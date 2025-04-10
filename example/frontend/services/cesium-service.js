@@ -2,7 +2,7 @@ import { Ion, Viewer, createWorldTerrain, createOsmBuildings, Cartesian3, Math a
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 
 // 配置Cesium Ion访问令牌（实际项目中应使用环境变量）
-Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS1kMWFjYmFkNjc5YzciLCJpZCI6NTc3MzMsImlhdCI6MTYyMjY0NjQ3NH0.XcKpgANiY22ejJpH9-qTHdMxl_SQzvELZ-eJxRylzKo';
+Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwYTg3Y2VmZC0wNGZlLTQyMWEtOTE3Yi0zMjA5ZTI3NTdiZjAiLCJpZCI6MjY1NzI5LCJpYXQiOjE3MzU1NTgyOTB9.5x2ohLt9GlRLXbH2LqoLBzH0olwpOm3XwavbkDNeQSQ';
 
 /**
  * Cesium查看器服务类

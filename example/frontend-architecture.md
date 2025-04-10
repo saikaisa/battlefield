@@ -56,8 +56,6 @@ frontend/
 
 **核心文件**：
 - `layers/geo-render/MapInitializer.js` - 地图初始化
-- `layers/geo-render/TerrainLoader.js` - 地形数据加载
-- `layers/geo-render/ViewerConfig.js` - 视图配置
 
 **关键功能**：
 - 初始化Cesium Viewer
@@ -70,8 +68,7 @@ frontend/
 **职责**：配置光照、阴影、天气/时间效果
 
 **核心文件**：
-- `layers/geo-render/LightingManager.js` - 光照管理
-- `layers/geo-render/WeatherEffects.js` - 天气效果
+- `layers/geo-render/EnvironmentManager.js` - 光照、天气和时间管理
 
 **关键功能**：
 - 设置光照参数
@@ -79,33 +76,32 @@ frontend/
 - 实现天气变化效果
 - 实现昼夜交替效果
 
-#### 3.1.3 六角网格绘制模块
+#### 3.1.3 六角网格绘制与渲染模块
 
-**职责**：在地图上生成规则的六角格，标注各个格子信息
+**职责**：在地图上生成规则的六角格，标注各个格子信息；实现战争迷雾效果，根据部队视野计算可见区域；在地图上绘制选中高亮状态、移动轨迹等
 
 **核心文件**：
+
 - `layers/geo-render/HexGridGenerator.js` - 六角网格生成器
-- `layers/geo-render/HexGridRenderer.js` - 六角网格渲染器
+- `layers/geo-render/FogOfWarManager.js` - 战争迷雾管理器
+- `layers/interaction/HexGridRenderer.js` - 六角网格渲染器（高亮与标记管理）
 
 **关键功能**：
-- 计算六角格坐标
-- 生成六角格网格
-- 渲染六角格
+
+- 计算六角格坐标，生成六角格网格，渲染六角格
 - 标注六角格信息
+- 选中六角格的高亮效果
+- 计算部队视野范围，更新六角格可见性状态
+- 渲染战争迷雾效果，动态更新迷雾状态
+- 实现移动路径显示
 
-#### 3.1.4 战争迷雾渲染模块
+#### 3.1.4 消息框模块
 
-**职责**：实现战争迷雾效果，根据部队视野计算可见区域
+**职责**：在地图的合适位置显示战局中各类提示消息框，例如选择错误、重试等。
 
 **核心文件**：
-- `layers/geo-render/FogOfWarManager.js` - 战争迷雾管理器
-- `layers/geo-render/VisibilityCalculator.js` - 可见性计算器
 
-**关键功能**：
-- 计算部队视野范围
-- 更新六角格可见性状态
-- 渲染战争迷雾效果
-- 动态更新迷雾状态
+- `layers/geo-render/MessageBox.js` - 提示框统一渲染
 
 ### 3.2 作战单位渲染与动画层
 
@@ -114,8 +110,7 @@ frontend/
 **职责**：处理3D模型，实现LOD、多级纹理等优化
 
 **核心文件**：
-- `layers/unit-render/ModelOptimizer.js` - 模型优化器
-- `layers/unit-render/LODManager.js` - LOD管理器
+- `layers/unit-render/UnitModelOptimizer.js` - 军事单位模型优化器
 
 **关键功能**：
 - 实现模型LOD
@@ -123,87 +118,70 @@ frontend/
 - 实现八叉树分块加载
 - 优化模型渲染性能
 
-#### 3.2.2 军事单位放置模块
+#### 3.2.2 军事单位渲染模块
 
-**职责**：将部队模型放置到正确的六角格位置
+**职责**：将部队模型放置到正确的六角格位置；实现部队可见性和高亮效果等
 
 **核心文件**：
-- `layers/unit-render/UnitPlacer.js` - 单位放置器
-- `layers/unit-render/UnitVisibilityManager.js` - 单位可见性管理器
+
+- `layers/unit-render/UnitRenderer.js` - 军事单位渲染器
 
 **关键功能**：
-- 解析部队位置数据
-- 将模型放置到六角格
-- 管理单位可见性
-- 处理单位选中状态
 
-#### 3.2.3 动画与状态更新模块
+- 解析部队位置数据
+- 将部队放置到六角格
+- 根据兵力值改变渲染的士兵数
+- 根据六角格的可见性和高亮效果，管理单位可见性和高亮效果
+
+#### 3.2.3 动画模块
 
 **职责**：处理部队移动、进攻、受损等动态效果
 
 **核心文件**：
 - `layers/unit-render/AnimationController.js` - 动画控制器
-- `layers/unit-render/UnitStateManager.js` - 单位状态管理器
 
 **关键功能**：
-- 实现部队移动动画
-- 实现交战动画
+
+- 实现部队移动、交战、消失等动画
 - 实现状态变化动画
 - 处理动画过渡效果
 
 ### 3.3 交互与信息展示层
 
-#### 3.3.1 HUD与控制面板模块
+#### 3.3.1 交互模块
 
-**职责**：构建用户界面，包括各种控制面板和信息展示
+**职责**：
+
+- 处理鼠标、触控等事件，调整视角
+- 实现区域框选交互操作
+- 构建用户界面，包括各种控制面板和信息展示
+- 下达命令
 
 **核心文件**：
-- `layers/interaction/HUDManager.vue` - HUD管理器
-- `components/hud/ControlPanel.vue` - 控制面板
-- `components/hud/UnitInfoPanel.vue` - 单位信息面板
+
+- `components/hud/InfoPanel.vue` - 单位信息和视角控制面板
 - `components/hud/CommandPanel.vue` - 命令面板
+- `layers/interaction/InfoPanelManager.js` - 单位信息和视角控制面板管理器
+- `layers/interaction/CommandPanelManager.js` - 命令面板管理器
 
 **关键功能**：
-- 实现视角控制区
-- 实现编队列表
-- 实现六角格信息栏
-- 实现详细信息栏
-- 实现命令下达区
-- 实现战斗群列表
-- 实现统计列表
-- 实现部队管理面板
-- 实现兵种管理面板
-- 实现规则编辑面板
-- 实现战斗日志面板
 
-#### 3.3.2 地图标记与交互模块
-
-**职责**：在地图上绘制选中高亮状态、移动轨迹等
-
-**核心文件**：
-- `layers/interaction/MapInteractionManager.js` - 地图交互管理器
-- `layers/interaction/SelectionManager.js` - 选择管理器
-- `layers/interaction/PathRenderer.js` - 路径渲染器
-
-**关键功能**：
-- 实现六角格选中高亮
-- 实现移动路径显示
-- 实现区域框选
-- 实现提示标记
-
-#### 3.3.3 用户交互逻辑模块
-
-**职责**：处理鼠标、触控等事件，调整视角，下达命令
-
-**核心文件**：
-- `layers/interaction/InputHandler.js` - 输入处理器
-- `layers/interaction/CommandBuilder.js` - 命令构建器
-- `layers/interaction/ViewManipulator.js` - 视图操作器
-
-**关键功能**：
+- 实现各个面板
+  - 实现视角控制区
+  - 实现编队列表
+  - 实现六角格信息栏
+  - 实现详细信息栏
+  - 实现命令下达区
+  - 实现战斗群列表
+  - 实现统计列表
+  - 实现部队管理面板
+  - 实现兵种管理面板
+  - 实现战斗日志面板
 - 处理鼠标事件
-- 处理触控事件
+  - 处理选中六角格事件
+  - 处理移动、进攻等命令事件
 - 实现视角调整
+- 实现区域框选交互操作
 - 构建命令JSON
 - 发送命令到后端
 
@@ -212,15 +190,14 @@ frontend/
 根据项目需求，我们可以使用Vue3的Composition API结合简单的状态管理方案，而不必引入完整的Vuex或Pinia。
 
 **核心文件**：
-- `store/index.js` - 状态管理入口
-- `store/modules/` - 状态模块目录
+- `store/index.js` - 状态管理模块
 
 **主要状态模块**：
-- `hexGrid.js` - 六角格状态
-- `units.js` - 单位状态
-- `selection.js` - 选择状态
-- `commands.js` - 命令状态
-- `battle.js` - 战斗状态
+- 六角格状态
+- 单位状态
+- 选择状态
+- 命令状态
+- 战斗状态
 
 ## 5. 通信机制
 
