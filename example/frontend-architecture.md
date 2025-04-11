@@ -58,6 +58,7 @@ frontend/
 - `layers/geo-render/MapInitializer.js` - 地图初始化
 
 **关键功能**：
+
 - 初始化Cesium Viewer
 - 加载DEM地形数据
 - 配置地图投影和坐标系
@@ -84,7 +85,7 @@ frontend/
 
 - `layers/geo-render/HexGridGenerator.js` - 六角网格生成器
 - `layers/geo-render/FogOfWarManager.js` - 战争迷雾管理器
-- `layers/interaction/HexGridRenderer.js` - 六角网格渲染器（高亮与标记管理）
+- `layers/geo-render/HexGridRenderer.js` - 六角网格渲染器（高亮与标记管理）
 
 **关键功能**：
 
@@ -128,7 +129,7 @@ frontend/
 
 **关键功能**：
 
-- 解析部队位置数据
+- ​																																																																					解析部队位置数据
 - 将部队放置到六角格
 - 根据兵力值改变渲染的士兵数
 - 根据六角格的可见性和高亮效果，管理单位可见性和高亮效果
