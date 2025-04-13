@@ -111,7 +111,7 @@ frontend/
 **职责**：处理3D模型，实现LOD、多级纹理等优化
 
 **核心文件**：
-- `layers/unit-render/UnitModelOptimizer.js` - 军事单位模型优化器
+- `layers/unit-render/UnitModelLoader.js` - 军事单位模型加载和优化器
 
 **关键功能**：
 - 实现模型LOD
@@ -129,7 +129,7 @@ frontend/
 
 **关键功能**：
 
-- ​																																																																					解析部队位置数据
+- 解析部队位置数据
 - 将部队放置到六角格
 - 根据兵力值改变渲染的士兵数
 - 根据六角格的可见性和高亮效果，管理单位可见性和高亮效果

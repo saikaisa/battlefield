@@ -1,8 +1,12 @@
 import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 
+import GameConfig from "../../config/GameConfig.js";
+import { CameraViewController } from './CameraViewController';
+import { setInfoPanelManager } from '../interaction/InfoPanelManager';
 import { HexGridGenerator } from './HexGridGenerator';
 import { HexGridRenderer } from './HexGridRenderer';
+import { UnitModelLoader } from "../unit-render/UnitModelLoader";
 
 export class MapInitializer {
   constructor(containerId) {
@@ -38,14 +42,16 @@ export class MapInitializer {
       this.viewer._cesiumWidget._creditContainer.style.display = 'none';
 
       // 异步加载地形数据（使用 Cesium Ion assetId 3957）
-      await this.loadTerrain(this.viewer, 3957);
+      await this.loadTerrain(this.viewer, GameConfig.cesium.terrainAssetId);
       
       // 异步加载 OSM Buildings（加载失败不阻塞地图显示）
-      try {
-        const tileset = await Cesium.createOsmBuildingsAsync();
-        this.viewer.scene.primitives.add(tileset);
-      } catch (err) {
-        console.error("加载 OSM Buildings 失败：", err);
+      if (GameConfig.cesium.osmBuildings) {
+        try {
+          const tileset = await Cesium.createOsmBuildingsAsync();
+          this.viewer.scene.primitives.add(tileset);
+        } catch (err) {
+          console.error("加载 OSM Buildings 失败：", err);
+        }
       }
       
       // 禁用默认双击事件
@@ -53,27 +59,52 @@ export class MapInitializer {
         Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
       );
       
-      // 设置初始视角（例如定位到宾夕法尼亚州 The Pinnacle）
-      this.setDefaultView(this.viewer);
-      
-      // ----- 六角网格生成与渲染测试 -----
-      // 定义一个测试区域边界（单位：度），可根据实际需要调整
-      const testBounds = { 
-        minLon: -75.95, 
-        maxLon: -75.85, 
-        minLat: 40.57, 
-        maxLat: 40.67 
-      };
-      const hexRadius = 500; // 500 米（从中心到顶点的距离）
-      
+      // ----- 六角网格生成与渲染 -----
       // 生成六角网格数据
-      const hexGridGenerator = new HexGridGenerator(testBounds, hexRadius, this.viewer);
+      const hexGridGenerator = new HexGridGenerator(GameConfig.hexGrid.bounds, GameConfig.hexGrid.hexRadius, this.viewer);
       let hexCells = await hexGridGenerator.generateGrid();
       
       // 创建 HexGridRenderer 实例并将六角网格渲染到地图上
-      this.hexGridRenderer = new HexGridRenderer(this.viewer);
-      this.hexGridRenderer.renderGrid(hexCells);
+      const hexGridRenderer = new HexGridRenderer(this.viewer);
+      hexGridRenderer.renderGrid(hexCells);
       // ----- 六角网格渲染结束 -----
+
+      // 设置视角
+      const cameraViewController = new CameraViewController(this.viewer);
+      cameraViewController.initialize();
+
+      // 设置全局视角控制管理器
+      setInfoPanelManager(this.viewer);
+
+      // 假设 hexCells 为生成的六角格数组（见 HexGridGenerator.js 中 generateGrid 方法返回的数据）
+      // 此处取第一个六角格的中心点作为部队单位的放置位置
+      const firstHex = hexCells[0];
+      const centerPoint = firstHex.position.points[0];  // 第一个点为中心点
+
+      // 将中心点（包含经纬度、高度）转换为 Cartesian3 坐标
+      const unitPosition = Cesium.Cartesian3.fromDegrees(centerPoint.longitude, centerPoint.latitude, centerPoint.height+500);
+
+      // 创建模型优化实例，传入当前 Viewer 对象
+      const unitModelLoader = new UnitModelLoader(this.viewer);
+
+      // 定义用于加载 GLB 单位模型的渲染属性，其中 lod_levels 可定义不同细节级别的模型路径
+      const renderingAttributes = {
+        // 当未启用 LOD 动态切换时，可直接指定基础模型路径
+        model_path: "../../assets/plane.gltf",
+        // 定义 LOD 方案：距离越远加载越低细节的模型
+        lod_levels: [
+          { level: 0, distance: 0, model_path: "/assets/plane.gltf" },
+          { level: 1, distance: 800, model_path: "/assets/plane.gltf" },
+          { level: 2, distance: 1500, model_path: "/assets/plane.gltf" }
+        ]
+      };
+
+      // 加载并渲染 GLB 模型到指定位置，返回对象包含当前模型和 dispose 方法
+      const unitModelHandle = unitModelLoader.loadUnitModelWithLOD(renderingAttributes, unitPosition);
+
+      // 此处，你可以在控制台输出 unitModelHandle 或在调试时检查是否正确加载
+      console.log("单位模型加载成功：", unitModelHandle);
+
       
       return this.viewer;
     } catch (error) {
@@ -103,21 +134,5 @@ export class MapInitializer {
     } catch (error) {
       console.error("加载地形失败：", error);
     }
-  }
-
-  /**
-   * 设置初始视角
-   * @param {Cesium.Viewer} viewer - Cesium Viewer 实例
-   */
-  setDefaultView(viewer) {
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(-75.91139, 40.61278, 10000),
-      orientation: {
-        heading: Cesium.Math.toRadians(0),
-        pitch: Cesium.Math.toRadians(-90),
-        roll: 0.0
-      },
-      duration: 3
-    });
   }
 }

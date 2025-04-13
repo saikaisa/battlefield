@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import GameConfig from "../../config/GameConfig.js";
 import { assignVisualStyle } from '../../config/HexVisualStyles';
 
 /**
@@ -152,8 +153,8 @@ export class HexGridGenerator {
           cell.position.points[i].height = updatedPositions[baseIndex + i].height;
           verticesHeightSum += updatedPositions[baseIndex + i].height;
         }
-        // 计算加权平均高度：中心点权重 0.4，各顶点权重 0.1
-        cell.terrain_attributes.elevation = 0.4 * cell.position.points[0].height + 0.1 * verticesHeightSum;
+        // 计算加权平均高度
+        cell.terrain_attributes.elevation = GameConfig.hexGrid.heightSamplingWeights.center * cell.position.points[0].height + GameConfig.hexGrid.heightSamplingWeights.vertex * verticesHeightSum;
         console.log(`[HexGridGenerator] Cell ${cell.hex_id} 更新高度：center=${cell.position.points[0].height.toFixed(2)}, elevation=${cell.terrain_attributes.elevation.toFixed(2)}`);
       });
     } catch (error) {
