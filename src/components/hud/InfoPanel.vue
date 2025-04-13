@@ -1,63 +1,75 @@
 <template>
-    <el-card class="info-panel" shadow="hover">
-      <el-row gutter="10" justify="center">
-        <!-- 全局显示按钮 -->
-        <el-col :span="12">
-          <el-button type="primary" @click="onGlobalView" style="width: 100%;">全局显示</el-button>
-        </el-col>
-        <!-- 视角复位按钮 -->
-        <el-col :span="12">
-          <el-button type="primary" @click="onResetView" style="width: 100%;">视角复位</el-button>
-        </el-col>
-      </el-row>
-      <el-row gutter="10" style="margin-top: 10px;" justify="center">
-        <!-- 2D/3D 模式切换 -->
-        <el-col :span="12">
-          <el-button type="primary" @click="toggle2D3D" style="width: 100%;">2D/3D 切换</el-button>
-        </el-col>
-        <!-- 图层可视切换 -->
-        <el-col :span="12">
-          <el-button type="primary" @click="toggleLayerVisibility" style="width: 100%;">图层切换</el-button>
-        </el-col>
-      </el-row>
-    </el-card>
-  </template>
-  
-  <script setup>
-//   import { onMounted } from 'vue';
-  import { useInfoPanelManager } from '../../layers/interaction/InfoPanelManager';
-  
-  const infoManager = useInfoPanelManager();
-  
-  function onGlobalView() {
-    if(infoManager) {
-      infoManager.globalView();
-    }
-  }
-  function onResetView() {
-    if(infoManager) {
-      infoManager.resetView();
-    }
-  }
-  function toggle2D3D() {
-    if(infoManager) {
-      infoManager.toggle2D3D();
-    }
-  }
-  function toggleLayerVisibility() {
-    if(infoManager) {
-      infoManager.toggleLayerVisibility();
-    }
-  }
-  </script>
-  
-  <style scoped>
-  .info-panel {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    width: 300px;
-    z-index: 1000;
-  }
-  </style>
-  
+  <el-card class="control-panel">
+    <el-button type="primary" @click="resetCameraView">视角居中</el-button>
+    <el-button type="success" @click="focusSelectedForce">定位选中单位</el-button>
+    <el-switch v-model="terrainHidden" @change="toggleTerrainVisual">
+      地形标记隐藏
+    </el-switch>
+    <el-switch v-model="hexGridHidden" @change="toggleHexGridVisibility">
+      六角格隐藏
+    </el-switch>
+    <div class="info">
+      <p>当前六角格数：{{ hexCells.length }}</p>
+      <p>选中部队数：{{ selectedForcesList.length }}</p>
+    </div>
+  </el-card>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue';
+import { useViewerStore } from '@/store';
+import { InfoPanelManager } from '@/layers/interaction/InfoPanelManager';
+
+// 引入 Element UI 的组件（确保已安装 Element Plus）
+import { ElCard, ElButton, ElSwitch } from 'element-plus';
+
+// 从全局 store 获取数据
+const viewerStore = useViewerStore();
+
+// 使用 computed 获取当前的六角格数据和选中部队列表
+const hexCells = computed(() => viewerStore.hexCells);
+const selectedForcesList = computed(() => viewerStore.selectedForcesList);
+
+// 用于切换按钮的本地状态
+const terrainHidden = ref(false);
+const hexGridHidden = ref(false);
+
+// 实例化 InfoPanelManager，传入 viewer 和 hexCells
+// 注意：确保 viewerStore.viewer 已经设置好了（MapInitializer 调用后会设置）
+const infoPanelManager = new InfoPanelManager(viewerStore.viewer, hexCells.value);
+
+// 方法
+const resetCameraView = () => {
+  // 视角居中：调用 InfoPanelManager 中对应方法
+  infoPanelManager.resetCameraView();
+};
+
+const focusSelectedForce = () => {
+  // 定位视角到选中单位：传入选中部队列表
+  infoPanelManager.focusOnSelectedForce(selectedForcesList.value);
+};
+
+const toggleTerrainVisual = () => {
+  // 根据开关状态隐藏或显示地形标记（默认半透明白色）
+  infoPanelManager.toggleTerrainVisual(terrainHidden.value);
+};
+
+const toggleHexGridVisibility = () => {
+  // 根据开关状态隐藏或显示六角格（全取消渲染或恢复渲染）
+  infoPanelManager.toggleHexGridVisibility(hexGridHidden.value);
+};
+</script>
+
+<style scoped>
+.control-panel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 250px;
+  z-index: 100;
+}
+.info {
+  margin-top: 10px;
+  font-size: 14px;
+}
+</style>

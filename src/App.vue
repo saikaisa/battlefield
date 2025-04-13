@@ -1,32 +1,39 @@
 <template>
   <div class="app-container">
     <div id="cesiumContainer" class="cesium-container"></div>
-    <!-- 直接引入 InfoPanel 组件 -->
-    <InfoPanel />
-    <router-view></router-view>
+
+    <!-- 在 Viewer 初始化完成后再渲染 UI 组件 -->
+    <div v-if="viewerReady">
+      <InfoPanel />
+      <router-view />
+    </div>
+
+    <div v-else class="loading">
+      地图加载中，请稍候...
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, provide } from 'vue';
+import { onMounted, onUnmounted, computed } from 'vue';
 import { MapInitializer } from './layers/geo-render/MapInitializer';
-import InfoPanel from './components/hud/InfoPanel.vue';  // 根据项目路径引入组件
+import InfoPanel from './components/hud/InfoPanel.vue';
+import { useViewerStore } from './store';
 
-// 使用 ref 保存 Cesium Viewer 实例
-const cesiumViewer = ref(null);
-// 立即 provide 全局变量到子组件中（这里提供的是 ref）
-provide('cesiumViewer', cesiumViewer);
+const viewerStore = useViewerStore();
+
+const viewerReady = computed(() => viewerStore.viewer !== null);
 
 onMounted(async () => {
   const mapInit = new MapInitializer('cesiumContainer');
   const viewer = await mapInit.init();
-  cesiumViewer.value = viewer;
+  viewerStore.setViewer(viewer);
 });
 
 onUnmounted(() => {
-  if (cesiumViewer.value) {
-    cesiumViewer.value.destroy();
-    cesiumViewer.value = null;
+  if (viewerStore.viewer) {
+    viewerStore.viewer.destroy();
+    viewerStore.setViewer(null);
   }
 });
 </script>
@@ -44,5 +51,15 @@ onUnmounted(() => {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 1;
+}
+.loading {
+  position: absolute;
+  z-index: 100;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 20px;
+  color: #333;
 }
 </style>

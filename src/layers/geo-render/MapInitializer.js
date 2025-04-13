@@ -2,8 +2,9 @@ import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 
 import GameConfig from "../../config/GameConfig.js";
+import { useViewerStore } from '@/store';
 import { CameraViewController } from './CameraViewController';
-import { setInfoPanelManager } from '../interaction/InfoPanelManager';
+// import { setInfoPanelManager } from '../interaction/InfoPanelManager';
 import { HexGridGenerator } from './HexGridGenerator';
 import { HexGridRenderer } from './HexGridRenderer';
 import { UnitModelLoader } from "../unit-render/UnitModelLoader";
@@ -12,6 +13,7 @@ export class MapInitializer {
   constructor(containerId) {
     this.containerId = containerId;
     this.viewer = null;
+    this.store = useViewerStore();
     this.hexGridGenerator = null;
     this.hexGridRenderer = null;
   }
@@ -63,6 +65,7 @@ export class MapInitializer {
       // 生成六角网格数据
       const hexGridGenerator = new HexGridGenerator(GameConfig.hexGrid.bounds, GameConfig.hexGrid.hexRadius, this.viewer);
       let hexCells = await hexGridGenerator.generateGrid();
+      this.store.setHexCells(hexCells);
       
       // 创建 HexGridRenderer 实例并将六角网格渲染到地图上
       const hexGridRenderer = new HexGridRenderer(this.viewer);
@@ -74,7 +77,7 @@ export class MapInitializer {
       cameraViewController.initialize();
 
       // 设置全局视角控制管理器
-      setInfoPanelManager(this.viewer);
+      // InfoPanelManager(this.viewer);
 
       // 假设 hexCells 为生成的六角格数组（见 HexGridGenerator.js 中 generateGrid 方法返回的数据）
       // 此处取第一个六角格的中心点作为部队单位的放置位置

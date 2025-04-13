@@ -1,6 +1,7 @@
 // layers/interaction/HexGridRenderer.js
 import * as Cesium from "cesium";
-import { HexGridGenerator } from "../geo-render/HexGridGenerator";
+import { HexGridGenerator } from "@/layers/geo-render/HexGridGenerator";
+import { HexVisualStyles } from "@/config/HexVisualStyles";
 
 export class HexGridRenderer {
   constructor(viewer) {
@@ -18,6 +19,16 @@ export class HexGridRenderer {
     });
     this.fillPrimitives = [];
     this.borderPrimitives = [];
+  }
+
+  /**
+   * 将所有六角格样式设置为默认
+   */
+  setHexesToDefaultVisual(hexCells) {
+    hexCells.forEach(hexCell => {
+      hexCell.visual_style = { ...HexVisualStyles.default };
+    });
+    this.renderGrid(hexCells);
   }
 
   renderGrid(hexCells) {

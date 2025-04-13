@@ -26,16 +26,7 @@ class CameraViewController {
     this.viewer.scene.screenSpaceCameraController.minimumZoomDistance = GameConfig.cameraControl.minZoomDistance;
     this.viewer.scene.screenSpaceCameraController.maximumZoomDistance = GameConfig.cameraControl.maxZoomDistance;
     this.viewer.scene.screenSpaceCameraController.enableTilt = GameConfig.cameraControl.enableTilt;
-
-    // 初始视角：固定斜视角
-    this.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(GameConfig.defaultCameraView.longitude, GameConfig.defaultCameraView.latitude, GameConfig.defaultCameraView.height),
-      orientation: {
-        heading: Cesium.Math.toRadians(GameConfig.defaultCameraView.heading),
-        pitch: Cesium.Math.toRadians(GameConfig.defaultCameraView.pitch),
-        roll: 0.0
-      }
-    });
+    this.resetToDefaultView();
     this.bindOrbitToggle();
   }
 
@@ -49,6 +40,7 @@ class CameraViewController {
   bindOrbitToggle() {
     const canvas = this.viewer.canvas;
     const handler = new Cesium.ScreenSpaceEventHandler(canvas);
+  
     handler.setInputAction(() => {
       this.orbitMode = !this.orbitMode;
   
@@ -58,24 +50,28 @@ class CameraViewController {
         console.warn("无法获取屏幕中心的 pivot，orbit 操作失败。");
         return;
       }
+  
       this.orbitCenter = pivot;
       const range = Cesium.Cartesian3.distance(this.viewer.camera.position, pivot);
   
       if (this.orbitMode) {
-        // 进入 orbit 模式时记录 pivot 的经纬度和高度、range
-        const pivotCartographic = Cesium.Cartographic.fromCartesian(pivot);
+        // 进入 orbit 模式：记录当前 pivot 经纬度和 range
+        const pivotCarto = Cesium.Cartographic.fromCartesian(pivot);
         this.preOrbitState = {
-          pivotLongitude: pivotCartographic.longitude,
-          pivotLatitude: pivotCartographic.latitude,
-          pivotHeight: pivotCartographic.height,
+          pivotLongitude: pivotCarto.longitude,
+          pivotLatitude: pivotCarto.latitude,
+          pivotHeight: pivotCarto.height,
           range: range
         };
-        // 进入 orbit 模式
-        this.viewer.camera.lookAt(this.orbitCenter, new Cesium.HeadingPitchRange(
-          this.viewer.camera.heading,
-          Cesium.Math.toRadians(GameConfig.defaultCameraView.pitch),
-          range
-        ));
+  
+        this.viewer.camera.lookAt(
+          this.orbitCenter,
+          new Cesium.HeadingPitchRange(
+            this.viewer.camera.heading,
+            GameConfig.defaultCameraView.pitch,
+            range
+          )
+        );
       } else {
         // 退出 orbit 模式
         this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
@@ -85,24 +81,17 @@ class CameraViewController {
             this.preOrbitState.pivotLatitude,
             this.preOrbitState.pivotHeight
           );
-          // 平滑飞行，以pivot为中心，恢复高度和角度，保证 pivot 在屏幕中心
-          this.viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(pivotCartesian, 0), {
-            offset: new Cesium.HeadingPitchRange(
-              this.viewer.camera.heading,   // 保留当前heading
-              Cesium.Math.toRadians(GameConfig.defaultCameraView.pitch),   // pitch固定
-              Cesium.Cartesian3.distance(this.viewer.camera.position, pivot)      // 恢复之前记录的range（高度）
-            ),
-            duration: 0.7  // 飞行动画时长
-          });
   
+          // 以 preOrbitState 记录的 pivot 恢复视角
+          this.focusOnLocation(pivotCartesian, 0.7, true, this.viewer.camera.heading);
           this.preOrbitState = null;
           this.orbitCenter = null;
         }
       }
     }, Cesium.ScreenSpaceEventType.MIDDLE_CLICK);
+  
     this._orbitHandler = handler;
   }
-  
 
   /**
    * 销毁控制器，解除事件绑定
@@ -112,6 +101,42 @@ class CameraViewController {
       this._orbitHandler.destroy();
       this._orbitHandler = null;
     }
+  }
+
+  /**
+   * 重置相机视角到默认视角
+   */
+  resetToDefaultView() {
+    this.focusOnLocation(Cesium.Cartesian3.fromDegrees(
+      GameConfig.defaultCameraView.longitude,
+      GameConfig.defaultCameraView.latitude,
+      0
+    ), 1.0);
+  }
+    
+  /**
+   * 定点居中显示：以45度倾斜角观察一个指定经纬度的地表上的点并居中显示
+   * @param {Cesium.Cartesian3} pivot 目标点的世界坐标系形式
+   * @param {number} duration 动画持续时间
+   * @param {boolean} keepRange true为保持当前相机距离，false为默认距离
+   * @param {number} heading 摄像机朝向（输入必须是弧度）
+   * @param {number} pitch 摄像机倾斜角（输入必须是弧度）
+   */
+  focusOnLocation(pivot, duration=0.7, keepRange=false, heading=GameConfig.defaultCameraView.heading, pitch=GameConfig.defaultCameraView.pitch) {
+    // 若旋转视角时，将视角放大到垂直地表往下看，那么此时 range = 最小限高（想象出一个等腰直角三角形就知道了）
+    // 恢复到45度倾斜角时相当于围绕定点往地面方向旋转了45度，此时相机高度一定会小于最小限高，
+    // 导致视角强制复位带来卡顿，视觉效果不流畅，所以这里判断 range < 最小限高的 tan45度（约等于1.5）时，
+    // 将 range 设为1.5倍避免强制视角复位带来的卡顿
+    const range = keepRange ? 
+                  Math.max(Cesium.Cartesian3.distance(this.viewer.camera.position, pivot), 
+                           GameConfig.cameraControl.minZoomDistance * 1.5) : 
+                  GameConfig.defaultCameraView.range;
+    console.log(`pitch = ${pitch}`);
+    // 平滑飞行，以pivot为中心，恢复高度和角度，保证 pivot 在屏幕中心
+    this.viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(pivot, 0), {
+      offset: new Cesium.HeadingPitchRange(heading, pitch, range),
+      duration: duration
+    });
   }
 }
 

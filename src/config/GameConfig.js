@@ -1,3 +1,5 @@
+import * as Cesium from 'cesium';
+
 const hexBounds = {
   minLon: -75.95,
   maxLon: -75.85,
@@ -9,9 +11,9 @@ function computeDefaultCameraView(bounds) {
   return {
     longitude: (bounds.maxLon + bounds.minLon) / 2,
     latitude: (bounds.maxLat + bounds.minLat) / 2,
-    height: 12000,
-    heading: 45,
-    pitch: -45,
+    range: 12000,
+    heading: Cesium.Math.toRadians(45),
+    pitch: Cesium.Math.toRadians(-45),
     roll: 0
   };
 }

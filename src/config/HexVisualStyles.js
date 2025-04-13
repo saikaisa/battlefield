@@ -1,7 +1,13 @@
 import * as Cesium from 'cesium';
 
-// 各种视觉预设预定义（初始时仅显示边框，不显示填充）
+// 各种视觉预设预定义
 export const HexVisualStyles = {
+  default: {
+    fillColor: Cesium.Color.BLACK.withAlpha(0.1),
+    borderColor: Cesium.Color.BLACK.withAlpha(0.2),
+    showFill: false,
+    showBorder: true
+  },
   plain: {
     fillColor: Cesium.Color.WHITE.withAlpha(0.1),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
