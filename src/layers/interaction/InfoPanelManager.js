@@ -1,6 +1,6 @@
-// InfoPanelManager.js
 import { CameraViewController } from '@/layers/geo-render/CameraViewController';
-import { HexGridRenderer } from '../geo-render/HexGridRenderer';
+import { HexGridRenderer } from '@/layers/geo-render/HexGridRenderer';
+// import { openGameStore } from '@/store';
 
 export class InfoPanelManager {
   constructor(viewer, hexCells) {
@@ -8,6 +8,13 @@ export class InfoPanelManager {
     this.hexCells = hexCells;
     this.cameraController = new CameraViewController(viewer);
     this.hexRenderer = new HexGridRenderer(viewer);
+  }
+
+  /**
+   * 设置 orbit 模式（true 进入，false 退出）
+   */
+  setOrbitMode(enable) {
+    this.cameraController.setOrbitMode(enable);
   }
 
   // 视角居中（默认范围）

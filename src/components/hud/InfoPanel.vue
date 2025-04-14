@@ -2,61 +2,77 @@
   <el-card class="control-panel">
     <el-button type="primary" @click="resetCameraView">视角居中</el-button>
     <el-button type="success" @click="focusSelectedForce">定位选中单位</el-button>
-    <el-switch v-model="terrainHidden" @change="toggleTerrainVisual">
-      地形标记隐藏
-    </el-switch>
-    <el-switch v-model="hexGridHidden" @change="toggleHexGridVisibility">
-      六角格隐藏
-    </el-switch>
-    <div class="info">
-      <p>当前六角格数：{{ hexCells.length }}</p>
-      <p>选中部队数：{{ selectedForcesList.length }}</p>
+    <el-button type="warning" @click="toggleOrbitMode">{{ orbitButtonText }}</el-button>
+    <div style="margin-top:10px;">
+      <span>地形标记隐藏</span>
+      <el-switch v-model="terrainHidden" @change="toggleTerrainVisual"></el-switch>
+    </div>
+    <div style="margin-top:10px;">
+      <span>六角格隐藏</span>
+      <el-switch v-model="hexGridHidden" @change="toggleHexGridVisibility"></el-switch>
     </div>
   </el-card>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { useViewerStore } from '@/store';
+import { inject, watch, ref, computed } from 'vue';
+import { ElCard, ElButton, ElSwitch } from 'element-plus';
+import { openGameStore } from '@/store';
 import { InfoPanelManager } from '@/layers/interaction/InfoPanelManager';
 
-// 引入 Element UI 的组件（确保已安装 Element Plus）
-import { ElCard, ElButton, ElSwitch } from 'element-plus';
-
+// 获取 Cesium Viewer
+const viewerRef = inject('cesiumViewer', ref(null));
 // 从全局 store 获取数据
-const viewerStore = useViewerStore();
-
-// 使用 computed 获取当前的六角格数据和选中部队列表
-const hexCells = computed(() => viewerStore.hexCells);
-const selectedForcesList = computed(() => viewerStore.selectedForcesList);
+const gameStore = openGameStore();
+const hexCells = computed(() => gameStore.hexCells);
+const selectedForcesList = computed(() => gameStore.selectedForcesList);
 
 // 用于切换按钮的本地状态
+const orbitEnabled = ref(false);
 const terrainHidden = ref(false);
 const hexGridHidden = ref(false);
 
-// 实例化 InfoPanelManager，传入 viewer 和 hexCells
-// 注意：确保 viewerStore.viewer 已经设置好了（MapInitializer 调用后会设置）
-const infoPanelManager = new InfoPanelManager(viewerStore.viewer, hexCells.value);
+const infoPanelManager = ref(null);
+// 确保 viewer 初始化之后才创建 InfoPanelManager
+watch(viewerRef, (v) => {
+  if (v) {
+    infoPanelManager.value = new InfoPanelManager(v, hexCells.value);
+    console.log("INFOPANEL READY");
+  }
+}, { immediate: true });
 
 // 方法
+const toggleOrbitMode = () => {
+  if (infoPanelManager.value) {
+    // 按钮状态切换：调用 InfoPanelManager.setOrbitMode(orbitEnabled.value)
+    orbitEnabled.value = !orbitEnabled.value;
+    infoPanelManager.value.setOrbitMode(orbitEnabled.value);
+  } else {
+    console.warn("InfoPanelManager 未初始化，无法设置 Orbit 模式");
+  }
+};
+
+const orbitButtonText = computed(() => orbitEnabled.value ? "退出 Orbit 模式" : "进入 Orbit 模式");
+
 const resetCameraView = () => {
   // 视角居中：调用 InfoPanelManager 中对应方法
-  infoPanelManager.resetCameraView();
+  orbitEnabled.value = false;
+  infoPanelManager.value.resetCameraView();
 };
 
 const focusSelectedForce = () => {
   // 定位视角到选中单位：传入选中部队列表
-  infoPanelManager.focusOnSelectedForce(selectedForcesList.value);
+  infoPanelManager.value.focusOnSelectedForce(selectedForcesList.value);
 };
 
 const toggleTerrainVisual = () => {
   // 根据开关状态隐藏或显示地形标记（默认半透明白色）
-  infoPanelManager.toggleTerrainVisual(terrainHidden.value);
+  infoPanelManager.value.toggleTerrainVisual(terrainHidden.value);
 };
 
 const toggleHexGridVisibility = () => {
   // 根据开关状态隐藏或显示六角格（全取消渲染或恢复渲染）
-  infoPanelManager.toggleHexGridVisibility(hexGridHidden.value);
+  infoPanelManager.value.toggleHexGridVisibility(hexGridHidden.value);
 };
 </script>
 
@@ -67,9 +83,6 @@ const toggleHexGridVisibility = () => {
   left: 10px;
   width: 250px;
   z-index: 100;
-}
-.info {
-  margin-top: 10px;
-  font-size: 14px;
+  padding: 10px;
 }
 </style>

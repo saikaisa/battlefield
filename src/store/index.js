@@ -1,18 +1,28 @@
-// src/store/index.js
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
-export const useViewerStore = defineStore('viewerStore', () => {
-  // 存储 Cesium Viewer 实例
-  const viewer = ref(null);
+export const openGameStore = defineStore('gameStore', () => {
+  // 存储视角历史记录的队列
+  const viewHistory = ref([]);
+  const MAX_HISTORY = 10;
   // 存储生成的六角网格数据，数组
   const hexCells = ref([]);
-  // 存储当前选中的部队列表（例如 selected_forces_list ）
+  // 存储当前选中的部队列表
   const selectedForcesList = ref([]);
+  
+  // 添加一条视角历史记录
+  function addViewHistory(viewObj) {
+    viewHistory.value.push(viewObj);
+    if (viewHistory.value.length > MAX_HISTORY) {
+      viewHistory.value.shift();
+    }
+  }
 
-  // 设置 Viewer 实例
-  function setViewer(newViewer) {
-    viewer.value = newViewer;
+  // 获取最近一条视角历史记录
+  function getLatestView() {
+    return viewHistory.value.length > 0
+      ? viewHistory.value[viewHistory.value.length - 1]
+      : null;
   }
 
   // 更新六角网格数据
@@ -36,10 +46,11 @@ export const useViewerStore = defineStore('viewerStore', () => {
   }
 
   return {
-    viewer,
+    viewHistory,
     hexCells,
     selectedForcesList,
-    setViewer,
+    addViewHistory,
+    getLatestView,
     setHexCells,
     setSelectedForcesList,
     addSelectedForce,

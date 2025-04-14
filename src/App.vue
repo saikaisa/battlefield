@@ -2,8 +2,8 @@
   <div class="app-container">
     <div id="cesiumContainer" class="cesium-container"></div>
 
-    <!-- 在 Viewer 初始化完成后再渲染 UI 组件 -->
-    <div v-if="viewerReady">
+    <!-- Viewer 初始化完成后再渲染 InfoPanel 等 UI -->
+    <div v-if="gameReady">
       <InfoPanel />
       <router-view />
     </div>
@@ -15,25 +15,29 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, computed } from 'vue';
-import { MapInitializer } from './layers/geo-render/MapInitializer';
-import InfoPanel from './components/hud/InfoPanel.vue';
-import { useViewerStore } from './store';
+import { ref, provide, onMounted, onUnmounted } from 'vue';
+import { MapInitializer } from '@/layers/geo-render/MapInitializer';
+import InfoPanel from '@/components/hud/InfoPanel.vue';
 
-const viewerStore = useViewerStore();
+// 创建并全局提供 viewer 实例
+const viewerRef = ref(null);
+provide('cesiumViewer', viewerRef);
 
-const viewerReady = computed(() => viewerStore.viewer !== null);
+// 控制 UI 是否可加载
+const gameReady = ref(false);
 
+// 生命周期钩子
 onMounted(async () => {
   const mapInit = new MapInitializer('cesiumContainer');
   const viewer = await mapInit.init();
-  viewerStore.setViewer(viewer);
+  viewerRef.value = viewer;
+  gameReady.value = true;
 });
 
 onUnmounted(() => {
-  if (viewerStore.viewer) {
-    viewerStore.viewer.destroy();
-    viewerStore.setViewer(null);
+  if (viewerRef.value) {
+    viewerRef.value.destroy();
+    viewerRef.value = null;
   }
 });
 </script>

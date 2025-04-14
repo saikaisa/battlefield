@@ -1,19 +1,18 @@
 import * as Cesium from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 
-import GameConfig from "../../config/GameConfig.js";
-import { useViewerStore } from '@/store';
+import { CesiumConfig } from "@/config/GameConfig";
+import { openGameStore } from '@/store';
 import { CameraViewController } from './CameraViewController';
-// import { setInfoPanelManager } from '../interaction/InfoPanelManager';
 import { HexGridGenerator } from './HexGridGenerator';
 import { HexGridRenderer } from './HexGridRenderer';
-import { UnitModelLoader } from "../unit-render/UnitModelLoader";
+import { UnitModelLoader } from "@/layers/unit-render/UnitModelLoader";
 
 export class MapInitializer {
   constructor(containerId) {
     this.containerId = containerId;
     this.viewer = null;
-    this.store = useViewerStore();
+    this.gameStore = openGameStore();
     this.hexGridGenerator = null;
     this.hexGridRenderer = null;
   }
@@ -39,46 +38,37 @@ export class MapInitializer {
         shadows: true,
         shouldAnimate: true
       });
-
       // 隐藏版权信息区域
       this.viewer._cesiumWidget._creditContainer.style.display = 'none';
-
-      // 异步加载地形数据（使用 Cesium Ion assetId 3957）
-      await this.loadTerrain(this.viewer, GameConfig.cesium.terrainAssetId);
-      
-      // 异步加载 OSM Buildings（加载失败不阻塞地图显示）
-      if (GameConfig.cesium.osmBuildings) {
-        try {
-          const tileset = await Cesium.createOsmBuildingsAsync();
-          this.viewer.scene.primitives.add(tileset);
-        } catch (err) {
-          console.error("加载 OSM Buildings 失败：", err);
-        }
-      }
-      
       // 禁用默认双击事件
       this.viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(
         Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
       );
+
+      // ---------------- 地形加载开始 ----------------
+      await this.loadTerrain(this.viewer, CesiumConfig.terrainAssetId);
+      // ---------------- 地形加载结束 ----------------
       
-      // ----- 六角网格生成与渲染 -----
+
+      // ---------------- 六角网格加载开始 ----------------
       // 生成六角网格数据
-      const hexGridGenerator = new HexGridGenerator(GameConfig.hexGrid.bounds, GameConfig.hexGrid.hexRadius, this.viewer);
+      const hexGridGenerator = new HexGridGenerator(this.viewer);
       let hexCells = await hexGridGenerator.generateGrid();
-      this.store.setHexCells(hexCells);
+      this.gameStore.setHexCells(hexCells);
       
       // 创建 HexGridRenderer 实例并将六角网格渲染到地图上
       const hexGridRenderer = new HexGridRenderer(this.viewer);
       hexGridRenderer.renderGrid(hexCells);
-      // ----- 六角网格渲染结束 -----
+      // ---------------- 六角网格加载结束 ----------------
 
-      // 设置视角
+      
+      // ---------------- 相机系统加载开始 ----------------
       const cameraViewController = new CameraViewController(this.viewer);
       cameraViewController.initialize();
+      // ---------------- 相机系统加载结束 ----------------
 
-      // 设置全局视角控制管理器
-      // InfoPanelManager(this.viewer);
 
+      // ---------------- 兵种系统加载开始 ----------------
       // 假设 hexCells 为生成的六角格数组（见 HexGridGenerator.js 中 generateGrid 方法返回的数据）
       // 此处取第一个六角格的中心点作为部队单位的放置位置
       const firstHex = hexCells[0];
@@ -107,8 +97,9 @@ export class MapInitializer {
 
       // 此处，你可以在控制台输出 unitModelHandle 或在调试时检查是否正确加载
       console.log("单位模型加载成功：", unitModelHandle);
-
+      // ---------------- 兵种系统加载结束 ----------------
       
+
       return this.viewer;
     } catch (error) {
       console.error("MapInitializer: 初始化地图失败", error);
@@ -125,6 +116,7 @@ export class MapInitializer {
    */
   async loadTerrain(viewer, terrainInput) {
     try {
+      // 异步加载地形数据
       let terrainProvider = null;
       if (typeof terrainInput === 'number') {
         terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(terrainInput);
@@ -134,6 +126,16 @@ export class MapInitializer {
         });
       }
       viewer.terrainProvider = terrainProvider;
+
+      // 异步加载 OSM Buildings（加载失败不阻塞地图显示）
+      if (CesiumConfig.genOsmBuildings) {
+        try {
+          const tileset = await Cesium.createOsmBuildingsAsync();
+          this.viewer.scene.primitives.add(tileset);
+        } catch (err) {
+          console.error("加载 OSM Buildings 失败：", err);
+        }
+      }
     } catch (error) {
       console.error("加载地形失败：", error);
     }

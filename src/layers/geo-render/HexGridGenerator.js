@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
-import GameConfig from "../../config/GameConfig.js";
-import { assignVisualStyle } from '../../config/HexVisualStyles';
+import { HexConfig } from "@/config/GameConfig";
+import { assignVisualStyle } from '@/config/HexVisualStyles';
 
 /**
  * 将米转换为纬度差（度），大致 111320 米=1 度
@@ -28,25 +28,24 @@ function metersToDegreesLon(meters, latDegrees) {
 export class HexGridGenerator {
   /**
    * 构造函数
-   * @param {Object} bounds 地图边界，格式：{ minLon, maxLon, minLat, maxLat }（单位：度）
-   * @param {number} hexRadius 六角格半径（米），指从中心到顶点的距离
    */
-  constructor(bounds, hexRadius, viewer) {
-    this.bounds = bounds;
-    this.hexRadius = hexRadius;
+  constructor(viewer) {
     this.viewer = viewer;
-    
+    // 地图边界，格式：{ minLon, maxLon, minLat, maxLat }（单位：度）
+    this.bounds = HexConfig.bounds;
+    // 六角格半径（米），指从中心到顶点的距离
+    this.hexRadius = HexConfig.radius;
     // 计算六角格尺寸
-    this.hexWidthMeters = 2 * hexRadius;
-    this.hexHeightMeters = Math.sqrt(3) * hexRadius;
-    this.midLat = (bounds.minLat + bounds.maxLat) / 2;
+    this.hexWidthMeters = 2 * this.hexRadius;
+    this.hexHeightMeters = Math.sqrt(3) * this.hexRadius;
+    this.midLat = (this.bounds.minLat + this.bounds.maxLat) / 2;
     // 水平间距：注意这里是六角格宽度的 3/4，即 1.5 * hexRadius
     this.dx = metersToDegreesLon(this.hexWidthMeters * 0.75, this.midLat);
     // 垂直间距：六角形高度转换成纬度差
     this.dy = metersToDegreesLat(this.hexHeightMeters);
 
     console.log('[HexGridGenerator] 初始化：');
-    console.log(`  hexRadius = ${hexRadius} m`);
+    console.log(`  hexRadius = ${this.hexRadius} m`);
     console.log(`  hexWidthMeters = ${this.hexWidthMeters} m, hexHeightMeters = ${this.hexHeightMeters.toFixed(2)} m`);
     console.log(`  midLat = ${this.midLat}`);
     console.log(`  dx (经度差) = ${this.dx.toFixed(6)}°, dy (纬度差) = ${this.dy.toFixed(6)}°`);
@@ -154,7 +153,7 @@ export class HexGridGenerator {
           verticesHeightSum += updatedPositions[baseIndex + i].height;
         }
         // 计算加权平均高度
-        cell.terrain_attributes.elevation = GameConfig.hexGrid.heightSamplingWeights.center * cell.position.points[0].height + GameConfig.hexGrid.heightSamplingWeights.vertex * verticesHeightSum;
+        cell.terrain_attributes.elevation = HexConfig.heightSamplingWeights.center * cell.position.points[0].height + HexConfig.heightSamplingWeights.vertex * verticesHeightSum;
         console.log(`[HexGridGenerator] Cell ${cell.hex_id} 更新高度：center=${cell.position.points[0].height.toFixed(2)}, elevation=${cell.terrain_attributes.elevation.toFixed(2)}`);
       });
     } catch (error) {
