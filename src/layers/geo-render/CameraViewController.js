@@ -10,7 +10,7 @@ class CameraViewController {
    */
   constructor(viewer) {
     this.viewer = viewer;
-    this.gameStore = openGameStore();
+    this.store = openGameStore();
   }
 
   /**
@@ -42,7 +42,7 @@ class CameraViewController {
    * @param {boolean} keepRange true为保持当前相机距离，false为默认距离
    */
   focusOnLocation(cameraView, duration = 0.7) {
-    this.gameStore.addViewHistory(cameraView); // 移动视角前存储当前视角位置
+    this.store.addViewHistory(cameraView.toPlainObject()); // 移动视角前存储当前视角位置
     this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
     
     // 平滑飞行，以pivot为中心，恢复高度和角度，保证 pivot 在屏幕中心
@@ -62,7 +62,7 @@ class CameraViewController {
     if (enable) {
       console.log(`-----------------Orbit Enable--------------`);
       const cameraView = CameraView.fromCurrentView(this.viewer);
-      this.gameStore.addViewHistory(cameraView.toPlainObject());
+      this.store.addViewHistory(cameraView.toPlainObject());
 
       // 使用当前摄像机 heading，不强制改变朝向，只固定 pivot
       this.viewer.camera.lookAt(
@@ -77,7 +77,7 @@ class CameraViewController {
       // 退出 orbit 模式：解除 lookAt，并平滑飞行恢复
       console.log(`-----------------Orbit Disable--------------`);
       this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-      const oldCameraView = CameraView.fromPlainObject(this.gameStore.getLatestView());
+      const oldCameraView = CameraView.fromPlainObject(this.store.getLatestViewPlain());
 
       const pivot = oldCameraView.getCartesianPos();
       const range = Math.max(Cesium.Cartesian3.distance(this.viewer.camera.position, pivot), CameraConfig.minZoomDistance * 1.5);

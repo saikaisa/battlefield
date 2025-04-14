@@ -12,7 +12,7 @@ export class MapInitializer {
   constructor(containerId) {
     this.containerId = containerId;
     this.viewer = null;
-    this.gameStore = openGameStore();
+    this.store = openGameStore();
     this.hexGridGenerator = null;
     this.hexGridRenderer = null;
   }
@@ -54,7 +54,7 @@ export class MapInitializer {
       // 生成六角网格数据
       const hexGridGenerator = new HexGridGenerator(this.viewer);
       let hexCells = await hexGridGenerator.generateGrid();
-      this.gameStore.setHexCells(hexCells);
+      this.store.setHexCells(hexCells);
       
       // 创建 HexGridRenderer 实例并将六角网格渲染到地图上
       const hexGridRenderer = new HexGridRenderer(this.viewer);

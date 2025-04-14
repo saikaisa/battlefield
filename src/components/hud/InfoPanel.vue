@@ -23,9 +23,9 @@ import { InfoPanelManager } from '@/layers/interaction/InfoPanelManager';
 // 获取 Cesium Viewer
 const viewerRef = inject('cesiumViewer', ref(null));
 // 从全局 store 获取数据
-const gameStore = openGameStore();
-const hexCells = computed(() => gameStore.hexCells);
-const selectedForcesList = computed(() => gameStore.selectedForcesList);
+const store = openGameStore();
+const hexCells = computed(() => store.hexCells);
+const selectedForcesList = computed(() => store.selectedForcesList);
 
 // 用于切换按钮的本地状态
 const orbitEnabled = ref(false);

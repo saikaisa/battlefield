@@ -1,5 +1,7 @@
 import * as Cesium from 'cesium';
+import { openGameStore } from '@/store';
 import { HexConfig } from "@/config/GameConfig";
+import { HexCell } from '@/models/HexCell';
 import { assignVisualStyle } from '@/config/HexVisualStyles';
 
 /**
@@ -31,9 +33,8 @@ export class HexGridGenerator {
    */
   constructor(viewer) {
     this.viewer = viewer;
-    // 地图边界，格式：{ minLon, maxLon, minLat, maxLat }（单位：度）
+    this.store = openGameStore();
     this.bounds = HexConfig.bounds;
-    // 六角格半径（米），指从中心到顶点的距离
     this.hexRadius = HexConfig.radius;
     // 计算六角格尺寸
     this.hexWidthMeters = 2 * this.hexRadius;
@@ -68,62 +69,55 @@ export class HexGridGenerator {
       let col = 0;
       // 同一行的六角格相隔 3倍六角格半径的距离
       for (let lon = minLon + offset; lon <= maxLon; lon += this.dx * 2) {
-        const centerPoint = {
-          longitude: lon,
-          latitude: lat,
-          height: 0
-        };
+        const centerPoint = { longitude: lon, latitude: lat, height: 0 };
         console.log(`    [HexGridGenerator] Row ${row}, Col ${col}: center=${lon.toFixed(6)}, ${lat.toFixed(6)}`);
         // 计算六个顶点（平顶六角格：0°、60°、120°、180°、240°、300°）
         const vertices = [];
         for (let i = 0; i < 6; i++) {
-          const angleDeg = 60 * i;
-          const angleRad = Cesium.Math.toRadians(angleDeg);
+          const angleRad = Cesium.Math.toRadians(60 * i);
           const dX = this.hexRadius * Math.cos(angleRad);
           const dY = this.hexRadius * Math.sin(angleRad);
           const deltaLon = metersToDegreesLon(dX, lat);
           const deltaLat = metersToDegreesLat(dY);
-          const vertexLon = lon + deltaLon;
-          const vertexLat = lat + deltaLat;
           vertices.push({
-            longitude: vertexLon,
-            latitude: vertexLat,
-            height: 0
+            longitude: lon + deltaLon,
+            latitude: lat + deltaLat,
+            height: 0,
           });
-          console.log(`         Vertex ${i}: ${vertexLon.toFixed(6)}, ${vertexLat.toFixed(6)}`);
         }
         // 将中心点和顶点合并为 points 数组（第 0 元素为中心，后续为顶点）
         const points = [centerPoint, ...vertices];
         // 初步生成 hexCell 数据结构（visual_style 先暂时留空）
-        const hexCell = {
-          hex_id: `H_${row}_${col}`,
+        const hexCellData = {
+          hexId: `H_${row}_${col}`,
           position: {
             points: points,
             row: row,
             col: col
           },
-          terrain_attributes: {
-            terrain_type: "plain",
-            terrain_composition: {},
-            elevation: centerPoint.height,
+          terrainAttributes: {
+            terrainType: "default",
+            terrainComposition: {},
+            elevation: 0,
             passability: { land: true, naval: false, air: true }
           },
-          battlefield_state: {
-            forces_list: [],
-            control_faction: "neutral"
+          battlefieldState: {
+            forcesList: [],
+            controlFaction: "neutral"
           },
           visibility: {
-            visual_style: {}, // 先为空，后续根据采样高度赋值
-            visible_to: {
+            visualStyle: {}, // 先为空，后续根据采样高度赋值
+            visibleTo: {
               "blue": true,
               "red": true
             }
           },
-          additional_info: {
-            is_objective_point: false,
+          additionalInfo: {
+            isObjectivePoint: false,
             resource: null
           }
         };
+        const hexCell = HexCell.fromPlainObject(hexCellData);
         hexCells.push(hexCell);
         console.log(`[HexGridGenerator] Row ${row}, Col ${col}: center=${lon.toFixed(6)}, ${lat.toFixed(6)}`);
         col++;
@@ -134,85 +128,35 @@ export class HexGridGenerator {
     
     // 采样所有六角格中 7 个点（中心 + 6 个顶点）
     const samplePositions = [];
-    hexCells.forEach(cell => {
-      cell.position.points.forEach(point => {
-        samplePositions.push(
-          Cesium.Cartographic.fromDegrees(point.longitude, point.latitude, point.height)
-        );
+    hexCells.forEach((cell) => {
+      cell.position.points.forEach((pt) => {
+        samplePositions.push(Cesium.Cartographic.fromDegrees(pt.longitude, pt.latitude));
       });
     });
     
     try {
-      const updatedPositions = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, samplePositions);
-      hexCells.forEach((cell, cellIndex) => {
-        const baseIndex = cellIndex * 7;
-        cell.position.points[0].height = updatedPositions[baseIndex].height;
-        let verticesHeightSum = 0;
-        for (let i = 1; i < 7; i++) {
-          cell.position.points[i].height = updatedPositions[baseIndex + i].height;
-          verticesHeightSum += updatedPositions[baseIndex + i].height;
+      const updated = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, samplePositions);
+      hexCells.forEach((cell, i) => {
+        const base = i * 7;
+        for (let j = 0; j < 7; j++) {
+          cell.position.points[j].height = updated[base + j].height;
         }
-        // 计算加权平均高度
-        cell.terrain_attributes.elevation = HexConfig.heightSamplingWeights.center * cell.position.points[0].height + HexConfig.heightSamplingWeights.vertex * verticesHeightSum;
-        console.log(`[HexGridGenerator] Cell ${cell.hex_id} 更新高度：center=${cell.position.points[0].height.toFixed(2)}, elevation=${cell.terrain_attributes.elevation.toFixed(2)}`);
+        cell.updateElevation();
       });
-    } catch (error) {
-      console.error("更新六角格高度失败：", error);
+    } catch (err) {
+      console.error('更新六角格高度失败:', err);
     }
     
     // 动态赋值视觉样式：等 DEM 更新完成后，根据更新后的 elevation 自动赋值 terrain_type 和 visual_style
-    hexCells.forEach(cell => {
-      const updatedStyle = assignVisualStyle(cell.terrain_attributes.elevation);
-      // 如果 assignVisualStyle 返回对象中有 type 属性，可以赋值 terrain_type，否则默认 plain
-      cell.terrain_attributes.terrain_type = updatedStyle.type || "plain";
-      cell.visual_style = { ...updatedStyle };
+    hexCells.forEach((cell) => {
+      const style = assignVisualStyle(cell.terrainAttributes.elevation);
+      // console.log(`elevation = ${cell.terrainAttributes.elevation}`)
+      // console.log(`terrainType = ${cell.terrainAttributes.terrainType}`)
+      cell.terrainAttributes.terrainType = style.type || 'default';
+      cell.updateVisualStyle(style);
     });
     
+    this.store.setHexCells(hexCells);
     return hexCells;
-  }
-
-  /**
-   * 静态方法：根据 hexCell 对象创建 Cesium.PolygonGeometry 用于渲染
-   * 注意：此函数只使用 position.points 中的顶点（第 1 至第 6 个元素）来创建多边形边界，中
-   * 心点不参与边界绘制。
-   * @param {Object} hexCell 六角格数据对象，要求 position.points 包含至少 7 个点（中心 + 6 个顶点）
-   * @returns {Cesium.PolygonGeometry}
-   */
-  static createHexagonGeometry(hexCell) {
-    // 取出六个顶点（忽略中心点 position.points[0]）
-    const vertices = hexCell.position.points.slice(1);
-    const positionsArray = [];
-    vertices.forEach(point => {
-      positionsArray.push(point.longitude, point.latitude, point.height);
-    });
-    // 添加闭合：重复第一个顶点
-    const firstVertex = vertices[0];
-    positionsArray.push(firstVertex.longitude, firstVertex.latitude, firstVertex.height);
-    
-    return Cesium.PolygonGeometry.fromPositions({
-      positions: Cesium.Cartesian3.fromDegreesArrayHeights(positionsArray),
-      vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT
-    });
-  }
-
-  /**
- * 根据 hexCell 对象生成边框的 PolylineGeometry
- * 只使用 position.points 中的顶点（第 1 至第 6 个元素），然后重复第一个顶点闭合
- * @param {Object} hexCell - 六角格数据对象，要求 position.points 包含至少 7 个点（中心 + 6 个顶点）
- * @returns {Cesium.PolylineGeometry}
- */
-  static createHexagonBorderGeometry(hexCell) {
-    // 取出六个顶点（忽略中心点 position.points[0]）
-    const vertices = hexCell.position.points.slice(1);
-    const positionsArray = [];
-    vertices.forEach(point => {
-      positionsArray.push(point.longitude, point.latitude);
-    });
-    
-    return new Cesium.GroundPolylineGeometry({
-      positions: Cesium.Cartesian3.fromDegreesArray(positionsArray),
-      loop : true,
-      width: 4.0,
-    });
   }
 }
