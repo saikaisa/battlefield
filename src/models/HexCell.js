@@ -1,4 +1,5 @@
 import { HexConfig } from '@/config/GameConfig';
+import { assignVisualStyle } from '@/config/HexVisualStyles';
 
 export class HexCell {
   /**
@@ -55,11 +56,20 @@ export class HexCell {
   }
 
   /**
-   * 更新视觉样式
+   * 将六角格显示样式更新为指定样式
    * @param {Object} newStyle - 样式对象
    */
   updateVisualStyle(newStyle) {
     this.visibility.visualStyle = { ...newStyle };
+  }
+
+  /**
+   * 将六角格显示样式更新为地形标记
+   */
+  updateVisualStyleByElevation() {
+    const style = assignVisualStyle(this.terrainAttributes.elevation);
+    this.terrainAttributes.terrainType = style.type || 'default';
+    this.updateVisualStyle(style);
   }
 
   /**

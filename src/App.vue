@@ -4,7 +4,7 @@
 
     <!-- Viewer 初始化完成后再渲染 InfoPanel 等 UI -->
     <div v-if="gameReady">
-      <InfoPanel />
+      <InfoPanel :infoPanelManager="infoPanelManager" />
       <router-view />
     </div>
 
@@ -16,22 +16,32 @@
 
 <script setup>
 import { ref, provide, onMounted, onUnmounted } from 'vue';
-import { MapInitializer } from '@/layers/geo-render/MapInitializer';
+import { SceneManager } from '@/layers/geo-render/SceneManager';
+import { InfoPanelManager } from '@/layers/interaction/InfoPanelManager';
 import InfoPanel from '@/components/hud/InfoPanel.vue';
 
-// 创建并全局提供 viewer 实例
+// 创建共享组件状态
 const viewerRef = ref(null);
 provide('cesiumViewer', viewerRef);
+
+const infoPanelManager = ref(null);
 
 // 控制 UI 是否可加载
 const gameReady = ref(false);
 
 // 生命周期钩子
 onMounted(async () => {
-  const mapInit = new MapInitializer('cesiumContainer');
-  const viewer = await mapInit.init();
+  // 初始化场景管理器
+  const sceneManager = new SceneManager('cesiumContainer');
+
+  const viewer = await sceneManager.init();
   viewerRef.value = viewer;
+
+  // 初始化信息面板管理器
+  infoPanelManager.value = new InfoPanelManager(viewer, sceneManager);
+
   gameReady.value = true;
+
 });
 
 onUnmounted(() => {

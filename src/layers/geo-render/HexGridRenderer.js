@@ -1,141 +1,190 @@
 import * as Cesium from "cesium";
-import { openGameStore } from "@/store";
-import { HexVisualStyles } from "@/config/HexVisualStyles";
+import { openGameStore } from '@/store';
+import { HexVisualStyles } from '@/config/HexVisualStyles';
+// eslint-disable-next-line no-unused-vars
+import { HexCell } from '@/models/HexCell';
 
 export class HexGridRenderer {
   constructor(viewer) {
     this.viewer = viewer;
     this.store = openGameStore();
-    this.fillPrimitives = [];
-    this.borderPrimitives = [];
+    this.baseLayerPrimitive = null; // 底层
+    this.interactionLayerPrimitive = null; // 交互层
+    this.hoveredHexId = null; // 鼠标悬浮的六角格
+    this.selectedHexIds = this.store.getSelectedHexIds(); // 鼠标选中的六角格，保存至全局状态
+    this.primitiveMap = {}; // hexId -> GeometryInstance
+
+    // 添加交互事件绑定
+    this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+
+    // 悬停事件：设置 hover 高亮
+    this.handler.setInputAction((movement) => {
+      const picked = this.viewer.scene.pick(movement.endPosition);
+      if (picked && picked.id) {
+        this.setHoveredHex(picked.id);
+      } else {
+        this.clearHoveredHex();
+      }
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+    // 点击事件：添加为选中高亮
+    this.handler.setInputAction((click) => {
+      const picked = this.viewer.scene.pick(click.position);
+      if (picked && picked.id) {
+        this.highlightHex(picked.id);
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
 
   clearGrid() {
-    this.fillPrimitives.forEach((primitive) => {
-      this.viewer.scene.primitives.remove(primitive);
-    });
-    this.borderPrimitives.forEach((primitive) => {
-      this.viewer.scene.primitives.remove(primitive);
-    });
-    this.fillPrimitives = [];
-    this.borderPrimitives = [];
+    if (this.baseLayerPrimitive) {
+      this.viewer.scene.primitives.remove(this.baseLayerPrimitive);
+      this.baseLayerPrimitive = null;
+    }
+    if (this.interactionLayerPrimitive) {
+      this.viewer.scene.primitives.remove(this.interactionLayerPrimitive);
+      this.interactionLayerPrimitive = null;
+    }
+    this.primitiveMap = {};
+    this.store.clearSelectedHexIds();
+    this.hoveredHexId = null;
   }
 
-  /**
-   * 将所有六角格样式设置为默认
-   */
-  renderGrid() {
+  renderGrid(layerIndex = 1) {
+    if (this.baseLayerPrimitive) this.viewer.scene.primitives.remove(this.baseLayerPrimitive);
     const hexCells = this.store.getHexCells();
-    hexCells.forEach((hexCell) => {
-      hexCell.updateVisualStyle(HexVisualStyles.default);
-    });
-    this.store.setHexCells(hexCells); // 回写更新后的副本
-    this.renderGrid();
-  }
+    if (layerIndex === 3) return;
 
-  renderGrid() {
-    this.clearGrid();
-    const hexCells = this.store.getHexCells();
+    const fillInstances = [];
+    const borderInstances = [];
 
     hexCells.forEach((hexCell) => {
-      const visual = hexCell.visibility.visualStyle || {};
-      console.log(`visual = ${visual.fillColor}`)
-      const showFill = visual.showFill === undefined ? false : visual.showFill;
-      const showBorder = visual.showBorder === undefined ? true : visual.showBorder;
-      console.log(`正在处理渲染六角格:  ${hexCell.hexId}`);
-
-      if (showFill) {
-        const fillGeometry = HexGridRenderer.createHexagonGeometry(hexCell);
-        const fillInstance = new Cesium.GeometryInstance({
-          geometry: fillGeometry,
-          attributes: {
-            color: Cesium.ColorGeometryInstanceAttribute.fromColor(visual.fillColor || Cesium.Color.WHITE.withAlpha(0.3)),
-          },
-          id: hexCell.hexId + "_fill",
-        });
-
-        const fillPrimitive = new Cesium.GroundPrimitive({
-          geometryInstances: fillInstance,
-          appearance: new Cesium.EllipsoidSurfaceAppearance({
-            material: Cesium.Material.fromType("Color", {
-              color: visual.fillColor || Cesium.Color.WHITE.withAlpha(0.3),
-            }),
-          }),
-          asynchronous: false,
-        });
-        this.viewer.scene.primitives.add(fillPrimitive);
-        this.fillPrimitives.push(fillPrimitive);
+      let visual = {};
+      if (layerIndex === 1) {
+        visual = HexVisualStyles.default;
+      } else if (layerIndex === 2) {
+        visual = hexCell.visibility.visualStyle || HexVisualStyles.default;
       }
 
-      if (showBorder) {
-        const borderGeometry = HexGridRenderer.createHexagonBorderGeometry(hexCell);
-        const borderInstance = new Cesium.GeometryInstance({
-          geometry: borderGeometry,
-          attributes: {
-            color: Cesium.ColorGeometryInstanceAttribute.fromColor(visual.borderColor || Cesium.Color.BLUE.withAlpha(0.3)),
-          },
-          id: hexCell.hexId + "_border",
-        });
+      const fillGeometry = HexGridRenderer.createHexCellGeometry(hexCell);
+      const fillInstance = new Cesium.GeometryInstance({
+        geometry: fillGeometry,
+        attributes: {
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+            visual.fillColor || Cesium.Color.WHITE.withAlpha(0.3)
+          ),
+        },
+        id: hexCell.hexId + '_fill',
+      });
+      fillInstances.push(fillInstance);
 
-        const borderPrimitive = new Cesium.GroundPolylinePrimitive({
-          geometryInstances: borderInstance,
-          appearance: new Cesium.PolylineColorAppearance({
-            material: Cesium.Material.fromType("Color", {
-              color: visual.borderColor || Cesium.Color.BLUE.withAlpha(0.3),
-            }),
-          }),
-        });
-        this.viewer.scene.primitives.add(borderPrimitive);
-        this.borderPrimitives.push(borderPrimitive);
-      }
+      const borderGeometry = HexGridRenderer.createHexCellBorderGeometry(hexCell);
+      const borderInstance = new Cesium.GeometryInstance({
+        geometry: borderGeometry,
+        attributes: {
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+            visual.borderColor || Cesium.Color.BLUE.withAlpha(0.3)
+          ),
+        },
+        id: hexCell.hexId + '_border',
+      });
+      borderInstances.push(borderInstance);
+
+      this.primitiveMap[hexCell.hexId] = fillInstance;
     });
+
+    const fillPrimitive = new Cesium.GroundPrimitive({
+      geometryInstances: fillInstances,
+      appearance: new Cesium.PerInstanceColorAppearance({ translucent: true }),
+      asynchronous: false,
+    });
+
+    const borderPrimitive = new Cesium.GroundPolylinePrimitive({
+      geometryInstances: borderInstances,
+      appearance: new Cesium.PolylineColorAppearance(),
+    });
+
+    this.baseLayerPrimitive = new Cesium.PrimitiveCollection();
+    this.baseLayerPrimitive.add(fillPrimitive);
+    this.baseLayerPrimitive.add(borderPrimitive);
+
+    this.viewer.scene.primitives.add(this.baseLayerPrimitive);
   }
 
-  // // 简单高亮：更新填充和边框颜色
-  // highlightHex(hexId, highlightFillColor, highlightBorderColor) {
-  //   this.fillPrimitives.forEach((primitive) => {
-  //     if (primitive.geometryInstances && primitive.geometryInstances[0].id === hexId + "_fill") {
-  //       primitive.appearance.material = Cesium.Material.fromType("Color", {
-  //         color: highlightFillColor,
-  //       });
-  //     }
-  //   });
-  //   this.borderPrimitives.forEach((primitive) => {
-  //     if (primitive.geometryInstances && primitive.geometryInstances[0].id === hexId + "_border") {
-  //       primitive.appearance.material = Cesium.Material.fromType("Color", {
-  //         color: highlightBorderColor,
-  //       });
-  //     }
-  //   });
-  // }
-  /**
-   * 静态方法：根据 hexCell 对象创建 Cesium.PolygonGeometry 用于渲染
-   * 注意：此函数只使用 position.points 中的顶点（第 1 至第 6 个元素）来创建多边形边界，中
-   * 心点不参与边界绘制。
-   * @param {Object} hexCell 六角格数据对象，要求 position.points 包含至少 7 个点（中心 + 6 个顶点）
-   * @returns {Cesium.PolygonGeometry}
-   */
-  static createHexagonGeometry(hexCell) {
+  renderInteractionLayer() {
+    if (this.interactionLayerPrimitive) this.viewer.scene.primitives.remove(this.interactionLayerPrimitive);
+    const hexCells = this.store.getHexCells();
+    this.selectedHexIds = this.store.getSelectedHexIds();
+
+    const interactionInstances = hexCells.map((hexCell) => {
+      let color = Cesium.Color.TRANSPARENT;
+      if (this.selectedHexIds.has(hexCell.hexId)) {
+        color = Cesium.Color.YELLOW.withAlpha(0.6);
+      } else if (this.hoveredHexId === hexCell.hexId) {
+        color = Cesium.Color.GRAY.withAlpha(0.5);
+      }
+      return new Cesium.GeometryInstance({
+        geometry: HexGridRenderer.createHexCellGeometry(hexCell),
+        attributes: {
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
+        },
+        id: hexCell.hexId,
+      });
+    });
+
+    this.interactionLayerPrimitive = new Cesium.GroundPrimitive({
+      geometryInstances: interactionInstances,
+      appearance: new Cesium.PerInstanceColorAppearance({ translucent: true }),
+      asynchronous: false,
+    });
+    this.viewer.scene.primitives.add(this.interactionLayerPrimitive);
+  }
+
+  highlightHex(hexId, multi=false) {
+    if (this.store.getSelectedHexIds().size > 0 && !multi) {
+      this.store.clearSelectedHexIds();
+    }
+    this.store.addSelectedHexId(hexId);
+    this.renderInteractionLayer();
+  }
+
+  unhighlightHex(hexId) {
+    this.store.removeSelectedHexId(hexId);
+    this.renderInteractionLayer();
+  }
+
+  clearHighlights() {
+    this.store.clearSelectedHexIds();
+    this.renderInteractionLayer();
+  }
+
+  setHoveredHex(hexId) {
+    if (this.hoveredHexId !== hexId) {
+      this.hoveredHexId = hexId;
+      this.renderInteractionLayer();
+    }
+  }
+
+  clearHoveredHex() {
+    if (this.hoveredHexId !== null) {
+      this.hoveredHexId = null;
+      this.renderInteractionLayer();
+    }
+  }
+
+  static createHexCellGeometry(hexCell) {
     const vertices = hexCell.getVertices();
     const pos = vertices.concat(vertices[0]);
     const posArr = pos.flatMap((pt) => [pt.longitude, pt.latitude, pt.height]);
-
     return Cesium.PolygonGeometry.fromPositions({
       positions: Cesium.Cartesian3.fromDegreesArrayHeights(posArr),
-      vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT,
+      vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
     });
   }
 
-  /**
-   * 根据 hexCell 对象生成边框的 PolylineGeometry
-   * 只使用 position.points 中的顶点（第 1 至第 6 个元素），然后重复第一个顶点闭合
-   * @param {Object} hexCell - 六角格数据对象，要求 position.points 包含至少 7 个点（中心 + 6 个顶点）
-   * @returns {Cesium.PolylineGeometry}
-   */
-  static createHexagonBorderGeometry(hexCell) {
+  static createHexCellBorderGeometry(hexCell) {
     const vertices = hexCell.getVertices();
     const posArr = vertices.map((pt) => [pt.longitude, pt.latitude]).flat();
-
     return new Cesium.GroundPolylineGeometry({
       positions: Cesium.Cartesian3.fromDegreesArray(posArr),
       loop: true,

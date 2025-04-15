@@ -2,7 +2,6 @@ import * as Cesium from 'cesium';
 import { openGameStore } from '@/store';
 import { HexConfig } from "@/config/GameConfig";
 import { HexCell } from '@/models/HexCell';
-import { assignVisualStyle } from '@/config/HexVisualStyles';
 
 /**
  * 将米转换为纬度差（度），大致 111320 米=1 度
@@ -147,13 +146,9 @@ export class HexGridGenerator {
       console.error('更新六角格高度失败:', err);
     }
     
-    // 动态赋值视觉样式：等 DEM 更新完成后，根据更新后的 elevation 自动赋值 terrain_type 和 visual_style
+    // 动态赋值视觉样式：等 DEM 更新完成后，根据更新后的 elevation 自动赋值 terrainType 和 visualStyle
     hexCells.forEach((cell) => {
-      const style = assignVisualStyle(cell.terrainAttributes.elevation);
-      // console.log(`elevation = ${cell.terrainAttributes.elevation}`)
-      // console.log(`terrainType = ${cell.terrainAttributes.terrainType}`)
-      cell.terrainAttributes.terrainType = style.type || 'default';
-      cell.updateVisualStyle(style);
+      cell.updateVisualStyleByElevation();
     });
     
     this.store.setHexCells(hexCells);

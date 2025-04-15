@@ -8,13 +8,14 @@ import { HexGridGenerator } from './HexGridGenerator';
 import { HexGridRenderer } from './HexGridRenderer';
 import { UnitModelLoader } from "@/layers/unit-render/UnitModelLoader";
 
-export class MapInitializer {
+export class SceneManager {
   constructor(containerId) {
     this.containerId = containerId;
     this.viewer = null;
     this.store = openGameStore();
     this.hexGridGenerator = null;
     this.hexGridRenderer = null;
+    this.cameraViewController = null;
   }
 
   /**
@@ -52,19 +53,19 @@ export class MapInitializer {
 
       // ---------------- 六角网格加载开始 ----------------
       // 生成六角网格数据
-      const hexGridGenerator = new HexGridGenerator(this.viewer);
-      let hexCells = await hexGridGenerator.generateGrid();
+      this.hexGridGenerator = new HexGridGenerator(this.viewer);
+      let hexCells = await this.hexGridGenerator.generateGrid();
       this.store.setHexCells(hexCells);
       
       // 创建 HexGridRenderer 实例并将六角网格渲染到地图上
-      const hexGridRenderer = new HexGridRenderer(this.viewer);
-      hexGridRenderer.renderGrid(hexCells);
+      this.hexGridRenderer = new HexGridRenderer(this.viewer);
+      this.hexGridRenderer.renderGrid();
       // ---------------- 六角网格加载结束 ----------------
 
       
       // ---------------- 相机系统加载开始 ----------------
-      const cameraViewController = new CameraViewController(this.viewer);
-      cameraViewController.initialize();
+      this.cameraViewController = new CameraViewController(this.viewer);
+      this.cameraViewController.initialize();
       // ---------------- 相机系统加载结束 ----------------
 
 
@@ -102,7 +103,7 @@ export class MapInitializer {
 
       return this.viewer;
     } catch (error) {
-      console.error("MapInitializer: 初始化地图失败", error);
+      console.error("SceneManager: 初始化地图失败", error);
       throw error;
     }
   }

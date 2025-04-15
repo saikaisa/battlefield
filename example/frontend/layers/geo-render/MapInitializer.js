@@ -5,7 +5,7 @@ import { ViewerConfig } from './ViewerConfig';
 // TerrainLoader 在 DEM 数据加载需要时调用，可在后续扩展时使用
 import { TerrainLoader } from './TerrainLoader';
 
-export class MapInitializer {
+export class SceneManager {
   constructor(containerId) {
     this.containerId = containerId;
     this.viewer = null;
@@ -53,7 +53,7 @@ export class MapInitializer {
       
       return this.viewer;
     } catch (error) {
-      console.error("MapInitializer: 初始化地图失败", error);
+      console.error("SceneManager: 初始化地图失败", error);
       throw error;
     }
   }

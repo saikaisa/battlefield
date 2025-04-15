@@ -1,25 +1,28 @@
+// eslint-disable-next-line no-unused-vars
 import { CameraViewController } from '@/layers/geo-render/CameraViewController';
+// eslint-disable-next-line no-unused-vars
 import { HexGridRenderer } from '@/layers/geo-render/HexGridRenderer';
-// import { openGameStore } from '@/store';
+import { openGameStore } from '@/store';
 
 export class InfoPanelManager {
-  constructor(viewer, hexCells) {
+  constructor(viewer, sceneManager) {
     this.viewer = viewer;
-    this.hexCells = hexCells;
-    this.cameraController = new CameraViewController(viewer);
-    this.hexRenderer = new HexGridRenderer(viewer);
+    this.store = openGameStore();
+    this.hexCells = this.store.getHexCells();
+    this.cameraViewController = sceneManager.cameraViewController;
+    this.hexGridRenderer = sceneManager.hexGridRenderer;
   }
 
   /**
    * 设置 orbit 模式（true 进入，false 退出）
    */
   setOrbitMode(enable) {
-    this.cameraController.setOrbitMode(enable);
+    this.cameraViewController.setOrbitMode(enable);
   }
 
   // 视角居中（默认范围）
   resetCameraView() {
-    this.cameraController.resetToDefaultView();
+    this.cameraViewController.resetToDefaultView();
   }
 
   // 视角定位到选中单位
@@ -33,31 +36,14 @@ export class InfoPanelManager {
     const targetHex = this.hexCells.find(hex => hex.hex_id === selectedForce.hex_id);
     if (targetHex) {
       const center = targetHex.position.points[0];
-      this.cameraController.focusOnLocation(center.longitude, center.latitude);
+      this.cameraViewController.focusOnLocation(center.longitude, center.latitude);
     } else {
       console.warn("未找到目标六角格");
     }
   }
 
-  // 地形标记隐藏开关
-  toggleTerrainVisual(layerIndex) {
-    if (layerIndex === 1) {
-      this.hexRenderer.renderDefaultGrid();
-    } else if (layerIndex === 2) {
-      this.hexRenderer.renderGrid();
-    } else if (layerIndex === 3) {
-      this.hexRenderer.clearGrid();
-    } else {
-      console.warn("未知图层编号", layerIndex);
-    }
-  }
-
-  // 六角格隐藏开关
-  toggleHexGridVisibility(isHexGridHidden) {
-    if (isHexGridHidden) {
-      this.hexRenderer.clearGrid();
-    } else {
-      this.hexRenderer.renderGrid(this.hexCells);
-    }
+  // 切换图层
+  toggleLayers(layerIndex) {
+      this.hexGridRenderer.renderGrid(layerIndex);
   }
 }
