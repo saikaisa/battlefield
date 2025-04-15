@@ -24,7 +24,7 @@ export class HexGridRenderer {
   /**
    * 将所有六角格样式设置为默认
    */
-  setHexesToDefaultVisual() {
+  renderGrid() {
     const hexCells = this.store.getHexCells();
     hexCells.forEach((hexCell) => {
       hexCell.updateVisualStyle(HexVisualStyles.default);

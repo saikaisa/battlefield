@@ -40,12 +40,15 @@ export class InfoPanelManager {
   }
 
   // 地形标记隐藏开关
-  toggleTerrainVisual(isTerrainHidden) {
-    if (isTerrainHidden) {
-      this.hexRenderer.setHexesToDefaultVisual(this.hexCells);
+  toggleTerrainVisual(layerIndex) {
+    if (layerIndex === 1) {
+      this.hexRenderer.renderDefaultGrid();
+    } else if (layerIndex === 2) {
+      this.hexRenderer.renderGrid();
+    } else if (layerIndex === 3) {
+      this.hexRenderer.clearGrid();
     } else {
-      // 恢复原视觉效果（这里你可以调用原始的 visual_style）
-      this.hexRenderer.renderGrid(this.hexCells);
+      console.warn("未知图层编号", layerIndex);
     }
   }
 
