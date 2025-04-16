@@ -2,6 +2,8 @@
 import { CameraViewController } from '@/layers/geo-render/CameraViewController';
 // eslint-disable-next-line no-unused-vars
 import { HexGridRenderer } from '@/layers/geo-render/HexGridRenderer';
+// eslint-disable-next-line no-unused-vars
+import { ScreenInteractor } from '@/layers/interaction/ScreenInteractor';
 import { openGameStore } from '@/store';
 
 export class InfoPanelManager {
@@ -11,6 +13,7 @@ export class InfoPanelManager {
     this.hexCells = this.store.getHexCells();
     this.cameraViewController = sceneManager.cameraViewController;
     this.hexGridRenderer = sceneManager.hexGridRenderer;
+    this.screenInteractor = sceneManager.screenInteractor;
   }
 
   /**
@@ -44,6 +47,7 @@ export class InfoPanelManager {
 
   // 切换图层
   toggleLayers(layerIndex) {
-      this.hexGridRenderer.renderBaseGrid(layerIndex);
+    this.screenInteractor.clearInteractionStyles();
+    this.hexGridRenderer.renderBaseGrid(layerIndex);
   }
 }

@@ -15,7 +15,7 @@ export const HexVisualStyles = {
     priority: 1,
     fillColor: Cesium.Color.BLACK.withAlpha(0.1),
     borderColor: Cesium.Color.BLACK.withAlpha(0.2),
-    showFill: false,
+    showFill: true,
     showBorder: true
   },
   // 平原地形

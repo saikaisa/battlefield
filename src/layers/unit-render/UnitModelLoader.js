@@ -80,6 +80,7 @@ export class UnitModelLoader {
         // minimumPixelSize: 64,
         maximumScale: 2000,
         shadows: Cesium.ShadowMode.ENABLED,
+        allowPicking: false,
       });
       this.viewer.scene.primitives.add(newModel);
       return newModel;

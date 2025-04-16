@@ -24,6 +24,24 @@ function metersToDegreesLon(meters, latDegrees) {
 }
 
 /**
+ * 分批采样 DEM 高度信息，避免一次采样点过多造成堆栈溢出
+ * @param {Cesium.TerrainProvider} terrainProvider DEM 提供者
+ * @param {Array} positions 需要采样的 Cartographic 数组
+ * @param {number} batchSize 每个批次采样的数量，默认 500
+ * @returns {Promise<Array>} 返回采样完成的 Cartographic 数组
+ */
+async function sampleTerrainInBatches(terrainProvider, positions, batchSize = 500) {
+  let updatedPositions = [];
+  for (let i = 0; i < positions.length; i += batchSize) {
+    const batch = positions.slice(i, i + batchSize);
+    // 等待当前批次采样完成
+    const updatedBatch = await Cesium.sampleTerrainMostDetailed(terrainProvider, batch);
+    updatedPositions = updatedPositions.concat(updatedBatch);
+  }
+  return updatedPositions;
+}
+
+/**
  * HexGridGenerator 类用于生成六角网格数据（平顶六角格方案）
  */
 export class HexGridGenerator {
@@ -127,29 +145,39 @@ export class HexGridGenerator {
     
     // 采样所有六角格中 7 个点（中心 + 6 个顶点）
     const samplePositions = [];
-    hexCells.forEach((cell) => {
-      cell.position.points.forEach((pt) => {
-        samplePositions.push(Cesium.Cartographic.fromDegrees(pt.longitude, pt.latitude));
+    hexCells.forEach(cell => {
+      cell.position.points.forEach(pt => {
+        samplePositions.push(Cesium.Cartographic.fromDegrees(pt.longitude, pt.latitude, pt.height));
       });
     });
     
     try {
-      const updated = await Cesium.sampleTerrainMostDetailed(this.viewer.terrainProvider, samplePositions);
-      hexCells.forEach((cell, i) => {
-        const base = i * 7;
+      // 分批采样：将 samplePositions 分批进行采样
+      const updatedPositions = await sampleTerrainInBatches(this.viewer.terrainProvider, samplePositions, 500);
+      hexCells.forEach((cell, cellIndex) => {
+        const base = cellIndex * 7;
+        // 更新所有 7 个点的高度
         for (let j = 0; j < 7; j++) {
-          cell.position.points[j].height = updated[base + j].height;
+          cell.position.points[j].height = updatedPositions[base + j].height;
         }
-        cell.updateElevation();
+        // 计算加权平均高度，赋值给 terrainAttributes.elevation；中心点高度保持原采样值
+        const centerHeight = updatedPositions[base].height;
+        let verticesSum = 0;
+        for (let j = 1; j < 7; j++) {
+          verticesSum += updatedPositions[base + j].height;
+        }
+        cell.terrainAttributes.elevation = 0.4 * centerHeight + 0.1 * verticesSum;
+        cell.addVisualStyleByElevation(); // 更新地形类型和视觉样式
+        console.log(`[HexGridGenerator] Cell ${cell.hexId} 更新高度：center=${centerHeight.toFixed(2)}, elevation=${cell.terrainAttributes.elevation.toFixed(2)}`);
       });
     } catch (err) {
       console.error('更新六角格高度失败:', err);
     }
     
-    // 动态赋值视觉样式：等 DEM 更新完成后，根据更新后的 elevation 自动赋值 terrainType 和 visualStyles
-    hexCells.forEach((cell) => {
-      cell.addVisualStyleByElevation();
-    });
+    // // 根据 DEM 更新后，可以重新动态赋值视觉样式（例如根据高度选择 terrainType 与颜色预设）
+    // hexCells.forEach(cell => {
+    //   cell.addVisualStyleByElevation();
+    // });
     
     this.store.setHexCells(hexCells);
     return hexCells;

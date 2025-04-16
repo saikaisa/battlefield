@@ -163,7 +163,7 @@ export class HexGridRenderer {
         attributes: {
           color: Cesium.ColorGeometryInstanceAttribute.fromColor(color)
         },
-        id: hexCell.hexId + "_interact",
+        id: hexCell.hexId + "_fill",
       });
       const interactPrimitive = new Cesium.GroundPrimitive({
         geometryInstances: interactInstance,

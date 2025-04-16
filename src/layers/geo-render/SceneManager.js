@@ -7,6 +7,7 @@ import { CameraViewController } from './CameraViewController';
 import { HexGridGenerator } from './HexGridGenerator';
 import { HexGridRenderer } from './HexGridRenderer';
 import { UnitModelLoader } from "@/layers/unit-render/UnitModelLoader";
+import { ScreenInteractor } from '../interaction/ScreenInteractor';
 
 export class SceneManager {
   constructor(containerId) {
@@ -16,6 +17,7 @@ export class SceneManager {
     this.hexGridGenerator = null;
     this.hexGridRenderer = null;
     this.cameraViewController = null;
+    this.screenInteractor = null;
   }
 
   /**
@@ -52,16 +54,19 @@ export class SceneManager {
       
 
       // ---------------- 六角网格加载开始 ----------------
-      // 生成六角网格数据
       this.hexGridGenerator = new HexGridGenerator(this.viewer);
       let hexCells = await this.hexGridGenerator.generateGrid();
       this.store.setHexCells(hexCells);
-      
-      // 创建 HexGridRenderer 实例并将六角网格渲染到地图上
-      this.hexGridRenderer = new HexGridRenderer(this.viewer);
-      this.hexGridRenderer.renderBaseGrid();
       // ---------------- 六角网格加载结束 ----------------
 
+      // ---------------- 六角网格渲染开始 ----------------
+      this.hexGridRenderer = new HexGridRenderer(this.viewer);
+      this.hexGridRenderer.renderBaseGrid();
+      // ---------------- 六角网格渲染结束 ----------------
+
+      // ---------------- 屏幕交互器加载开始 ----------------
+      this.screenInteractor = new ScreenInteractor(this.viewer, this.hexGridRenderer, { enabled: true, multiSelect: false });
+      // ---------------- 屏幕交互器加载开始 ----------------
       
       // ---------------- 相机系统加载开始 ----------------
       this.cameraViewController = new CameraViewController(this.viewer);
