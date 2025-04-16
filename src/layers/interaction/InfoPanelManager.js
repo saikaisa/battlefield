@@ -44,6 +44,6 @@ export class InfoPanelManager {
 
   // 切换图层
   toggleLayers(layerIndex) {
-      this.hexGridRenderer.renderGrid(layerIndex);
+      this.hexGridRenderer.renderBaseGrid(layerIndex);
   }
 }

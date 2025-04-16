@@ -105,7 +105,7 @@ export class HexGridGenerator {
             controlFaction: "neutral"
           },
           visibility: {
-            visualStyle: {}, // 先为空，后续根据采样高度赋值
+            visualStyles: [], // 先为空，后续根据采样高度赋值
             visibleTo: {
               "blue": true,
               "red": true
@@ -146,9 +146,9 @@ export class HexGridGenerator {
       console.error('更新六角格高度失败:', err);
     }
     
-    // 动态赋值视觉样式：等 DEM 更新完成后，根据更新后的 elevation 自动赋值 terrainType 和 visualStyle
+    // 动态赋值视觉样式：等 DEM 更新完成后，根据更新后的 elevation 自动赋值 terrainType 和 visualStyles
     hexCells.forEach((cell) => {
-      cell.updateVisualStyleByElevation();
+      cell.addVisualStyleByElevation();
     });
     
     this.store.setHexCells(hexCells);

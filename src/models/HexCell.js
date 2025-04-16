@@ -1,5 +1,5 @@
 import { HexConfig } from '@/config/GameConfig';
-import { assignVisualStyle } from '@/config/HexVisualStyles';
+import { HexVisualStyles } from '@/config/HexVisualStyles';
 
 export class HexCell {
   /**
@@ -18,7 +18,11 @@ export class HexCell {
     this.position = position;
     this.terrainAttributes = terrainAttributes;
     this.battlefieldState = battlefieldState;
-    this.visibility = visibility;
+    // visibility.visualStyles 如果不存在就初始化为 []
+    this.visibility = visibility || {};
+    if (!this.visibility.visualStyles) {
+      this.visibility.visualStyles = [];
+    }
     this.additionalInfo = additionalInfo;
   }
 
@@ -56,20 +60,62 @@ export class HexCell {
   }
 
   /**
-   * 将六角格显示样式更新为指定样式
-   * @param {Object} newStyle - 样式对象
+   * 添加一个新的可视样式。同一层中，同一优先级的样式只能存在一个。
+   * @param {Object} visualStyle - 来自 HexVisualStyles 的对象(含 layer, type, priority等)
    */
-  updateVisualStyle(newStyle) {
-    this.visibility.visualStyle = { ...newStyle };
+  addVisualStyle(visualStyle) {
+    if (!visualStyle) return;
+
+    // 如果没有 visualStyles，初始化一下
+    if (!this.visibility.visualStyles) {
+      this.visibility.visualStyles = [];
+    }
+
+    this.visibility.visualStyles = this.visibility.visualStyles.filter(style => {
+      // 若同层且同优先级，则去掉
+      return !(style.layer === visualStyle.layer && style.priority === visualStyle.priority);
+    });
+
+    this.visibility.visualStyles.push(visualStyle);
+  }
+
+  /**
+   * 根据 type 移除某个可视样式
+   */
+  removeVisualStyleByType(type) {
+    if (!this.visibility.visualStyles) return;
+    this.visibility.visualStyles = this.visibility.visualStyles.filter(s => s.type !== type);
+  }
+
+  /**
+   * 获取指定 layer 下优先级最高的样式
+   * @param {string} layer - 'base' 或 'interaction' 等
+   * @returns {Object|undefined} 样式对象（如 fillColor, borderColor, priority等）
+   */
+  getTopVisualStyle(layer) {
+    if (!this.visibility.visualStyles) return undefined;
+    const layerStyles = this.visibility.visualStyles.filter(s => s.layer === layer);
+    if (layerStyles.length === 0) return undefined;
+    // 按优先级从大到小排序
+    layerStyles.sort((a, b) => b.priority - a.priority);
+    return layerStyles[0]; // 第一个就是最高优先级
   }
 
   /**
    * 将六角格显示样式更新为地形标记
    */
-  updateVisualStyleByElevation() {
-    const style = assignVisualStyle(this.terrainAttributes.elevation);
+  addVisualStyleByElevation() {
+    let style = null;
+    // 低海拔用 plain；中等海拔用 hill；高海拔用 mountain
+    if (this.terrainAttributes.elevation < 100) {
+      style = HexVisualStyles.plain;
+    } else if (this.terrainAttributes.elevation < 200) {
+      style = HexVisualStyles.hill;
+    } else {
+      style = HexVisualStyles.mountain;
+    }
     this.terrainAttributes.terrainType = style.type || 'default';
-    this.updateVisualStyle(style);
+    this.addVisualStyle(style);
   }
 
   /**

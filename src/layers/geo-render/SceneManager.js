@@ -59,7 +59,7 @@ export class SceneManager {
       
       // 创建 HexGridRenderer 实例并将六角网格渲染到地图上
       this.hexGridRenderer = new HexGridRenderer(this.viewer);
-      this.hexGridRenderer.renderGrid();
+      this.hexGridRenderer.renderBaseGrid();
       // ---------------- 六角网格加载结束 ----------------
 
       
