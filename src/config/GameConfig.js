@@ -1,3 +1,4 @@
+// src\config\GameConfig.js
 import * as Cesium from "cesium";
 
 function computeDefaultCameraView() {
@@ -8,19 +9,21 @@ function computeDefaultCameraView() {
   )
 }
 
+/** Cesium基础配置 */ 
 export const CesiumConfig = {
   terrainAssetId: 3957, // Cesium Ion地形数据的Asset ID
   genOsmBuildings: true, // 是否加载Cesium OSM Buildings
 };
 
+/** 六角格相关配置 */ 
 export const HexConfig = {
   radius: 500, // 六角格半径（单位：米，从中心到顶点的距离）
   // 战场边界
   bounds: {
-    minLon: -75.95,
-    maxLon: -75.85,
-    minLat: 40.57,
-    maxLat: 40.67,
+    minLon: -76.00,
+    maxLon: -75.70,
+    minLat: 40.47,
+    maxLat: 40.77,
   },
   // 高度采样权重
   heightSamplingWeights: {
@@ -29,6 +32,7 @@ export const HexConfig = {
   },
 };
 
+/** 相机视角相关配置 */ 
 export const CameraConfig = {
   defaultPosition: computeDefaultCameraView(),
   defaultRange: 12000,
@@ -40,6 +44,28 @@ export const CameraConfig = {
   enableTilt: false
 };
 
+/** 军事单位相关配置 */ 
+export const MilitaryConfig = {
+  // 限制参数（作为前端参考或限制条件）
+  limit: {
+    maxTroopStrength: 100, // 最大兵力值
+    minMorale: 50, // 最低士气值
+    maxActionPoints: 100, // 最大行动力
+    combatChance: {
+      max: 1,
+      min: -2
+    },
+    fatigueFactor: {
+      levelOne: 0.9,
+      levelTwo: 0.8,
+    }
+  },
+
+  // 兵种模型资源路径与LOD配置
+  // ...
+};
+
+/** API配置 */ 
 export const ApiConfig = {
   baseUrl: "http://localhost:8080/api", // 后续根据实际部署环境更改
   endpoints: {

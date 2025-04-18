@@ -1,4 +1,4 @@
-// src/layers/geo-render/CameraView.js
+// src\models\CameraView.js
 import * as Cesium from 'cesium';
 import { CameraConfig } from "@/config/GameConfig.js";
 

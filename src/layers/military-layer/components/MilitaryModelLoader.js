@@ -1,13 +1,12 @@
-// layers/unit-render/UnitModelLoader.js
-
+// src\layers\military-layer\components\MilitaryModelLoader.js
 import * as Cesium from "cesium";
 
 /**
- * UnitModelLoader 负责对作战单位的3D模型进行预处理和优化，
+ * MilitaryModelLoader 负责对作战单位的3D模型进行预处理和优化，
  * 包括 LOD 模型加载等，目前实现了基于 fromGltfAsync 的模型加载
  * 并支持通过 scale 参数设置模型大小，使其与六角格尺寸保持相对一致。
  */
-export class UnitModelLoader {
+export class MilitaryModelLoader {
   /**
    * 构造函数接收 Cesium Viewer 实例，用于后续模型在场景中的渲染
    * @param {Cesium.Viewer} viewer - Cesium Viewer 实例

@@ -1,9 +1,9 @@
-// ScreenInteractor.js
+// src\layers\interaction-layer\ScreenInteractor.js
 import * as Cesium from "cesium";
 import { openGameStore } from "@/store";
 import { HexVisualStyles } from "@/config/HexVisualStyles";
 // eslint-disable-next-line no-unused-vars
-import { HexGridRenderer } from "../geo-render/HexGridRenderer";
+import { HexGridRenderer } from "@/layers/geo-layer/components/HexGridRenderer";
 
 /**
  * ScreenInteractor: 管理鼠标悬浮 / 点击选中交互

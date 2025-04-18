@@ -5,10 +5,11 @@
 // 说明：
 //   • Unit    —— 兵种模板（同一个兵种实例可被多个 Force 引用）
 //   • Force   —— 部队（地图上渲染实体）
-//   • Battlegroup —— 战斗群（临时联合体）
+//   • BattleGroup —— 战斗群（临时联合体）
 //   • Formation    —— 编队（管理分组）
 //
 //   * 部队‑六角格、部队‑编队 等关联全部由 HexForceMapper 维护。
+//   * Pinia store 暴露 getHex / getForce，实体通过 id → PlainObject Map 检索。
 // ============================================================
 
 import { HexForceMapper }   from '@/utils/HexForceMapper';
@@ -22,21 +23,30 @@ const store = openGameStore();
  * -------------------------------------------------------------------*/
 export class Unit {
   static #autoId = 1; // 自动递增 id
-  
-  /** 新建或复用 Store 中已有的同 ID 实例 */
-  static create(data) {
-    const store = openGameStore();
-    const existing = store.getUnitById(data.unitId);
-    if (existing) return existing;
-    const u = new Unit(data);
-    store.addUnit(u);
-    return u;
-  }
+  static #registry = new Map(); // 兵种注册表
 
-  /** 委托给 Pinia */
-  static getById(id) {
-    return openGameStore().getUnitById(id);
+  /**
+   * 兵种模版：创建并缓存兵种
+   * 
+   * 传入的opt对象的id为null时，表示创建一个新兵种并返回其引用；
+   * 传入的opt对象的id不为null时：
+   *  - 一般表示正在创建部队，需要这个兵种作为组成，要从兵种注册表中
+   *    返回一个该兵种的引用（多个部队共用同一个兵种模板对象）作为该部队的成员。
+   *  - 或者表示要按指定id去创建一个部队，此时已经匹配过了注册表
+   *    确保没有id重复的，所以也不会创造出id相同的部队了
+   * 
+   * @param obj 兵种的PlainObject形式
+   */
+  static create(obj) {
+    // 一方面是防止创建同一个id的兵种，发生冲突；另一方面是
+    if (Unit.#registry.has(obj.unitId)) {
+      return Unit.#registry.get(obj.unitId);
+    }
+    const newUnit = new Unit(obj);
+    Unit.#registry.set(newUnit.unitId, newUnit);
+    return newUnit;
   }
+  static getById(id) { return Unit.#registry.get(id); }
 
   constructor({
     // ===== Identification =====
@@ -47,8 +57,6 @@ export class Unit {
     visibilityRadius, actionPointCostComposition, recoveryRate,
     // ===== Command Attributes =====
     commandCapability = 1, commandRange = 1,
-    // ===== Rendering Attributes =====
-    renderingKey = ""
   }) {
     this.unitId = unitId ?? `U_${Unit.#autoId++}`;
     this.unitName = unitName;
@@ -62,7 +70,6 @@ export class Unit {
     this.recoveryRate = recoveryRate;
     this.commandCapability = commandCapability;
     this.commandRange = commandRange;
-    this.renderingKey = renderingKey;
   }
 
   /* ==================== 作战/行动相关属性动态计算 ===================== */
@@ -330,13 +337,13 @@ export class Force {
 }
 
 /* ===================================================================
- * Ⅲ. Battlegroup (战斗群)
+ * Ⅲ. BattleGroup (战斗群)
  * -------------------------------------------------------------------*/
-export class Battlegroup {
+export class BattleGroup {
   static #autoId = 1;
 
-  constructor({ BattlegroupId, faction, commandForceId, forceIdList }) {
-    this.BattlegroupId  = BattlegroupId ?? `BG_${Battlegroup.#autoId++}`;
+  constructor({ battlegroupId, faction, commandForceId, forceIdList }) {
+    this.battlegroupId  = battlegroupId ?? `BG_${BattleGroup.#autoId++}`;
     this.faction        = faction;
     this.commandForceId = commandForceId;
     this.forceIdList    = forceIdList; // ForceId[]，包含了commandForceId
@@ -380,7 +387,7 @@ export class Battlegroup {
   /* ======================== 序列化 =========================== */
   toPlainObject() {
     return {
-      BattlegroupId: this.BattlegroupId,
+      battlegroupId: this.battlegroupId,
       faction: this.faction,
       commandForceId: this.commandForceId,
       forceIdList: this.forceIdList,
@@ -388,7 +395,7 @@ export class Battlegroup {
   }
 
   static fromPlainObject(obj) { 
-    return new Battlegroup(obj); 
+    return new BattleGroup(obj); 
   }
 }
 

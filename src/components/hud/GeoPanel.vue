@@ -1,3 +1,4 @@
+<!-- src\components\hud\GeoPanel.vue -->
 <template>
   <el-card class="control-panel">
     <el-button type="primary" @click="resetCameraView">视角居中</el-button>
@@ -19,7 +20,7 @@ import { ref, computed, defineProps } from 'vue';
 import { openGameStore } from '@/store';
 
 const props = defineProps({
-  infoPanelManager: Object
+  geoPanelManager: Object
 });
 
 const store = openGameStore();
@@ -31,7 +32,7 @@ const layerIndex = ref(1); // 1: 默认图层, 2: 地形图层, 3: 无六角格�
 
 const toggleOrbitMode = () => {
   orbitEnabled.value = !orbitEnabled.value;
-  props.infoPanelManager.setOrbitMode(orbitEnabled.value);
+  props.geoPanelManager.setOrbitMode(orbitEnabled.value);
 };
 
 const orbitButtonText = computed(() =>
@@ -40,15 +41,15 @@ const orbitButtonText = computed(() =>
 
 const resetCameraView = () => {
   orbitEnabled.value = false;
-  props.infoPanelManager.resetCameraView();
+  props.geoPanelManager.resetCameraView();
 };
 
 const toggleLayers = () => {
-  props.infoPanelManager.toggleLayers(layerIndex.value);
+  props.geoPanelManager.toggleLayers(layerIndex.value);
 };
 
 const focusSelectedForce = () => {
-  props.infoPanelManager.focusOnSelectedForce(selectedForcesList.value);
+  props.geoPanelManager.focusOnSelectedForce(selectedForcesList.value);
 };
 </script>
 

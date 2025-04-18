@@ -1,12 +1,19 @@
+// src\layers\interaction-layer\GeoPanelManager.js
 // eslint-disable-next-line no-unused-vars
-import { CameraViewController } from '@/layers/geo-render/CameraViewController';
+import { CameraViewController } from '@/layers/geo-layer/components/CameraViewController';
 // eslint-disable-next-line no-unused-vars
-import { HexGridRenderer } from '@/layers/geo-render/HexGridRenderer';
+import { HexGridRenderer } from '@/layers/geo-layer/components/HexGridRenderer';
 // eslint-disable-next-line no-unused-vars
-import { ScreenInteractor } from '@/layers/interaction/ScreenInteractor';
+import { ScreenInteractor } from '@/layers/interaction-layer/ScreenInteractor';
 import { openGameStore } from '@/store';
 
-export class InfoPanelManager {
+/**
+ * 六角格/相机视角控制相关面板管理器
+ * 
+ * - 视角控制区
+ * - 六角格信息栏（尚未完成）
+ */
+export class GeoPanelManager {
   constructor(viewer, sceneManager) {
     this.viewer = viewer;
     this.store = openGameStore();

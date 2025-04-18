@@ -1,3 +1,4 @@
+// src\layers\geo-layer\components\CameraViewController.js
 import * as Cesium from "cesium";
 import { openGameStore } from "@/store";
 import { CameraConfig } from "@/config/GameConfig";
@@ -77,7 +78,7 @@ class CameraViewController {
       // 退出 orbit 模式：解除 lookAt，并平滑飞行恢复
       console.log(`-----------------Orbit Disable--------------`);
       this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-      const oldCameraView = CameraView.fromPlainObject(this.store.getLatestViewPlain());
+      const oldCameraView = this.store.getLatestView();
 
       const pivot = oldCameraView.getCartesianPos();
       const range = Math.max(Cesium.Cartesian3.distance(this.viewer.camera.position, pivot), CameraConfig.minZoomDistance * 1.5);

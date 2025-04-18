@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+// src\layers\geo-layer\components\HexGridGenerator.js
+import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 import { HexConfig } from "@/config/GameConfig";
 import { HexCell } from '@/models/HexCell';
@@ -119,7 +120,6 @@ export class HexGridGenerator {
             passability: { land: true, naval: false, air: true }
           },
           battlefieldState: {
-            forcesList: [],
             controlFaction: "neutral"
           },
           visibility: {
@@ -179,7 +179,6 @@ export class HexGridGenerator {
     //   cell.addVisualStyleByElevation();
     // });
     
-    this.store.setHexCells(hexCells);
     return hexCells;
   }
 }

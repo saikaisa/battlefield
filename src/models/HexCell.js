@@ -1,5 +1,7 @@
+// src\models\HexCell.js
 import { HexConfig } from '@/config/GameConfig';
 import { HexVisualStyles } from '@/config/HexVisualStyles';
+import { HexForceMapper } from '@/utils/HexForceMapper';
 
 export class HexCell {
   /**
@@ -13,18 +15,50 @@ export class HexCell {
     battlefieldState,
     visibility,
     additionalInfo,
-  }) {
-    this.hexId = hexId;
-    this.position = position;
-    this.terrainAttributes = terrainAttributes;
-    this.battlefieldState = battlefieldState;
-    // visibility.visualStyles 如果不存在就初始化为 []
-    this.visibility = visibility || {};
-    if (!this.visibility.visualStyles) {
-      this.visibility.visualStyles = [];
-    }
-    this.additionalInfo = additionalInfo;
+  } = {}) {
+    // 基础标识
+    this.hexId = hexId ?? '';
+
+    // 空间位置：保证 points、row、col 三个字段都已初始化
+    this.position = {
+      points: Array.isArray(position?.points) ? position.points : [],
+      row:    position?.row    ?? 0,
+      col:    position?.col    ?? 0,
+    };
+
+    // 地形属性：保证每个子字段都有默认值
+    this.terrainAttributes = {
+      terrainType:        terrainAttributes?.terrainType        ?? 'default',
+      terrainComposition: terrainAttributes?.terrainComposition ?? {},
+      elevation:          terrainAttributes?.elevation          ?? 0,
+      passability:        terrainAttributes?.passability        ?? { land: true, naval: false, air: true },
+    };
+
+    // 战场状态：controlFaction 必须有默认
+    this.battlefieldState = {
+      // this.forceIds = updated from HexForceMapper;
+      controlFaction: battlefieldState?.controlFaction ?? 'neutral',
+    };
+
+    // 可视状态：visualStyles 和 visibleTo 都要初始化
+    this.visibility = {
+      visualStyles: Array.isArray(visibility?.visualStyles) ? visibility.visualStyles : [],
+      visibleTo: visibility?.visibleTo ?? { blue: true, red: true },
+    };
+
+    // 附加信息：isObjectivePoint、resource
+    this.additionalInfo = {
+      isObjectivePoint: additionalInfo?.isObjectivePoint ?? false,
+      resource:         additionalInfo?.resource         ?? null,
+    };
   }
+
+  // 六角格包含部队
+  get forcesIds() { return HexForceMapper.getForcesByHexId(this.hexId); }
+
+  // 部队添加和移除
+  addForceById(id) { HexForceMapper.addForceById(id, this.hexId); }
+  removeForceById(id) { HexForceMapper.removeForceById(id); }
 
   /**
    * 获取中心点

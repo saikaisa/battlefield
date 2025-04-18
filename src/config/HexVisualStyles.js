@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+// src\config\HexVisualStyles.js
+import * as Cesium from "cesium";
 
 /**
  * 各种视觉预设预定义
@@ -60,17 +61,17 @@ export const HexVisualStyles = {
   },
   // 蓝方阵营高亮标记
   factionBlue: {
-    layer: 'base',
+    layer: 'interaction',
     type: 'factionBlue',
-    priority: 2,
+    priority: 0,
     fillColor: Cesium.Color.BLUE.withAlpha(0.3),
     showFill: true,
   },
   // 红方阵营高亮标记
   factionRed: {
-    layer: 'base',
+    layer: 'interaction',
     type: 'factionRed',
-    priority: 2,
+    priority: 0,
     fillColor: Cesium.Color.RED.withAlpha(0.3),
     showFill: true,
   },
