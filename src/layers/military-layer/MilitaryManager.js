@@ -1,58 +1,84 @@
-// src\layers\military-layer\MilitaryManager.js
+// eslint-disable-next-line no-unused-vars
 import * as Cesium from "cesium";
-import { openGameStore } from "@/store";
-import { MilitaryModelLoader } from "./components/MilitaryModelLoader";
+import { watch } from 'vue';
+import { openGameStore } from '@/store';
+import { MilitaryModelLoader } from './components/MilitaryModelLoader';
+import { MilitaryModelRenderer } from './components/MilitaryModelRenderer';
+import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
+import { API } from "@/services/api";
 
 /**
  * 军事单位管理器
- * 
- * 加载军事单位和命令处理逻辑的总管理器
+ *
+ * 主要职责：
+ *  1. 模板预加载 (Loader)
+ *  2. 模型实例化渲染 (Renderer)
+ *  3. Pinia forceMap 数据同步
+ *  4. 交互面板 (PanelManager) 命令回调对接
  */
 export class MilitaryManager {
-  constructor(viewer) {
+  constructor(viewer, geoPanelManager) {
     this.viewer = viewer;
     this.store = openGameStore();
-    this.hexCells = this.store.getHexCells();
+    this.loader = null;
+    this.renderer = null;
+    this.geoPanelManager = geoPanelManager;
+
+    // 初始化面板管理器
+    this.panelManager = new MilitaryPanelManager(viewer, geoPanelManager);
+    this._stopForceWatch = null;
   }
 
-  /**
-   * 异步初始化地图，并在划定区域生成六角网格
-   */
-  async init() {
-    // ---------------- 兵种系统加载开始 ----------------
-    // 下面只是示例
-    // 假设 hexCells 为生成的六角格数组（见 HexGridGenerator.js 中 generateGrid 方法返回的数据）
-    // 此处取第一个六角格的中心点作为部队单位的放置位置
-    const firstHex = this.hexCells[0];
-    const centerPoint = firstHex.position.points[0];  // 第一个点为中心点
+  async init(onProgress) {
+    this.loader = new MilitaryModelLoader(this.viewer);
+    await this.loader.preloadAll(onProgress);
 
-    // 将中心点（包含经纬度、高度）转换为 Cartesian3 坐标
-    const unitPosition = Cesium.Cartesian3.fromDegrees(centerPoint.longitude, centerPoint.latitude, centerPoint.height+500);
+    this.renderer = new MilitaryModelRenderer(this.viewer, this.loader);
+    this.renderer.renderAllForces();
 
-    // 创建模型优化实例，传入当前 Viewer 对象
-    const militaryModelLoader = new MilitaryModelLoader(this.viewer);
+    this._stopForceWatch = watch(
+      () => Array.from(this.store.forceMap.keys()),
+      (newIds, oldIds) => this.renderer.syncForces(newIds, oldIds)
+    );
 
-    // 定义用于加载 GLB 单位模型的渲染属性，其中 lod_levels 可定义不同细节级别的模型路径
-    const renderingAttributes = {
-      // 当未启用 LOD 动态切换时，可直接指定基础模型路径
-      model_path: "../../assets/plane.gltf",
-      // 定义 LOD 方案：距离越远加载越低细节的模型
-      lod_levels: [
-        { level: 0, distance: 0, model_path: "/assets/plane.gltf" },
-        { level: 1, distance: 800, model_path: "/assets/plane.gltf" },
-        { level: 2, distance: 1500, model_path: "/assets/plane.gltf" }
-      ]
+    this._bindPanelCommands();
+    return true;
+  }
+
+  _bindPanelCommands() {
+    this.panelManager.onMoveCommand = async ({ forceId, path }) => {
+      const res = await API.move(forceId, path);
+      console.log('[MilitaryManager] move result:', res);
     };
 
-    // 加载并渲染 GLB 模型到指定位置，返回对象包含当前模型和 dispose 方法
-    const unitModelHandle = militaryModelLoader.loadUnitModelWithLOD(renderingAttributes, unitPosition);
+    this.panelManager.onAttackCommand = async ({ commandForceId, targetHex, supportForceIds }) => {
+      const res = await API.attack(commandForceId, targetHex, supportForceIds);
+      console.log('[MilitaryManager] attack result:', res);
+    };
 
-    // 此处，你可以在控制台输出 unitModelHandle 或在调试时检查是否正确加载
-    console.log("单位模型加载成功：", unitModelHandle);
-    // ---------------- 兵种系统加载结束 ----------------
+    this.panelManager.onCreateForce = async ({ hexId, faction, composition }) => {
+      const res = await API.createForce(hexId, faction, composition);
+      console.log('[MilitaryManager] createForce result:', res);
+    };
 
+    this.panelManager.onMergeForces = async ({ hexId, forceIds }) => {
+      const res = await API.mergeForces(hexId, forceIds);
+      console.log('[MilitaryManager] mergeForces result:', res);
+    };
 
-    return true;
+    this.panelManager.onSplitForce = async ({ forceId, splitDetails }) => {
+      const res = await API.splitForce(forceId, splitDetails);
+      console.log('[MilitaryManager] splitForce result:', res);
+    };
+  }
 
+  destroy() {
+    if (this._stopForceWatch) {
+      this._stopForceWatch();
+      this._stopForceWatch = null;
+    }
+    this.renderer?.dispose();
+    this.loader?.dispose();
+    this.panelManager?.destroy?.();
   }
 }

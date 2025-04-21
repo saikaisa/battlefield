@@ -62,7 +62,35 @@ export const MilitaryConfig = {
   },
 
   // 兵种模型资源路径与LOD配置
-  // ...
+  models: {
+    infantry_basic: {
+      scale: 60,
+      animations: ["idle", "walk", "attack", "die"],
+      lod_levels: [
+        { level: 0, distance: 0,    url: "/assets/models/infantry_high.glb" },
+        { level: 1, distance: 800,  url: "/assets/models/infantry_mid.glb" },
+        { level: 2, distance: 1600, url: "/assets/models/infantry_low.glb" }
+      ]
+    },
+    tank_mk1: {
+      scale: 95,
+      animations: ["idle", "move", "fire", "destroy"],
+      lod_levels: [
+        { level: 0, distance: 0,    url: "/assets/models/tank_mk1_high.glb" },
+        { level: 1, distance: 1000, url: "/assets/models/tank_mk1_mid.glb" },
+        { level: 2, distance: 2200, url: "/assets/models/tank_mk1_low.glb" }
+      ]
+    },
+    plane_f16: {
+      scale: 110,
+      animations: ["idle", "fly", "attack"],
+      lod_levels: [
+        { level: 0, distance: 0,    url: "/assets/models/plane_f16_high.glb" },
+        { level: 1, distance: 1500, url: "/assets/models/plane_f16_mid.glb" },
+        { level: 2, distance: 3000, url: "/assets/models/plane_f16_low.glb" }
+      ]
+    }
+  }
 };
 
 /** API配置 */ 

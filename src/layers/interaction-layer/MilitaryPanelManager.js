@@ -1,4 +1,3 @@
-// src\layers\interaction-layer\MilitaryPanelManager.js
 import { watch, computed } from 'vue';
 import { openGameStore } from '@/store';
 // eslint-disable-next-line no-unused-vars
@@ -6,7 +5,7 @@ import { GeoPanelManager } from '@/layers/interaction-layer/GeoPanelManager';
 
 /**
  * 军事单位/命令操作相关面板管理器
- * 
+ *
  * - 编队列表
  * - 部队详细信息栏
  * - 命令下达区
@@ -20,6 +19,13 @@ export class MilitaryPanelManager {
     this.store = openGameStore();
     this.geoPanelManager = geoPanelManager;
 
+    // 命令回调占位符，由 MilitaryManager 绑定实现
+    this.onMoveCommand = null;
+    this.onAttackCommand = null;
+    this.onCreateForce = null;
+    this.onMergeForces = null;
+    this.onSplitForce = null;
+
     /* ========= 只读派生 =========== */
     this.selectedFormation = computed(() => {
       const [fid] = Array.from(this.store.selectedForceIds);
@@ -32,9 +38,9 @@ export class MilitaryPanelManager {
     watch(() => this.store.selectedForceIds, (set) => {
       if (set.size === 0) return;
       const forceId = Array.from(set)[0];
-      const force   = this.store.getForceById(forceId);
+      const force = this.store.getForceById(forceId);
       if (force) {
-        const hex   = this.store.getHexCellById(force.hexId);
+        const hex = this.store.getHexCellById(force.hexId);
         if (hex) {
           const center = hex.getCenter();
           this.geoPanelManager.cameraViewController.focusOnLocation(center.longitude, center.latitude);
@@ -45,13 +51,11 @@ export class MilitaryPanelManager {
 
   /** 点击编队标题 => 高亮所有部队所在格 */
   onFormationClick(formation) {
-    // 清空再批量添加选中的格子
     this.store.clearSelectedHexIds();
     formation.forceIdList.forEach(fid => {
       const f = this.store.getForceById(fid);
       if (f) this.store.addSelectedHexId(f.hexId);
     });
-    // 渲染器会监听 selectedHexIds 自动高亮
   }
 
   /** 点击部队名称 => 选中并定位一个部队 */
@@ -61,4 +65,41 @@ export class MilitaryPanelManager {
     this.store.addSelectedForceId(force.forceId);
     this.store.addSelectedHexId(force.hexId);
   }
+
+  /** 发起移动命令 */
+  move(forceId, path) {
+    if (typeof this.onMoveCommand === 'function') {
+      this.onMoveCommand({ forceId, path });
+    }
+  }
+
+  /** 发起进攻命令 */
+  attack(commandForceId, targetHex, supportForceIds) {
+    if (typeof this.onAttackCommand === 'function') {
+      this.onAttackCommand({ commandForceId, targetHex, supportForceIds });
+    }
+  }
+
+  /** 发起创建部队命令 */
+  createForce(hexId, faction, composition) {
+    if (typeof this.onCreateForce === 'function') {
+      this.onCreateForce({ hexId, faction, composition });
+    }
+  }
+
+  /** 发起合并部队命令 */
+  mergeForces(hexId, forceIds) {
+    if (typeof this.onMergeForces === 'function') {
+      this.onMergeForces({ hexId, forceIds });
+    }
+  }
+
+  /** 发起拆分部队命令 */
+  splitForce(forceId, splitDetails) {
+    if (typeof this.onSplitForce === 'function') {
+      this.onSplitForce({ forceId, splitDetails });
+    }
+  }
+
+  // 可在此处添加更多命令接口...
 }

@@ -17,7 +17,7 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted, onUnmounted } from 'vue';
+import { ref, provide, onMounted, onBeforeUnmount, onUnmounted } from 'vue';
 import { SceneManager } from '@/layers/geo-layer/SceneManager';
 import { GeoPanelManager } from '@/layers/interaction-layer/GeoPanelManager';
 import GeoPanel from '@/components/hud/GeoPanel.vue';
@@ -34,13 +34,15 @@ provide('cesiumViewer', viewerRef);
 // 控制 UI 是否可加载
 const gameReady = ref(false);
 
+let sceneManager;
+let militaryManager;
 let geoPanelManager;
 // let militaryPanelManager;
 
 // 生命周期钩子
 onMounted(async () => {
   // 初始化场景管理器
-  const sceneManager = new SceneManager('cesiumContainer');
+  sceneManager = new SceneManager('cesiumContainer');
 
   const viewer = await sceneManager.init();
   viewerRef.value = viewer;
@@ -49,12 +51,18 @@ onMounted(async () => {
   geoPanelManager = new GeoPanelManager(viewer, sceneManager);
 
   // 初始化军事单位管理器
-  const militaryManager = new MilitaryManager(viewer);
+  militaryManager = new MilitaryManager(viewer);
+  await militaryManager.init((done,total)=>console.log(`unit preload ${done}/${total}`));
 
   // militaryPanelManager = new MilitaryPanelManager(viewer, geoPanelManager);
 
   gameReady.value = await militaryManager.init();
 
+});
+
+onBeforeUnmount(() => {
+  militaryManager?.dispose();
+  sceneManager?.destroy();
 });
 
 onUnmounted(() => {
