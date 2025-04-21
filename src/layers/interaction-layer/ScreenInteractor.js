@@ -1,4 +1,5 @@
 // src\layers\interaction-layer\ScreenInteractor.js
+import { watch } from 'vue';
 import * as Cesium from "cesium";
 import { openGameStore } from "@/store";
 import { HexVisualStyles } from "@/config/HexVisualStyles";
@@ -34,8 +35,27 @@ export class ScreenInteractor {
     this.allowCancelSingle = options.allowCancelSingle !== undefined ? options.allowCancelSingle : true;
     this.allowCancelMulti = options.allowCancelMulti !== undefined ? options.allowCancelMulti : false;
 
-    // 记录当前悬浮的 hexId（只能有一个）
+    // 记录当前悬浮的 hexId 和 primitive（只能有一个）
     this.hoveredHexId = null;
+    this.hoverPrimitive = null;
+
+    // 监听 layerIndex，全局图层切换时自动启停交互
+    watch(
+      () => this.store.layerIndex, // 侦听全局图层
+      (newLayer) => {
+        if (newLayer === 3) {
+          this._hideHover();
+          this.enabled = false;
+        } else {
+          this.enabled = true;
+        }
+      },
+      { immediate: true }   // 首次立即触发一次，以设置 enabled
+    );
+
+    // Hover 降频调度
+    this._nextHoverId = null;
+    this._hoverRafId  = null;
 
     // 创建事件处理器
     this.handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
@@ -52,13 +72,10 @@ export class ScreenInteractor {
     this.handler.setInputAction((movement) => {
       if (!this.enabled) return;
       const pickedObj = this.viewer.scene.pick(movement.endPosition);
-      if (Cesium.defined(pickedObj) && pickedObj.id && pickedObj.id.includes("_fill")) {
-        const hexId = pickedObj.id.replace("_fill", "");
-        this._handleHover(hexId);
-      } else {
-        this._handleHover(null); // 移开到空白
-      }
-      this.hexGridRenderer.renderInteractGrid();
+      const hexId = (Cesium.defined(pickedObj) && pickedObj.id?.includes("_fill"))
+                      ? pickedObj.id.replace("_fill", "")
+                      : null;
+      this._scheduleHover(hexId);
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
   }
 
@@ -83,33 +100,63 @@ export class ScreenInteractor {
       this.hexGridRenderer.renderInteractGrid();
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
+  
+  /** 将 hover 处理合并到下一帧，只执行一次 */
+  _scheduleHover(hexId) {
+    if (!this.enabled) return;
+    if (this._hoverRafId) return;      // 已经排队
+    this._nextHoverId = hexId;
+    this._hoverRafId = requestAnimationFrame(() => {
+      this._hoverRafId = null;
+      this._handleHover(this._nextHoverId);
+    });
+  }
 
   /**
    * 悬浮处理：移除旧悬浮，加新悬浮
    */
   _handleHover(hexId) {
-    if (hexId === this.hoveredHexId) {
-      return; // 无需重复
-    }
-    // 移除旧悬浮
-    if (this.hoveredHexId) {
-      this._removeVisualStyleByType(this.hoveredHexId, "hovered");
-    }
+    if (!this.enabled) return;
+    if (hexId === this.hoveredHexId) return;
     this.hoveredHexId = hexId;
-
-    // 新建悬浮
-    if (hexId) {
-      const hexCell = this._getHexCellById(hexId);
-      if (hexCell) {
-        hexCell.addVisualStyle(HexVisualStyles.hovered); 
-      }
+  
+    if (this.hoverPrimitive) {
+      this.viewer.scene.primitives.remove(this.hoverPrimitive);
+      this.hoverPrimitive = null;
     }
+  
+    // 如果移到空白就结束
+    if (!hexId) return;
+  
+    // 为新的格子重新创建 Primitive
+    const cell = this.store.getHexCellById(hexId);
+    if (!cell) return;
+  
+    const { fillGeometry } = HexGridRenderer.getOrCreateGeometry(cell);
+  
+    const inst = new Cesium.GeometryInstance({
+      geometry: fillGeometry,
+      attributes: {
+        color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+          HexVisualStyles.hovered.fillColor
+        )
+      },
+      id: cell.hexId + "_fill",
+    });
+  
+    this.hoverPrimitive = new Cesium.GroundPrimitive({
+      geometryInstances: inst,
+      asynchronous: false,
+    });
+    this.viewer.scene.primitives.add(this.hoverPrimitive);
   }
 
   /**
    * 点击处理：单选或多选，根据配置决定能否取消
    */
   _handleClick(hexId) {
+    if (!this.enabled) return;
+    
     const selectedIds = this.store.getSelectedHexIds();
     const isSelected = selectedIds.has(hexId);
 
@@ -130,7 +177,7 @@ export class ScreenInteractor {
         this.store.clearSelectedHexIds();
 
         this.store.addSelectedHexId(hexId);
-        const hexCell = this._getHexCellById(hexId);
+        const hexCell = this.store.getHexCellById(hexId);
         if (hexCell) {
           hexCell.addVisualStyle(HexVisualStyles.selected);
         }
@@ -149,7 +196,7 @@ export class ScreenInteractor {
       } else {
         // 新增选中
         this.store.addSelectedHexId(hexId);
-        const hexCell = this._getHexCellById(hexId);
+        const hexCell = this.store.getHexCellById(hexId);
         if (hexCell) {
           hexCell.addVisualStyle(HexVisualStyles.selected);
         }
@@ -178,17 +225,16 @@ export class ScreenInteractor {
       this.handler.destroy();
       this.handler = null;
     }
+    // 清除 RAF
+    if (this._hoverRafId) {
+      cancelAnimationFrame(this._hoverRafId);
+      this._hoverRafId = null;
+    }
   }
 
   // =============== 辅助方法 ===============
-
-  _getHexCellById(hexId) {
-    const all = this.store.getHexCells();
-    return all.find(c => c.hexId === hexId);
-  }
-
   _removeVisualStyleByType(hexId, styleType) {
-    const cell = this._getHexCellById(hexId);
+    const cell = this.store.getHexCellById(hexId);
     if (!cell) return;
     cell.removeVisualStyleByType(styleType);
   }
@@ -198,5 +244,15 @@ export class ScreenInteractor {
     hexCells.forEach((hexCell) => {
       hexCell.removeVisualStyleByType(type);
     });
+  }
+  /**
+   * 隐藏当前悬浮灰块
+   */
+  _hideHover() {
+    if (this.hoverPrimitive) {
+      this.viewer.scene.primitives.remove(this.hoverPrimitive);
+      this.hoverPrimitive = null;
+    }
+    this.hoveredHexId = null;
   }
 }

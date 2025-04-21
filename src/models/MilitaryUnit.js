@@ -15,8 +15,6 @@ import { HexForceMapper }   from '@/utils/HexForceMapper';
 import { openGameStore }    from '@/store';
 import { MilitaryConfig }   from '@/config/GameConfig';
 
-const store = openGameStore();
-
 /* ===================================================================
  * Ⅰ. Unit  (兵种)
  * -------------------------------------------------------------------*/
@@ -267,7 +265,8 @@ export class Force {
    * 查找当前部队所在六角格的地形
    */
   _terrainAt(hexId = this.hexId) {
-    const cell = store.getHex(hexId);
+    const store = openGameStore();
+    const cell = store.getHexCellById(hexId);
     return cell?.terrainAttributes?.terrainType ?? 'plain';
   }
 
@@ -349,14 +348,14 @@ export class Battlegroup {
   /* ======================== 动态计算属性 =========================== */
   get jointAttackFirepower()  { return this._getJointFirepower('attackFirepower'); }
   get jointDefenseFirepower() { return this._getJointFirepower('defenseFirepower'); }
-  get commandCapability() { return store.getForce(this.commandForceId)?.commandCapability ?? 1; }
-  get commandRange() { return store.getForce(this.commandForceId)?.commandRange ?? 1; }
+  get commandCapability() { return openGameStore().getForceById(this.commandForceId)?.commandCapability ?? 1; }
+  get commandRange() { return openGameStore().getForceById(this.commandForceId)?.commandRange ?? 1; }
 
   /* ======================== 内部工具方法 =========================== */
   // 返回 forceIdList 内所有部队的对象
   _forces() { 
     return this.forceIdList
-    .map(fid => store.getForce(fid))
+    .map(fid => openGameStore().getForceById(fid))
     .filter(Boolean); 
   }
 

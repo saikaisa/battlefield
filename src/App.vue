@@ -6,6 +6,7 @@
     <!-- Viewer 初始化完成后再渲染 GeoPanel 等 UI -->
     <div v-if="gameReady">
       <GeoPanel :geoPanelManager="geoPanelManager" />
+      <!-- <MilitaryPanel :militaryPanelManager="militaryPanelManager" /> -->
       <router-view />
     </div>
 
@@ -21,15 +22,20 @@ import { SceneManager } from '@/layers/geo-layer/SceneManager';
 import { GeoPanelManager } from '@/layers/interaction-layer/GeoPanelManager';
 import GeoPanel from '@/components/hud/GeoPanel.vue';
 import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
+// import MilitaryPanel from '@/components/hud/MilitaryPanel.vue';
+// import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
 
 // 创建共享组件状态
 const viewerRef = ref(null);
 provide('cesiumViewer', viewerRef);
 
-const geoPanelManager = ref(null);
+// const geoPanelManager = ref(null);
 
 // 控制 UI 是否可加载
 const gameReady = ref(false);
+
+let geoPanelManager;
+// let militaryPanelManager;
 
 // 生命周期钩子
 onMounted(async () => {
@@ -40,10 +46,12 @@ onMounted(async () => {
   viewerRef.value = viewer;
 
   // 初始化信息面板管理器
-  geoPanelManager.value = new GeoPanelManager(viewer, sceneManager);
+  geoPanelManager = new GeoPanelManager(viewer, sceneManager);
 
   // 初始化军事单位管理器
   const militaryManager = new MilitaryManager(viewer);
+
+  // militaryPanelManager = new MilitaryPanelManager(viewer, geoPanelManager);
 
   gameReady.value = await militaryManager.init();
 

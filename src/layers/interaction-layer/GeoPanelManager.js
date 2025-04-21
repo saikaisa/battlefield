@@ -35,15 +35,20 @@ export class GeoPanelManager {
     this.cameraViewController.resetToDefaultView();
   }
 
-  // 视角定位到选中单位
-  focusOnSelectedForce(selected_forces_list) {
-    if (selected_forces_list.length === 0) {
+  /** 
+   * 视角定位到选中单位
+   * 
+   * @param {Set} selectedForceIds 选中部队集合
+   */
+  focusOnSelectedForce() {
+    const selectedForceIds = this.store.getSelectedForceIds();
+    if (selectedForceIds.size === 0) {
       console.warn("没有选中任何单位");
       return;
     }
 
-    const selectedForce = selected_forces_list[0]; // 第一个部队
-    const targetHex = this.hexCells.find(hex => hex.hex_id === selectedForce.hex_id);
+    const selectedForce = this.store.getForceById(selectedForceIds.values().next().value); // 第一个部队
+    const targetHex = this.hexCells.find(hex => hex.hexId === selectedForce.hexId);
     if (targetHex) {
       const center = targetHex.position.points[0];
       this.cameraViewController.focusOnLocation(center.longitude, center.latitude);
@@ -53,8 +58,8 @@ export class GeoPanelManager {
   }
 
   // 切换图层
-  toggleLayers(layerIndex) {
-    this.screenInteractor.clearInteractionStyles();
-    this.hexGridRenderer.renderBaseGrid(layerIndex);
+  toggleLayers() {
+    this.hexGridRenderer.renderBaseGrid();
+    this.hexGridRenderer.renderInteractGrid();
   }
 }

@@ -77,7 +77,7 @@ export const HexVisualStyles = {
   },
   // 鼠标悬浮灰块
   hovered: {
-    layer: 'interaction',
+    layer: 'immediately',
     type: 'hovered',
     priority: 1,
     fillColor: Cesium.Color.GRAY.withAlpha(0.5),

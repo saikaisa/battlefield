@@ -4,10 +4,11 @@ import { openGameStore } from '@/store';
 import { HexVisualStyles } from '@/config/HexVisualStyles';
 // eslint-disable-next-line no-unused-vars
 import { HexCell } from '@/models/HexCell';
+import { computed } from "vue";
 
 // 缓存：每个六角格几何 (fillGeom, borderGeom)
 const geometryCache = new Map();
-// 缓存：按 layerIndex 存放 PrimitiveCollection，key=layerIndex
+// 缓存：按 layerIndex 存放 PrimitiveCollection，Map<layerIndex , PrimitiveCollection>
 const baseLayerCache = new Map();
 
 export class HexGridRenderer {
@@ -15,7 +16,8 @@ export class HexGridRenderer {
     this.viewer = viewer;
     this.store = openGameStore();
 
-    this.layerIndex = 1;
+    this.layerIndex = computed(() => this.store.layerIndex);
+    // console.log(`layerIndex: ${this.layerIndex.value}`)
     this.interactGridPrimitives = null; // 交互层
     this.selectedHexIds = this.store.getSelectedHexIds(); // 鼠标选中的六角格，保存至全局状态
   }
@@ -25,21 +27,20 @@ export class HexGridRenderer {
    * 
    * 边框采用一个Primitive对应多个Geometry的方式渲染，
    * 填充采用一个Primitive对应一个Geometry的方式渲染(灰块/高亮块同理)。
-   * @param {number} layerIndex = 1: 基本图层  2: 地形图层  3: 无六角格
+   * @param {number} refresh 是否强制刷新
    */
-  renderBaseGrid(layerIndex = 1, refresh = false) {
+  renderBaseGrid(refresh = false) {
     // 隐藏所有 (layerIndex===3)
-    if (layerIndex === 3) {
-      baseLayerCache.forEach(coll => coll.show = false);
-      this.layerIndex = layerIndex;
+    if (this.layerIndex.value === 3) {
+      baseLayerCache.forEach(collection => collection.show = false);
       return;
     }
 
     // 首次或强制：清除旧缓存并重建所有层
     if (refresh || baseLayerCache.size === 0) {
       // 从场景移除并销毁旧集合
-      baseLayerCache.forEach(coll => {
-        this.viewer.scene.primitives.remove(coll, false);
+      baseLayerCache.forEach(collection => {
+        this.viewer.scene.primitives.remove(collection);
       });
       baseLayerCache.clear();
 
@@ -48,7 +49,7 @@ export class HexGridRenderer {
       // 构建 layer 1 & 2 两套 PrimitiveCollection
       [1, 2].forEach(idx => {
         const borderInstances = [];
-        const primColl = new Cesium.PrimitiveCollection();
+        const primCollection = new Cesium.PrimitiveCollection();
         hexCells.forEach((hexCell) => {
           // 选择对应样式
           let visual = idx === 1
@@ -68,7 +69,7 @@ export class HexGridRenderer {
               geometryInstances: fillInstance,
               asynchronous: false
             });
-            primColl.add(fillPrimitive);
+            primCollection.add(fillPrimitive);
           }
           if (visual.showBorder) {
             const borderInstance = new Cesium.GeometryInstance({
@@ -83,25 +84,24 @@ export class HexGridRenderer {
           }
         });
 
-        primColl.add(new Cesium.GroundPolylinePrimitive({
+        primCollection.add(new Cesium.GroundPolylinePrimitive({
           geometryInstances: borderInstances,
           appearance: new Cesium.PolylineColorAppearance(),
           allowPicking: false
         }));
         // 显隐控制
-        primColl.show = (layerIndex === idx);
+        primCollection.show = (this.layerIndex.value === idx);
         // 加入场景 & 缓存
-        this.viewer.scene.primitives.add(primColl);
-        baseLayerCache.set(idx, primColl);
+        this.viewer.scene.primitives.add(primCollection);
+        baseLayerCache.set(idx, primCollection);
       });
     } else {
       // 仅切换显隐
-      baseLayerCache.forEach((coll, idx) => {
-        coll.show = (layerIndex === idx);
+      baseLayerCache.forEach((collection, idx) => {
+        collection.show = (this.layerIndex.value === idx);
       });
     }
-    
-    this.layerIndex = layerIndex;
+
   }
 
   /**
@@ -113,7 +113,7 @@ export class HexGridRenderer {
       this.viewer.scene.primitives.remove(this.interactGridPrimitives);
       this.interactGridPrimitives = null;
     }
-    if (this.layerIndex === 3) return; // layerIndex=3时，不渲染
+    if (this.layerIndex.value === 3) return; // layerIndex=3时，不渲染
 
     this.interactGridPrimitives = new Cesium.PrimitiveCollection();
     const hexCells = this.store.getHexCells();

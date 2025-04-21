@@ -12,22 +12,23 @@ function Rea(input, ClassCtor) {
 }
 
 export const openGameStore = defineStore("gameStore", () => {
-  /* 1. 视角历史 */
+  /* 1. 全局状态 */
   const viewHistory = ref([]); // CameraView的PlainObject形式，只读
   const MAX_HISTORY = 10;
-
+  const layerIndex = ref(1); // 当前六角格图层：1=默认，2=地形，3=隐藏
+  
   /* 2. 主数据容器 */
   const hexCellMap     = reactive(new Map());  // Map<hexId, HexCell>
   const unitMap        = reactive(new Map());  // Map<unitId, Unit>
   const forceMap       = reactive(new Map());  // Map<forceId, Force>
   const battlegroupMap = reactive(new Map());  // Map<battlegroupId , Battlegroup>
   const formationMap   = reactive(new Map());  // Map<formationId , Formation>
-  
+
   /* 3. 选中状态 */
   const selectedHexIds   = reactive(new Set());
   const selectedForceIds = reactive(new Set());
 
-  /* ==================== 视角历史 ==================== */
+  /* ==================== 全局状态 ==================== */
   // 添加一条视角历史记录
   function addViewHistory(view) {
     viewHistory.value.push(view instanceof CameraView ? view.toPlainObject() : view);
@@ -38,8 +39,12 @@ export const openGameStore = defineStore("gameStore", () => {
   // 获取最近一条视角历史记录
   function getLatestView() {
     return viewHistory.value.length > 0 ? 
-    CameraView.fromPlainObject(viewHistory.value[viewHistory.value.length - 1]) : 
-    null; 
+      CameraView.fromPlainObject(viewHistory.value[viewHistory.value.length - 1]) : 
+      null; 
+  }
+  // 设置图层编号
+  function setLayerIndex(idx) {
+    layerIndex.value = idx;
   }
   
   /* ==================== HexCell 相关 ==================== */
@@ -47,9 +52,10 @@ export const openGameStore = defineStore("gameStore", () => {
   function addHexCell(data) {
     const cell = Rea(data, HexCell);
     hexCellMap.set(cell.hexId, cell);
+    // console.log('reactive:', isReactive(cell));
     return cell;
   }
-  // 加载六角格 (会清空原有的)
+  // 批量加载六角格 (会清空原有的)
   function setHexCells(newHexCells) { 
     hexCellMap.clear();
     newHexCells.forEach(data => { addHexCell(data); });
@@ -94,6 +100,10 @@ export const openGameStore = defineStore("gameStore", () => {
     viewHistory,
     addViewHistory,
     getLatestView,
+
+    // 全局图层控制
+    layerIndex,
+    setLayerIndex,
 
     // 六角格
     hexCellMap,

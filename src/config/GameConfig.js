@@ -20,9 +20,9 @@ export const HexConfig = {
   radius: 500, // 六角格半径（单位：米，从中心到顶点的距离）
   // 战场边界
   bounds: {
-    minLon: -76.00,
+    minLon: -75.80,
     maxLon: -75.70,
-    minLat: 40.47,
+    minLat: 40.67,
     maxLat: 40.77,
   },
   // 高度采样权重

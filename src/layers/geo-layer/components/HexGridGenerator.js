@@ -174,11 +174,6 @@ export class HexGridGenerator {
       console.error('更新六角格高度失败:', err);
     }
     
-    // // 根据 DEM 更新后，可以重新动态赋值视觉样式（例如根据高度选择 terrainType 与颜色预设）
-    // hexCells.forEach(cell => {
-    //   cell.addVisualStyleByElevation();
-    // });
-    
     return hexCells;
   }
 }
