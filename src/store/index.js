@@ -1,11 +1,10 @@
 // src\store\index.js
 import { defineStore } from "pinia";
 import { reactive, ref, isReactive } from "vue";
-import { CameraView } from "@/models/CameraView";
 import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 
-/** 把传入对象转成“已 reactive 的指定类实例” */
+/** 把传入对象转成"已 reactive 的指定类实例" */
 function Rea(input, ClassCtor) {
   let inst = input instanceof ClassCtor ? input : new ClassCtor(input);
   return isReactive(inst) ? inst : reactive(inst);
@@ -13,8 +12,6 @@ function Rea(input, ClassCtor) {
 
 export const openGameStore = defineStore("gameStore", () => {
   /* 1. 全局状态 */
-  const viewHistory = ref([]); // CameraView的PlainObject形式，只读
-  const MAX_HISTORY = 10;
   const layerIndex = ref(1); // 当前六角格图层：1=默认，2=地形，3=隐藏
   
   /* 2. 主数据容器 */
@@ -29,19 +26,6 @@ export const openGameStore = defineStore("gameStore", () => {
   const selectedForceIds = reactive(new Set());
 
   /* ==================== 全局状态 ==================== */
-  // 添加一条视角历史记录
-  function addViewHistory(view) {
-    viewHistory.value.push(view instanceof CameraView ? view.toPlainObject() : view);
-    if (viewHistory.value.length > MAX_HISTORY) {
-      viewHistory.value.shift();
-    }
-  }
-  // 获取最近一条视角历史记录
-  function getLatestView() {
-    return viewHistory.value.length > 0 ? 
-      CameraView.fromPlainObject(viewHistory.value[viewHistory.value.length - 1]) : 
-      null; 
-  }
   // 设置图层编号
   function setLayerIndex(idx) {
     layerIndex.value = idx;
@@ -94,13 +78,7 @@ export const openGameStore = defineStore("gameStore", () => {
    function clearSelectedForceIds() { selectedForceIds.clear(); }
    function getSelectedForceIds() { return selectedForceIds; }
 
-
    return {
-    // 视角历史
-    viewHistory,
-    addViewHistory,
-    getLatestView,
-
     // 全局图层控制
     layerIndex,
     setLayerIndex,

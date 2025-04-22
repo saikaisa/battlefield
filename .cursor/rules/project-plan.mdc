@@ -1,0 +1,64 @@
+---
+description: 项目的大纲和框架。
+globs: 
+alwaysApply: false
+---
+
+# 项目概述
+
+这是我的大学本科毕业设计项目，名为“基于网页的三维兵棋渲染引擎”，请你将回复和代码的深度控制在本科毕设应有的水平。目前已经完成了 scene-layer 的大部分，现在的重点是 military-layer 部分。
+
+## 整体分层
+
+### 基础地理渲染层（scene‑layer）
+
+- SceneManager：Cesium 场景初始化、地形加载、网格生成与渲染的总控。
+
+- HexGridGenerator：基于 DEM 和地理边界异步构造六角格数据（含点位、海拔、地形风格）。
+
+- HexGridRenderer：将六角格以 PrimitiveCollection 形式渲染到 Cesium 场景中，支持基础层与交互层样式叠加。
+
+- ScreenInteractor：处理鼠标悬浮、单/多选等交互逻辑，将行为同步到 Store，并驱动网格高亮。
+
+### 作战单位渲染与动画层（military‑layer）
+
+- 数据模型 (MilitaryUnit.js)：定义 Unit（兵种模板）、Force（地图实体）、Battlegroup（战斗群）、Formation（编队）4 类，所有动态属性由 Pinia Store 驱动。
+
+- MilitaryModelLoader：加载并缓存各兵种 glTF/glb 模型，支持 LOD 切换与动画播放。
+
+- MilitaryModelRenderer：根据 Store 中 forceMap，为每支部队动态实例化模型，计算“环形/网格/聚合”偏移、实时更新位置与 LOD。
+
+- MilitaryManager：二阶段主控制器，负责 Loader ↔ Renderer 初始化顺序、Store 监听、并对接面板命令回调（move/attack/create/merge/split），通过模拟 Api 模块更新前端状态。
+
+### 交互与信息展示层（interaction‑layer）
+
+- MilitaryPanelManager：桥接 Vue 组件与 MilitaryManager，暴露 move / attack / createForce / mergeForces / splitForce 等方法。
+
+- MilitaryPanel.vue：侧边栏 UI，包含编队列表、部队列表、六角格详情、部队详情、战斗群列表，以及命令下达区（移动/攻击/创建/合并/拆分）。
+
+### 全局状态管理层
+
+- 使用 Pinia 存储：hexCellMap、unitMap、forceMap、battlegroupMap、formationMap、选中状态等。
+
+- 组件/渲染器通过 openGameStore() 读取、更新、并用 Vue 的 reactive & computed 保持实时联动。
+
+## 已完成要点
+
+- 地图、地形与六角格基础功能已稳定；交互（选中、悬浮、高亮）功能完备。
+
+- 军事模型加载器与渲染器初步可用，支持大规模部队实例化、偏移排布、LOD 切换。
+
+- 面板与命令回调链路已搭建：从 UI → PanelManager → MilitaryManager → 模拟 API → Store → Renderer。
+
+- Store 中数据模型、Pinia 增删监听、Cesium postUpdate 更新等核心逻辑已落地。
+
+## 待完成/优化方向
+
+- 后端对接（次要）：将模拟 Api 替换为真实 HTTP REST 接口；完善状态回写与错误处理。
+
+- 动画与状态过渡：部队移动动画、进攻/受损特效、模型淡入淡出等。
+
+- 战争迷雾：基于 visibilityRadius 与六角格 visibleTo 实现真实时序迷雾效果。
+
+- HUD 拓展：统计列表、兵种管理面板、战斗日志面板等 UI 与业务对接。
+

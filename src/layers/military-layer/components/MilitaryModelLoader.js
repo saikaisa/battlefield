@@ -4,58 +4,53 @@ import { reactive } from 'vue';
 import { MilitaryConfig } from "@/config/GameConfig";
 
 /**
- * 军事模型加载器 (模板层)
- *
- * • templateCache: Map<renderingKey, TemplateEntry>
- *
- * TemplateEntry {
- *   lod: Array<{ level: number; distance: number; model: Cesium.Model }>;
- *   animations: string[];
- * }
- *
+ * 军事模型加载器
+ * 
  * 主要职责：
- *  1) 读取 MilitaryConfig.models，逐个加载各兵种的 LOD 模型到 templateCache
- *  2) 提供 getTemplate(key) 方法，按需懒加载
- *  3) 支持 preloadAll(onProgress) 批量预加载，并回调进度
- *  4) dispose() 清理所有缓存模型
+ * 1. 加载和缓存各兵种的 3D 模型
+ * 2. 支持 LOD (Level of Detail) 分级加载
+ * 3. 提供模型模板获取接口
  */
 export class MilitaryModelLoader {
   constructor(viewer) {
     this.viewer = viewer;
-    // 所有已加载的模板：renderingKey -> TemplateEntry
+    // 模型模板缓存: renderingKey -> TemplateEntry
     this.templateCache = reactive(new Map());
   }
 
   /**
-   * 批量预加载所有配置的兵种模型
-   * @param {Function} onProgress(done: number, total: number)
+   * 预加载所有配置的兵种模型
+   * @param {Function} onProgress 加载进度回调 (当前进度, 总数)
    */
   async preloadAll(onProgress = () => {}) {
-    const keys = Object.keys(MilitaryConfig.models);
-    const total = keys.length;
+    const modelKeys = Object.keys(MilitaryConfig.models);
+    const total = modelKeys.length;
+    
     for (let i = 0; i < total; i++) {
-      const key = keys[i];
-      await this._ensureTemplate(key);
+      await this._loadTemplate(modelKeys[i]);
       onProgress(i + 1, total);
     }
   }
 
   /**
-   * 根据渲染键获取模板，若未加载则触发加载
-   * @param {string} key
-   * @returns {Promise<TemplateEntry>}
+   * 获取指定兵种的模型模板
+   * @param {string} renderingKey 渲染键名
+   * @returns {Promise<TemplateEntry>} 模型模板
    */
-  async getTemplate(key) {
-    return this._ensureTemplate(key);
+  async getTemplate(renderingKey) {
+    if (!this.templateCache.has(renderingKey)) {
+      await this._loadTemplate(renderingKey);
+    }
+    return this.templateCache.get(renderingKey);
   }
 
   /**
-   * 清空缓存并销毁模型
+   * 清理所有已加载的模型
    */
   dispose() {
-    for (const tpl of this.templateCache.values()) {
-      tpl.lod.forEach(item => {
-        if (item.model && item.model.destroy) {
+    for (const template of this.templateCache.values()) {
+      template.lod.forEach(item => {
+        if (item.model?.isDestroyed?.()) {
           item.model.destroy();
         }
       });
@@ -63,40 +58,41 @@ export class MilitaryModelLoader {
     this.templateCache.clear();
   }
 
-  /* ------------------ 私有方法 ------------------ */
   /**
-   * 确保指定 key 的模板已加载
+   * 加载指定兵种的模型模板
    * @private
+   * @param {string} renderingKey 渲染键名
    */
-  async _ensureTemplate(key) {
-    if (this.templateCache.has(key)) {
-      return this.templateCache.get(key);
-    }
-
-    const config = MilitaryConfig.models[key];
+  async _loadTemplate(renderingKey) {
+    const config = MilitaryConfig.models[renderingKey];
     if (!config) {
-      throw new Error(`MilitaryModelLoader: 未找到模板配置 '${key}'`);
+      throw new Error(`未找到模型配置: ${renderingKey}`);
     }
 
-    // 按 level 升序加载各 LOD 模型
-    const lodArr = [];
-    const sorted = [...config.lod_levels].sort((a, b) => a.level - b.level);
-    for (const lvl of sorted) {
+    // 按 LOD 等级排序加载
+    const lodModels = [];
+    const sortedLevels = [...config.lod_levels].sort((a, b) => a.level - b.level);
+    
+    for (const level of sortedLevels) {
       const model = await Cesium.Model.fromGltfAsync({
-        url: lvl.url,
-        modelMatrix: Cesium.Matrix4.IDENTITY, // 模板不放入场景
+        url: level.url,
+        modelMatrix: Cesium.Matrix4.IDENTITY,
         scale: config.scale || 1.0,
         allowPicking: false,
         shadows: Cesium.ShadowMode.ENABLED
       });
-      lodArr.push({ level: lvl.level, distance: lvl.distance, model });
+
+      lodModels.push({
+        level: level.level,
+        distance: level.distance,
+        model: model
+      });
     }
 
-    const entry = {
-      lod: lodArr,
+    // 保存到缓存
+    this.templateCache.set(renderingKey, {
+      lod: lodModels,
       animations: config.animations || []
-    };
-    this.templateCache.set(key, entry);
-    return entry;
+    });
   }
 }

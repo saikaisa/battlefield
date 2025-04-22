@@ -1,4 +1,4 @@
-// src\layers\geo-layer\components\HexGridRenderer.js
+// src\layers\scene-layer\components\HexGridRenderer.js
 import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 import { HexVisualStyles } from '@/config/HexVisualStyles';
@@ -12,7 +12,32 @@ const geometryCache = new Map();
 const baseLayerCache = new Map();
 
 export class HexGridRenderer {
+  static instance = null;
+
+  /**
+   * 获取 HexGridRenderer 的单例实例
+   * @param {Cesium.Viewer} viewer - Cesium Viewer 实例（仅首次调用时需要）
+   * @returns {HexGridRenderer} 单例实例
+   */
+  static getInstance(viewer) {
+    if (!HexGridRenderer.instance) {
+      if (!viewer) {
+        throw new Error('首次创建 HexGridRenderer 实例时必须提供 viewer 参数');
+      }
+      HexGridRenderer.instance = new HexGridRenderer(viewer);
+    }
+    return HexGridRenderer.instance;
+  }
+
+  /**
+   * 私有构造函数，接收 Cesium.Viewer 实例
+   * @param {Cesium.Viewer} viewer - Cesium Viewer 实例
+   * @private
+   */
   constructor(viewer) {
+    if (HexGridRenderer.instance) {
+      throw new Error('HexGridRenderer 是单例类，请使用 getInstance() 方法获取实例');
+    }
     this.viewer = viewer;
     this.store = openGameStore();
 

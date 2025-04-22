@@ -4,34 +4,58 @@ import * as Cesium from "cesium";
 import { openGameStore } from "@/store";
 import { HexVisualStyles } from "@/config/HexVisualStyles";
 // eslint-disable-next-line no-unused-vars
-import { HexGridRenderer } from "@/layers/geo-layer/components/HexGridRenderer";
+import { HexGridRenderer } from "@/layers/scene-layer/components/HexGridRenderer";
 
 /**
  * ScreenInteractor: 管理鼠标悬浮 / 点击选中交互
  *  - 悬浮灰块 hovered
  *  - 点击高亮 selected
  *  - 支持单选或多选模式
- *  - 单/多选模式下，对同一格点击是否可取消选中也可配置
+ *  - 单/多选模式下，对同一格点击是否可取消也可配置
  */
 export class ScreenInteractor {
+  static instance = null;
+
   /**
+   * 获取 ScreenInteractor 的单例实例
+   * @param {Cesium.Viewer} viewer - Cesium Viewer 实例（仅首次调用时需要）
+   * @param {Object} options - 配置选项
+   * @returns {ScreenInteractor} 单例实例
+   */
+  static getInstance(viewer, options = {}) {
+    if (!ScreenInteractor.instance) {
+      if (!viewer) {
+        throw new Error('首次创建 ScreenInteractor 实例时必须提供 viewer 和 hexGridRenderer 参数');
+      }
+      ScreenInteractor.instance = new ScreenInteractor(viewer, options);
+    }
+    return ScreenInteractor.instance;
+  }
+
+  /**
+   * 私有构造函数
    * @param {Cesium.Viewer} viewer - Cesium Viewer 实例
    * @param {Object} options
    * @param {boolean} [options.enabled=true] - 是否启用鼠标交互
    * @param {boolean} [options.multiSelect=false] - 是否多选
    * @param {boolean} [options.allowCancelSingle=true] - 单选模式下，点击已选的格子是否可取消
    * @param {boolean} [options.allowCancelMulti=false] - 多选模式下，点击已选的格子是否可取消
+   * @private
    */
-  constructor(viewer, hexGridRenderer, options = {}) {
+  constructor(viewer, options = {}) {
+    if (ScreenInteractor.instance) {
+      throw new Error('ScreenInteractor 是单例类，请使用 getInstance() 方法获取实例');
+    }
+
     this.viewer = viewer;
-    this.hexGridRenderer = hexGridRenderer;
+    this.hexGridRenderer = HexGridRenderer.getInstance(viewer);
     this.store = openGameStore();
 
     // 基本交互设置
     this.enabled = options.enabled !== undefined ? options.enabled : true;
     this.multiSelect = options.multiSelect !== undefined ? options.multiSelect : false;
 
-    // 关于“点击已选格能否取消”
+    // 关于"点击已选格能否取消"
     this.allowCancelSingle = options.allowCancelSingle !== undefined ? options.allowCancelSingle : true;
     this.allowCancelMulti = options.allowCancelMulti !== undefined ? options.allowCancelMulti : false;
 

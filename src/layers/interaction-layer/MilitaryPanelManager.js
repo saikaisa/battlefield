@@ -1,12 +1,14 @@
 import { watch, computed } from 'vue';
 import { openGameStore } from '@/store';
+import { CameraViewController } from '@/layers/scene-layer/components/CameraViewController';
 // eslint-disable-next-line no-unused-vars
-import { GeoPanelManager } from '@/layers/interaction-layer/GeoPanelManager';
+import { ScenePanelManager } from '@/layers/interaction-layer/ScenePanelManager';
 
 /**
  * 军事单位/命令操作相关面板管理器
  *
  * - 编队列表
+ * - 六角格信息栏
  * - 部队详细信息栏
  * - 命令下达区
  * - 战斗群列表
@@ -15,9 +17,9 @@ import { GeoPanelManager } from '@/layers/interaction-layer/GeoPanelManager';
  * - 兵种管理面板（默认隐藏）
  */
 export class MilitaryPanelManager {
-  constructor(viewer, geoPanelManager) {
+  constructor(viewer) {
     this.store = openGameStore();
-    this.geoPanelManager = geoPanelManager;
+    this.cameraViewController = CameraViewController.getInstance(viewer);
 
     // 命令回调占位符，由 MilitaryManager 绑定实现
     this.onMoveCommand = null;
@@ -43,7 +45,7 @@ export class MilitaryPanelManager {
         const hex = this.store.getHexCellById(force.hexId);
         if (hex) {
           const center = hex.getCenter();
-          this.geoPanelManager.cameraViewController.focusOnLocation(center.longitude, center.latitude);
+          this.scenePanelManager.cameraViewController.focusOnLocation(center.longitude, center.latitude);
         }
       }
     });

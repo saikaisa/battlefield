@@ -2,171 +2,329 @@ import * as Cesium from "cesium";
 import { reactive } from 'vue';
 import { openGameStore } from '@/store';
 import { HexConfig } from '@/config/GameConfig';
+import { HexForceMapper } from '@/utils/HexForceMapper';
 
 /**
- * 军事模型渲染器 (实例层)
- *
+ * 军事模型渲染器
+ * 
  * 主要职责：
- *  - 接收模板 (loader.templateCache)
- *  - 根据 Pinia 中 forceMap 动态增删实例
- *  - 同步部队位置、LOD 切换、偏移排布
- *  - 提供 dispose() 清理所有实例
+ * 1. 管理部队模型的实例化和渲染（一个部队包含多个兵种模型）
+ * 2. 处理部队位置更新和 LOD 切换
+ * 3. 维护部队在六角格内的排布
  */
 export class MilitaryModelRenderer {
   constructor(viewer, loader) {
     this.viewer = viewer;
     this.loader = loader;
     this.store = openGameStore();
-
-    // Map<forceId, InstanceEntry>
+    
+    // 实例缓存: forceId -> ForceInstanceEntry
+    // ForceInstanceEntry: {
+    //   force: Force,
+    //   unitInstances: Map<unitId, UnitInstanceEntry>,
+    //   position: { longitude, latitude, height }
+    // }
+    // UnitInstanceEntry: {
+    //   model: Cesium.Model,
+    //   currentLOD: number,
+    //   template: TemplateEntry,
+    //   localOffset: { x, y }  // 兵种在部队内的相对偏移
+    // }
     this.instanceCache = reactive(new Map());
-    this._postUpdateHandle = null;
+    this._updateHandle = null;
 
-    // 可配置参数
-    this.opts = {
-      ringThreshold: 6,               // <=6 使用环形排布
-      ringRadiusFactor: 0.4,          // 环形半径 = HexConfig.radius * factor
-      gridMax: 9,                     // <=9 使用网格排布
-      gridScale: 0.7,                 // 网格整体缩放比例
-      heightOffset: 2,                // 相对地表抬高
+    // 部队排布配置
+    this.layoutConfig = {
+      // 环形布局（少量部队）
+      ringLayout: {
+        maxCount: 6,          // 最大使用环形的部队数
+        radiusScale: 0.4      // 环半径 = 六角格半径 * 此系数
+      },
+      // 网格布局（中等数量）
+      gridLayout: {
+        maxCount: 9,          // 最大使用网格的部队数
+        scale: 0.7           // 网格整体缩放系数
+      },
+      // 部队内兵种布局
+      unitLayout: {
+        spacing: 5,          // 兵种间距（米）
+        maxRow: 3           // 每行最多放置的兵种数
+      },
+      // 通用配置
+      heightOffset: 2         // 模型离地高度
     };
   }
 
+  /**
+   * 渲染所有部队的模型
+   */
   renderAllForces() {
-    this.store.getForces().forEach(f => this._addInstance(f));
+    this.store.getForces().forEach(force => {
+      this._createForceInstance(force);
+    });
     this._startUpdateLoop();
   }
 
-  syncForces(newIds, oldIds) {
-    newIds.forEach(id => {
+  /**
+   * 同步部队变化（增删）
+   */
+  syncForces(newForceIds, oldForceIds) {
+    // 添加新部队
+    newForceIds.forEach(id => {
       if (!this.instanceCache.has(id)) {
         const force = this.store.getForceById(id);
-        if (force) this._addInstance(force);
+        if (force) this._createForceInstance(force);
       }
     });
-    oldIds.forEach(id => {
-      if (!newIds.includes(id) && this.instanceCache.has(id)) {
-        this._removeInstance(id);
+
+    // 移除旧部队
+    oldForceIds.forEach(id => {
+      if (!newForceIds.includes(id)) {
+        this._removeForceInstance(id);
       }
     });
   }
 
-  async _addInstance(force) {
-    try {
-      const tpl = await this.loader.getTemplate(force.renderingKey);
-      const base = tpl.lod[0];
-      const inst = base.model.clone();
-      inst.modelMatrix = this._calcMatrix(force);
-      inst.allowPicking = true;
-      this.viewer.scene.primitives.add(inst);
-      this.instanceCache.set(force.forceId, {
-        forceRef: force,
-        model: inst,
-        currentLOD: 0,
-        tplEntry: tpl
+  /**
+   * 清理所有实例
+   */
+  dispose() {
+    if (this._updateHandle) {
+      this.viewer.scene.postUpdate.removeEventListener(this._updateHandle);
+      this._updateHandle = null;
+    }
+    
+    this.instanceCache.forEach(entry => {
+      entry.unitInstances.forEach(unitInstance => {
+        this.viewer.scene.primitives.remove(unitInstance.model);
       });
-    } catch (e) {
-      console.error(`[Renderer] 添加实例失败: ${force.forceId}`, e);
-    }
-  }
-
-  _removeInstance(forceId) {
-    const entry = this.instanceCache.get(forceId);
-    if (entry) {
-      this.viewer.scene.primitives.remove(entry.model);
-      this.instanceCache.delete(forceId);
-    }
-  }
-
-  _startUpdateLoop() {
-    if (this._postUpdateHandle) return;
-    this._postUpdateHandle = this.viewer.scene.postUpdate.addEventListener(() => {
-      this.instanceCache.forEach(entry => this._updateInstance(entry));
     });
+    this.instanceCache.clear();
   }
 
-  _updateInstance(entry) {
-    const { forceRef, model, tplEntry } = entry;
-    // 位置 & 偏移
-    model.modelMatrix = this._calcMatrix(forceRef);
-    // LOD 切换
-    const cameraPos = this.viewer.scene.camera.positionWC;
-    const modelPos = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
-    const dist = Cesium.Cartesian3.distance(cameraPos, modelPos);
-    let desired = 0;
-    tplEntry.lod.forEach((lvl, idx) => {
-      if (dist >= lvl.distance) desired = idx;
-    });
-    if (desired !== entry.currentLOD) {
-      // 切换实例
-      this.viewer.scene.primitives.remove(entry.model);
-      const newTpl = tplEntry.lod[desired].model;
-      const newInst = newTpl.clone();
-      newInst.modelMatrix = model.modelMatrix;
-      this.viewer.scene.primitives.add(newInst);
-      entry.model = newInst;
-      entry.currentLOD = desired;
+  /**
+   * 创建部队实例（包含多个兵种模型）
+   * @private
+   */
+  async _createForceInstance(force) {
+    try {
+      const forceEntry = {
+        force: force,
+        unitInstances: new Map(),
+        position: this._computeForcePosition(force)
+      };
+
+      // 为每个兵种创建实例
+      for (const comp of force.composition) {
+        const unit = this.store.getUnitById(comp.unitId);
+        if (!unit || !unit.renderingKey) continue;
+
+        const template = await this.loader.getTemplate(unit.renderingKey);
+        const baseModel = template.lod[0].model;
+        
+        // 计算该兵种在部队内的相对位置
+        const localOffset = this._computeUnitLocalOffset(
+          force.composition.indexOf(comp),
+          force.composition.length
+        );
+
+        // 创建实例
+        for (let i = 0; i < comp.unitCount; i++) {
+          const instance = baseModel.clone();
+          const unitInstance = {
+            model: instance,
+            currentLOD: 0,
+            template: template,
+            localOffset: {
+              x: localOffset.x + (Math.random() - 0.5) * 2, // 添加随机微偏移
+              y: localOffset.y + (Math.random() - 0.5) * 2
+            }
+          };
+
+          // 设置初始位置
+          instance.modelMatrix = this._computeUnitModelMatrix(
+            forceEntry.position,
+            unitInstance.localOffset
+          );
+          instance.allowPicking = true;
+          
+          this.viewer.scene.primitives.add(instance);
+          
+          // 使用 unitId_index 作为 key
+          const instanceId = `${comp.unitId}_${i}`;
+          forceEntry.unitInstances.set(instanceId, unitInstance);
+        }
+      }
+
+      this.instanceCache.set(force.forceId, forceEntry);
+    } catch (error) {
+      console.error(`创建部队实例失败: ${force.forceId}`, error);
     }
   }
 
   /**
-   * 计算载入部队的位置矩阵
-   * - 中心点基础经纬度
-   * - 偏移排布：环形 / 网格 / 聚合
+   * 移除部队实例
+   * @private
    */
-  _calcMatrix(force) {
-    const hex = this.store.getHexCellById(force.hexId);
-    if (!hex) return Cesium.Matrix4.IDENTITY;
-    const center = hex.getCenter();
-    const forces = this.store.getForcesByHexId(force.hexId);
-    const idx = forces.indexOf(force.forceId);
-    const N = forces.length;
-    // 配置解构
-    const { ringThreshold, ringRadiusFactor, gridMax, gridScale, heightOffset } = this.opts;
-    // 辅助函数：米→度
-    const toDegLat = m => m / 111320;
-    const toDegLon = (m, lat) => m / (111320 * Math.cos(lat));
-    // 计算基础地理坐标
-    const carto = Cesium.Cartographic.fromDegrees(center.longitude, center.latitude, center.height);
-    // 计算偏移
-    let dx = 0, dy = 0;
-    if (N <= ringThreshold) {
-      // 环形排布
-      const r = HexConfig.radius * ringRadiusFactor;
-      const ang = 2 * Math.PI * idx / N;
-      dx = r * Math.cos(ang);
-      dy = r * Math.sin(ang);
-    } else if (N <= gridMax) {
-      // 网格排布
-      const cols = Math.ceil(Math.sqrt(N));
-      const rows = Math.ceil(N / cols);
-      const spanX = (HexConfig.radius * 2 * gridScale) / cols;
-      const spanY = (HexConfig.radius * 2 * gridScale) / rows;
-      const row = Math.floor(idx / cols);
-      const col = idx % cols;
-      dx = (col - (cols - 1) / 2) * spanX;
-      dy = (row - (rows - 1) / 2) * spanY;
-    } else {
-      // 聚合：中心不偏移，可额外加微扰
-      dx = 0;
-      dy = 0;
+  _removeForceInstance(forceId) {
+    const forceEntry = this.instanceCache.get(forceId);
+    if (forceEntry) {
+      forceEntry.unitInstances.forEach(unitInstance => {
+        this.viewer.scene.primitives.remove(unitInstance.model);
+      });
+      this.instanceCache.delete(forceId);
     }
-    // 米偏移转经纬度
-    const lon = carto.longitude + toDegLon(dx, carto.latitude);
-    const lat = carto.latitude  + toDegLat(dy);
-    // 构建 Cartesian3 并生成矩阵
-    const pos = Cesium.Cartesian3.fromDegrees(lon, lat, carto.height + heightOffset);
-    return Cesium.Transforms.eastNorthUpToFixedFrame(pos);
   }
 
-  dispose() {
-    if (this._postUpdateHandle) {
-      this.viewer.scene.postUpdate.removeEventListener(this._postUpdateHandle);
-      this._postUpdateHandle = null;
-    }
-    this.instanceCache.forEach(entry => {
-      this.viewer.scene.primitives.remove(entry.model);
+  /**
+   * 启动更新循环
+   * @private
+   */
+  _startUpdateLoop() {
+    if (this._updateHandle) return;
+    
+    this._updateHandle = this.viewer.scene.postUpdate.addEventListener(() => {
+      this.instanceCache.forEach(forceEntry => {
+        this._updateForceInstance(forceEntry);
+      });
     });
-    this.instanceCache.clear();
+  }
+
+  /**
+   * 更新部队实例（位置和 LOD）
+   * @private
+   */
+  _updateForceInstance(forceEntry) {
+    // 更新部队位置
+    forceEntry.position = this._computeForcePosition(forceEntry.force);
+    
+    // 获取相机位置用于 LOD 判断
+    const cameraPos = this.viewer.scene.camera.positionWC;
+    
+    // 更新每个兵种实例
+    forceEntry.unitInstances.forEach(unitInstance => {
+      // 更新位置
+      unitInstance.model.modelMatrix = this._computeUnitModelMatrix(
+        forceEntry.position,
+        unitInstance.localOffset
+      );
+      
+      // 处理 LOD 切换
+      const modelPos = Cesium.Matrix4.getTranslation(
+        unitInstance.model.modelMatrix,
+        new Cesium.Cartesian3()
+      );
+      const distance = Cesium.Cartesian3.distance(cameraPos, modelPos);
+      
+      // 选择合适的 LOD 级别
+      let targetLOD = 0;
+      unitInstance.template.lod.forEach((level, index) => {
+        if (distance >= level.distance) {
+          targetLOD = index;
+        }
+      });
+      
+      // 如果需要切换 LOD
+      if (targetLOD !== unitInstance.currentLOD) {
+        const newModel = unitInstance.template.lod[targetLOD].model.clone();
+        newModel.modelMatrix = unitInstance.model.modelMatrix;
+        newModel.allowPicking = true;
+        
+        this.viewer.scene.primitives.remove(unitInstance.model);
+        this.viewer.scene.primitives.add(newModel);
+        
+        unitInstance.model = newModel;
+        unitInstance.currentLOD = targetLOD;
+      }
+    });
+  }
+
+  /**
+   * 计算部队在六角格内的位置
+   * @private
+   */
+  _computeForcePosition(force) {
+    const hex = this.store.getHexCellById(force.hexId);
+    if (!hex) return null;
+
+    const center = hex.getCenter();
+    // 从 HexForceMapper 获取部队列表
+    const forces = HexForceMapper.getForcesByHexId(force.hexId);
+    const index = forces.indexOf(force.forceId);
+    const count = forces.length;
+
+    // 计算部队在六角格内的偏移
+    let offsetX = 0, offsetY = 0;
+    const config = this.layoutConfig;
+
+    if (count <= config.ringLayout.maxCount) {
+      // 环形布局
+      const radius = HexConfig.radius * config.ringLayout.radiusScale;
+      const angle = (2 * Math.PI * index) / count;
+      offsetX = radius * Math.cos(angle);
+      offsetY = radius * Math.sin(angle);
+    } 
+    else if (count <= config.gridLayout.maxCount) {
+      // 网格布局
+      const cols = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / cols);
+      const size = (HexConfig.radius * 2 * config.gridLayout.scale) / Math.max(rows, cols);
+      
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      offsetX = (col - (cols - 1) / 2) * size;
+      offsetY = (row - (rows - 1) / 2) * size;
+    }
+
+    // 将米偏移转换为经纬度偏移
+    const metersPerDegree = 111320;
+    const lonOffset = offsetX / (metersPerDegree * Math.cos(center.latitude * Math.PI / 180));
+    const latOffset = offsetY / metersPerDegree;
+
+    return {
+      longitude: center.longitude + lonOffset,
+      latitude: center.latitude + latOffset,
+      height: center.height + this.layoutConfig.heightOffset
+    };
+  }
+
+  /**
+   * 计算兵种在部队内的相对偏移
+   * @private
+   */
+  _computeUnitLocalOffset(index, total) {
+    const { spacing, maxRow } = this.layoutConfig.unitLayout;
+    const cols = Math.min(maxRow, total);
+    const rows = Math.ceil(total / cols);
+    
+    const row = Math.floor(index / cols);
+    const col = index % cols;
+    
+    return {
+      x: (col - (cols - 1) / 2) * spacing,
+      y: (row - (rows - 1) / 2) * spacing
+    };
+  }
+
+  /**
+   * 计算兵种模型的最终变换矩阵
+   * @private
+   */
+  _computeUnitModelMatrix(forcePosition, localOffset) {
+    if (!forcePosition) return Cesium.Matrix4.IDENTITY;
+
+    // 将局部偏移转换为经纬度偏移
+    const metersPerDegree = 111320;
+    const lonOffset = localOffset.x / (metersPerDegree * Math.cos(forcePosition.latitude * Math.PI / 180));
+    const latOffset = localOffset.y / metersPerDegree;
+
+    // 构建最终位置
+    const position = Cesium.Cartesian3.fromDegrees(
+      forcePosition.longitude + lonOffset,
+      forcePosition.latitude + latOffset,
+      forcePosition.height
+    );
+
+    return Cesium.Transforms.eastNorthUpToFixedFrame(position);
   }
 }

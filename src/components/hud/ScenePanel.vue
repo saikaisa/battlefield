@@ -1,8 +1,8 @@
-<!-- src\components\hud\GeoPanel.vue -->
+<!-- src\components\hud\ScenePanel.vue -->
 <template>
   <el-card class="control-panel">
-    <el-button type="primary" @click="resetCameraView">视角居中</el-button>
-    <el-button type="success" @click="focusSelectedForce">定位选中单位</el-button>
+    <el-button type="primary" @click="resetCamera">视角居中</el-button>
+    <el-button type="success" @click="focusForce">定位选中单位</el-button>
     <el-button type="warning" @click="toggleOrbitMode">{{ orbitButtonText }}</el-button>
     <div style="margin-top:10px;">
       <span>地形图层</span>
@@ -20,8 +20,9 @@ import { ref, computed, defineProps } from 'vue';
 import { openGameStore } from '@/store';
 
 const props = defineProps({
-  geoPanelManager: Object
+  scenePanelManager: Object
 });
+
 const store = openGameStore();
 
 // 用于切换按钮的本地状态
@@ -32,26 +33,26 @@ const layerIndex = computed({
   get: () => store.layerIndex,
   set: (val) => {
     store.setLayerIndex(val);
-    props.geoPanelManager.toggleLayers(val);
+    props.scenePanelManager.handleLayerChange();
   }
 });
 
 const toggleOrbitMode = () => {
   orbitEnabled.value = !orbitEnabled.value;
-  props.geoPanelManager.setOrbitMode(orbitEnabled.value);
+  props.scenePanelManager.handleOrbitMode(orbitEnabled.value);
 };
 
 const orbitButtonText = computed(() =>
   orbitEnabled.value ? "退出 Orbit 模式" : "进入 Orbit 模式"
 );
 
-const resetCameraView = () => {
+const resetCamera = () => {
   orbitEnabled.value = false;
-  props.geoPanelManager.resetCameraView();
+  props.scenePanelManager.handleResetCamera();
 };
 
-const focusSelectedForce = () => {
-  props.geoPanelManager.focusOnSelectedForce();
+const focusForce = () => {
+  props.scenePanelManager.handleFocusForce();
 };
 </script>
 

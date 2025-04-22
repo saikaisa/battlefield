@@ -4,14 +4,40 @@ import { openGameStore } from "@/store";
 import { CameraConfig } from "@/config/GameConfig";
 import { CameraView } from "@/models/CameraView";
 
-class CameraViewController {
+/**
+ * 工具类：相机视角控制（单例模式）
+ */
+export class CameraViewController {
+  static instance = null;
+  
   /**
-   * 构造函数，接收 Cesium.Viewer 实例
+   * 获取 CameraViewController 的单例实例
+   * @param {Cesium.Viewer} viewer - Cesium Viewer 实例（仅首次调用时需要）
+   * @returns {CameraViewController} 单例实例
+   */
+  static getInstance(viewer) {
+    if (!CameraViewController.instance) {
+      if (!viewer) {
+        throw new Error('首次创建 CameraViewController 实例时必须提供 viewer 参数');
+      }
+      CameraViewController.instance = new CameraViewController(viewer);
+    }
+    return CameraViewController.instance;
+  }
+
+  /**
+   * 私有构造函数，接收 Cesium.Viewer 实例
    * @param {Cesium.Viewer} viewer - Cesium Viewer 实例
+   * @private
    */
   constructor(viewer) {
+    if (CameraViewController.instance) {
+      throw new Error('CameraViewController 是单例类，请使用 getInstance() 方法获取实例');
+    }
     this.viewer = viewer;
     this.store = openGameStore();
+    this._viewHistory = [];
+    this._MAX_HISTORY = 10;
   }
 
   /**
@@ -43,7 +69,7 @@ class CameraViewController {
    * @param {boolean} keepRange true为保持当前相机距离，false为默认距离
    */
   focusOnLocation(cameraView, duration = 0.7) {
-    this.store.addViewHistory(cameraView.toPlainObject()); // 移动视角前存储当前视角位置
+    this._addViewHistory(cameraView); // 移动视角前存储当前视角位置
     this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
     
     // 平滑飞行，以pivot为中心，恢复高度和角度，保证 pivot 在屏幕中心
@@ -63,7 +89,7 @@ class CameraViewController {
     if (enable) {
       console.log(`-----------------Orbit Enable--------------`);
       const cameraView = CameraView.fromCurrentView(this.viewer);
-      this.store.addViewHistory(cameraView.toPlainObject());
+      this._addViewHistory(cameraView);
 
       // 使用当前摄像机 heading，不强制改变朝向，只固定 pivot
       this.viewer.camera.lookAt(
@@ -78,7 +104,7 @@ class CameraViewController {
       // 退出 orbit 模式：解除 lookAt，并平滑飞行恢复
       console.log(`-----------------Orbit Disable--------------`);
       this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-      const oldCameraView = this.store.getLatestView();
+      const oldCameraView = this._getLatestView();
 
       const pivot = oldCameraView.getCartesianPos();
       const range = Math.max(Cesium.Cartesian3.distance(this.viewer.camera.position, pivot), CameraConfig.minZoomDistance * 1.5);
@@ -88,6 +114,44 @@ class CameraViewController {
       this.focusOnLocation(cameraView, 0.7);
     }
   }
-}
 
-export { CameraViewController };
+  // ==================== 视角历史记录 ====================
+  /**
+   * 添加一条视角历史记录
+   * @param {CameraView} view - 视角对象
+   */
+  _addViewHistory(view) {
+    if (!(view instanceof CameraView)) {
+      throw new Error('视角记录必须是 CameraView 实例');
+    }
+    this._viewHistory.push(view);
+    if (this._viewHistory.length > this._MAX_HISTORY) {
+      this._viewHistory.shift();
+    }
+  }
+
+  /**
+   * 获取最近一条视角历史记录
+   * @returns {CameraView | null} 最近的视角记录，如果没有则返回 null
+   */
+  _getLatestView() {
+    return this._viewHistory.length > 0 ? 
+      this._viewHistory[this._viewHistory.length - 1] : 
+      null;
+  }
+
+  /**
+   * 获取所有视角历史记录
+   * @returns {Array} 视角历史记录数组
+   */
+  _getViewHistory() {
+    return this._viewHistory;
+  }
+
+  /**
+   * 清空视角历史记录
+   */
+  _clearViewHistory() {
+    this._viewHistory = [];
+  }
+}

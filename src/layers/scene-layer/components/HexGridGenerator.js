@@ -1,4 +1,4 @@
-// src\layers\geo-layer\components\HexGridGenerator.js
+// src\layers\scene-layer\components\HexGridGenerator.js
 import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 import { HexConfig } from "@/config/GameConfig";
@@ -46,10 +46,32 @@ async function sampleTerrainInBatches(terrainProvider, positions, batchSize = 50
  * HexGridGenerator 类用于生成六角网格数据（平顶六角格方案）
  */
 export class HexGridGenerator {
+  static instance = null;
+
   /**
-   * 构造函数
+   * 获取 HexGridGenerator 的单例实例
+   * @param {Cesium.Viewer} viewer - Cesium Viewer 实例（仅首次调用时需要）
+   * @returns {HexGridGenerator} 单例实例
+   */
+  static getInstance(viewer) {
+    if (!HexGridGenerator.instance) {
+      if (!viewer) {
+        throw new Error('首次创建 HexGridGenerator 实例时必须提供 viewer 参数');
+      }
+      HexGridGenerator.instance = new HexGridGenerator(viewer);
+    }
+    return HexGridGenerator.instance;
+  }
+
+  /**
+   * 私有构造函数，接收 Cesium.Viewer 实例
+   * @param {Cesium.Viewer} viewer - Cesium Viewer 实例
+   * @private
    */
   constructor(viewer) {
+    if (HexGridGenerator.instance) {
+      throw new Error('HexGridGenerator 是单例类，请使用 getInstance() 方法获取实例');
+    }
     this.viewer = viewer;
     this.store = openGameStore();
     this.bounds = HexConfig.bounds;
