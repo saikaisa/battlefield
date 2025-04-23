@@ -80,13 +80,14 @@ export const API = {
    * @param {string} faction 阵营
    * @param {Array} composition 部队组成
    */
-  createForce: async (hexId, faction, composition) => {
+  createForce: async (hexId, faction, composition, formationId = null) => {
     try {
       const command = {
         command_type: "CREATE_FORCE",
         hex_id: hexId,
         faction: faction,
         composition: composition,
+        formation_id: formationId,
         timestamp: new Date().toISOString()
       };
 

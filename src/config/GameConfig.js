@@ -9,7 +9,20 @@ function computeDefaultCameraView() {
   )
 }
 
-/** Cesium基础配置 */ 
+/** 规则相关配置 */
+export const RuleConfig = {
+  // 起始回合
+  startRound: 1,
+  // 先手阵营
+  firstFaction: 'blue',
+  // 阵营显示名称
+  factionNames: {
+    blue: '蓝方',
+    red: '红方'
+  }
+}
+
+/** Cesium基础配置 */
 export const CesiumConfig = {
   terrainAssetId: 3957, // Cesium Ion地形数据的Asset ID
   genOsmBuildings: true, // 是否加载Cesium OSM Buildings
@@ -66,7 +79,7 @@ export const MilitaryConfig = {
     infantry_basic: {
       scale: 60,
       animations: ["idle", "walk", "attack", "die"],
-      lod_levels: [
+      lodLevels: [
         { level: 0, distance: 0,    url: "/assets/models/infantry_high.glb" },
         { level: 1, distance: 800,  url: "/assets/models/infantry_mid.glb" },
         { level: 2, distance: 1600, url: "/assets/models/infantry_low.glb" }
@@ -75,7 +88,7 @@ export const MilitaryConfig = {
     tank_mk1: {
       scale: 95,
       animations: ["idle", "move", "fire", "destroy"],
-      lod_levels: [
+      lodLevels: [
         { level: 0, distance: 0,    url: "/assets/models/tank_mk1_high.glb" },
         { level: 1, distance: 1000, url: "/assets/models/tank_mk1_mid.glb" },
         { level: 2, distance: 2200, url: "/assets/models/tank_mk1_low.glb" }
@@ -84,7 +97,7 @@ export const MilitaryConfig = {
     plane_f16: {
       scale: 110,
       animations: ["idle", "fly", "attack"],
-      lod_levels: [
+      lodLevels: [
         { level: 0, distance: 0,    url: "/assets/models/plane_f16_high.glb" },
         { level: 1, distance: 1500, url: "/assets/models/plane_f16_mid.glb" },
         { level: 2, distance: 3000, url: "/assets/models/plane_f16_low.glb" }

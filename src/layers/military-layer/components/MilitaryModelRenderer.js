@@ -18,19 +18,34 @@ export class MilitaryModelRenderer {
     this.loader = loader;
     this.store = openGameStore();
     
-    // 实例缓存: forceId -> ForceInstanceEntry
-    // ForceInstanceEntry: {
-    //   force: Force,
-    //   unitInstances: Map<unitId, UnitInstanceEntry>,
-    //   position: { longitude, latitude, height }
+    // forceInstanceMap: Map<forceId, forceInstance>
+    // forceInstance: {
+    //   force: Force, —— 部队
+    //   unitInstanceMap: Map<unitInstanceId, unitInstance>, —— 兵种实例集合
+    //   position: { longitude, latitude, height } —— 部队位置
     // }
-    // UnitInstanceEntry: {
-    //   model: Cesium.Model,
-    //   currentLOD: number,
-    //   template: TemplateEntry,
-    //   localOffset: { x, y }  // 兵种在部队内的相对偏移
+    // unitInstanceId: `${forceId}_${unitId}_${index}`
+    // unitInstance: {
+    //   currentModel: Cesium.Model, —— 当前显示的模型实例
+    //   currentLOD: number, —— 当前 LOD 级别
+    //   modelTemplate: modelTemplate, —— 兵种模型模版
+    //   localOffset: { x, y } —— 兵种在部队内的相对偏移
     // }
-    this.instanceCache = reactive(new Map());
+    this.forceInstanceMap = reactive(new Map());
+    
+    // 记录正在移动中的部队
+    // movingForces: Map<forceId, movementData>
+    // movementData: {
+    //   path: string[], —— 路径（六角格ID数组）
+    //   currentPathIndex: number, —— 当前所在路径索引
+    //   targetPosition: { longitude, latitude, height }, —— 目标位置
+    //   currentPosition: { longitude, latitude, height }, —— 当前位置
+    //   startTime: number, —— 开始移动时间
+    //   duration: number, —— 当前段移动持续时间（毫秒）
+    //   isMoving: boolean —— 是否在移动中
+    // }
+    this.movingForces = reactive(new Map());
+    
     this._updateHandle = null;
 
     // 部队排布配置
@@ -51,27 +66,38 @@ export class MilitaryModelRenderer {
         maxRow: 3           // 每行最多放置的兵种数
       },
       // 通用配置
-      heightOffset: 2         // 模型离地高度
+      heightOffset: 2,        // 模型离地高度
+      // 移动相关配置
+      movement: {
+        segmentDuration: 1500,  // 每段路径移动时间（毫秒）
+        randomOffset: 10,      // 路径随机偏移范围（米）
+        easing: (t) => {       // 缓动函数
+          return t<0.5 ? 2*t*t : -1+(4-2*t)*t
+        }
+      }
     };
   }
 
   /**
-   * 渲染所有部队的模型
+   * 强制重新渲染所有部队的模型
    */
   renderAllForces() {
     this.store.getForces().forEach(force => {
+      // 先移除所有部队实例
+      this._removeForceInstanceById(force.forceId);
+      // 再创建新的部队实例
       this._createForceInstance(force);
     });
     this._startUpdateLoop();
   }
 
   /**
-   * 同步部队变化（增删）
+   * 处理部队数量变化（新增或删除部队）
    */
-  syncForces(newForceIds, oldForceIds) {
+  handleForcesChange(newForceIds, oldForceIds) {
     // 添加新部队
     newForceIds.forEach(id => {
-      if (!this.instanceCache.has(id)) {
+      if (!this.forceInstanceMap.has(id)) {
         const force = this.store.getForceById(id);
         if (force) this._createForceInstance(force);
       }
@@ -80,9 +106,53 @@ export class MilitaryModelRenderer {
     // 移除旧部队
     oldForceIds.forEach(id => {
       if (!newForceIds.includes(id)) {
-        this._removeForceInstance(id);
+        this._removeForceInstanceById(id);
       }
     });
+  }
+
+  /**
+   * 移动部队沿着路径前进
+   * @param {string} forceId 部队ID
+   * @param {string[]} path 路径（六角格ID数组）
+   */
+  moveForceAlongPath(forceId, path) {
+    if (!path || path.length < 2) {
+      console.warn("路径过短，无法进行移动");
+      return;
+    }
+    
+    const forceInstance = this.forceInstanceMap.get(forceId);
+    if (!forceInstance) {
+      console.error(`未找到部队实例: ${forceId}`);
+      return;
+    }
+    
+    // 计算起始位置
+    const startPosition = forceInstance.position;
+    
+    // 创建移动数据
+    const movementData = {
+      path: path, // 路径（六角格ID数组）
+      currentPathIndex: 0, // 当前所在路径索引
+      startPosition: startPosition, // 起始位置
+      currentPosition: { ...startPosition }, // 当前位置
+      targetPosition: this._getHexCenterPosition(path[1]), // 下一个路径点
+      startTime: Date.now(), // 开始移动时间
+      duration: this.layoutConfig.movement.segmentDuration, // 当前段移动持续时间（毫秒）
+      isMoving: true, // 是否在移动中
+      // 为每段路径生成随机偏移，使移动看起来更自然
+      pathOffsets: path.map(() => ({
+        x: (Math.random() - 0.5) * this.layoutConfig.movement.randomOffset,
+        y: (Math.random() - 0.5) * this.layoutConfig.movement.randomOffset
+      }))
+    };
+    
+    // 记录到移动中的部队
+    this.movingForces.set(forceId, movementData);
+    
+    // 确保更新循环已启动
+    this._startUpdateLoop();
   }
 
   /**
@@ -94,12 +164,13 @@ export class MilitaryModelRenderer {
       this._updateHandle = null;
     }
     
-    this.instanceCache.forEach(entry => {
-      entry.unitInstances.forEach(unitInstance => {
-        this.viewer.scene.primitives.remove(unitInstance.model);
+    this.forceInstanceMap.forEach(forceInstance => {
+      forceInstance.unitInstanceMap.forEach(unitInstance => {
+        this.viewer.scene.primitives.remove(unitInstance.currentModel);
       });
     });
-    this.instanceCache.clear();
+    this.forceInstanceMap.clear();
+    this.movingForces.clear();
   }
 
   /**
@@ -108,9 +179,9 @@ export class MilitaryModelRenderer {
    */
   async _createForceInstance(force) {
     try {
-      const forceEntry = {
+      const forceInstance = {
         force: force,
-        unitInstances: new Map(),
+        unitInstanceMap: new Map(),
         position: this._computeForcePosition(force)
       };
 
@@ -119,8 +190,8 @@ export class MilitaryModelRenderer {
         const unit = this.store.getUnitById(comp.unitId);
         if (!unit || !unit.renderingKey) continue;
 
-        const template = await this.loader.getTemplate(unit.renderingKey);
-        const baseModel = template.lod[0].model;
+        const modelTemplate = await this.loader.getModelTemplate(unit.renderingKey);
+        const baseModel = modelTemplate.lodModels[0].model;
         
         // 计算该兵种在部队内的相对位置
         const localOffset = this._computeUnitLocalOffset(
@@ -130,11 +201,11 @@ export class MilitaryModelRenderer {
 
         // 创建实例
         for (let i = 0; i < comp.unitCount; i++) {
-          const instance = baseModel.clone();
+          const currentModel = baseModel.clone();
           const unitInstance = {
-            model: instance,
+            currentModel: currentModel, // 当前显示的模型实例
             currentLOD: 0,
-            template: template,
+            modelTemplate: modelTemplate, // 兵种模型模版
             localOffset: {
               x: localOffset.x + (Math.random() - 0.5) * 2, // 添加随机微偏移
               y: localOffset.y + (Math.random() - 0.5) * 2
@@ -142,21 +213,21 @@ export class MilitaryModelRenderer {
           };
 
           // 设置初始位置
-          instance.modelMatrix = this._computeUnitModelMatrix(
-            forceEntry.position,
+          currentModel.modelMatrix = this._computeUnitModelMatrix(
+            forceInstance.position,
             unitInstance.localOffset
           );
-          instance.allowPicking = true;
+          currentModel.allowPicking = true;
           
-          this.viewer.scene.primitives.add(instance);
+          this.viewer.scene.primitives.add(currentModel);
           
-          // 使用 unitId_index 作为 key
-          const instanceId = `${comp.unitId}_${i}`;
-          forceEntry.unitInstances.set(instanceId, unitInstance);
+          // 使用 forceId_unitId_index 作为 key
+          const unitInstanceId = `${force.forceId}_${comp.unitId}_${i}`;
+          forceInstance.unitInstanceMap.set(unitInstanceId, unitInstance);
         }
       }
 
-      this.instanceCache.set(force.forceId, forceEntry);
+      this.forceInstanceMap.set(force.forceId, forceInstance);
     } catch (error) {
       console.error(`创建部队实例失败: ${force.forceId}`, error);
     }
@@ -166,77 +237,205 @@ export class MilitaryModelRenderer {
    * 移除部队实例
    * @private
    */
-  _removeForceInstance(forceId) {
-    const forceEntry = this.instanceCache.get(forceId);
-    if (forceEntry) {
-      forceEntry.unitInstances.forEach(unitInstance => {
-        this.viewer.scene.primitives.remove(unitInstance.model);
+  _removeForceInstanceById(forceId) {
+    const forceInstance = this.forceInstanceMap.get(forceId);
+    if (forceInstance) {
+      forceInstance.unitInstanceMap.forEach(unitInstance => {
+        this.viewer.scene.primitives.remove(unitInstance.currentModel);
       });
-      this.instanceCache.delete(forceId);
+      this.forceInstanceMap.delete(forceId);
     }
+    
+    // 同时清除移动状态
+    this.movingForces.delete(forceId);
   }
 
   /**
-   * 启动更新循环
+   * 启动更新循环，每帧执行一次
    * @private
    */
   _startUpdateLoop() {
     if (this._updateHandle) return;
     
     this._updateHandle = this.viewer.scene.postUpdate.addEventListener(() => {
-      this.instanceCache.forEach(forceEntry => {
-        this._updateForceInstance(forceEntry);
+      // 更新所有部队
+      this.forceInstanceMap.forEach((forceInstance, forceId) => {
+        // 移动部队：更新部队位置
+        if (this.movingForces.has(forceId)) {
+          // 计算移动中的部队实例下一帧的位置
+          this._computeMovingForcePosition(forceId);
+          // 更新部队实例中各兵种实例模型的位置 (以部队实例位置为基准进行偏移)
+          this._updateModelPositions(forceInstance);
+        } 
+        else {
+          // 静止部队：更新LOD
+          this._updateModelLOD(forceInstance);
+        }
       });
+      
+      // 清理已完成移动的部队
+      this._cleanupFinishedMovements();
     });
   }
 
   /**
-   * 更新部队实例（位置和 LOD）
+   * 更新模型LOD（用于静止部队）
    * @private
    */
-  _updateForceInstance(forceEntry) {
-    // 更新部队位置
-    forceEntry.position = this._computeForcePosition(forceEntry.force);
-    
-    // 获取相机位置用于 LOD 判断
+  _updateModelLOD(forceInstance) {
     const cameraPos = this.viewer.scene.camera.positionWC;
-    
-    // 更新每个兵种实例
-    forceEntry.unitInstances.forEach(unitInstance => {
-      // 更新位置
-      unitInstance.model.modelMatrix = this._computeUnitModelMatrix(
-        forceEntry.position,
-        unitInstance.localOffset
-      );
-      
-      // 处理 LOD 切换
+
+    forceInstance.unitInstanceMap.forEach(unitInstance => {
+      // 获取当前模型位置用于计算与相机的距离
       const modelPos = Cesium.Matrix4.getTranslation(
-        unitInstance.model.modelMatrix,
+        unitInstance.currentModel.modelMatrix,
         new Cesium.Cartesian3()
       );
       const distance = Cesium.Cartesian3.distance(cameraPos, modelPos);
       
       // 选择合适的 LOD 级别
       let targetLOD = 0;
-      unitInstance.template.lod.forEach((level, index) => {
+      unitInstance.modelTemplate.lodModels.forEach((level, index) => {
         if (distance >= level.distance) {
           targetLOD = index;
         }
       });
       
-      // 如果需要切换 LOD
+      // 如果需要切换 LOD，并更新模型重新载入 primitives
       if (targetLOD !== unitInstance.currentLOD) {
-        const newModel = unitInstance.template.lod[targetLOD].model.clone();
-        newModel.modelMatrix = unitInstance.model.modelMatrix;
-        newModel.allowPicking = true;
+        const targetModel = unitInstance.modelTemplate.lodModels[targetLOD].model.clone();
+        // 保持原有位置
+        targetModel.modelMatrix = unitInstance.currentModel.modelMatrix;
+        targetModel.allowPicking = true;
         
-        this.viewer.scene.primitives.remove(unitInstance.model);
-        this.viewer.scene.primitives.add(newModel);
+        this.viewer.scene.primitives.remove(unitInstance.currentModel);
+        this.viewer.scene.primitives.add(targetModel);
         
-        unitInstance.model = newModel;
+        unitInstance.currentModel = targetModel;
         unitInstance.currentLOD = targetLOD;
       }
     });
+  }
+
+  /**
+   * 更新兵种实例模型位置
+   * @private
+   */
+  _updateModelPositions(forceInstance) {
+    forceInstance.unitInstanceMap.forEach(unitInstance => {
+      // 只更新位置，不更新LOD
+      unitInstance.currentModel.modelMatrix = this._computeUnitModelMatrix(
+        forceInstance.position,
+        unitInstance.localOffset
+      );
+    });
+  }
+
+  /**
+   * 计算移动中的部队实例下一帧的位置
+   * @private
+   */
+  _computeMovingForcePosition(forceId) {
+    const movementData = this.movingForces.get(forceId);
+    const forceInstance = this.forceInstanceMap.get(forceId);
+    
+    if (!movementData || !forceInstance || !movementData.isMoving) return;
+    
+    const now = Date.now();
+    const elapsed = now - movementData.startTime;
+    
+    // 计算当前段的移动进度
+    let progress = Math.min(1, elapsed / movementData.duration);
+    progress = this.layoutConfig.movement.easing(progress);
+    
+    // 插值计算当前位置
+    const start = movementData.startPosition;
+    const target = movementData.targetPosition;
+    const current = {
+      longitude: start.longitude + (target.longitude - start.longitude) * progress,
+      latitude: start.latitude + (target.latitude - start.latitude) * progress,
+      height: start.height + (target.height - start.height) * progress
+    };
+    
+    // 更新部队当前位置
+    forceInstance.position = current;
+    movementData.currentPosition = current;
+    
+    // 如果当前段移动完成，准备下一段移动
+    if (progress >= 1) {
+      movementData.currentPathIndex++;
+      
+      // 检查是否到达终点
+      if (movementData.currentPathIndex >= movementData.path.length - 1) {
+        // 最后一段移动，更新部队的六角格位置
+        const force = forceInstance.force;
+        const finalHexId = movementData.path[movementData.path.length - 1];
+        
+        // 更新Store中的位置
+        force.hexId = finalHexId;
+        
+        // 同时更新HexForceMapper中的映射关系
+        HexForceMapper.moveForceToHex(forceId, finalHexId);
+        
+        // 计算终点六角格中的准确位置（考虑部队在六角格内的精确布局）
+        forceInstance.position = this._computeForcePosition(force);
+        
+        // 最后更新一次位置，确保最终位置准确
+        this._updateModelPositions(forceInstance);
+        
+        // 标记移动完成
+        movementData.isMoving = false;
+      } 
+      else {
+        // 准备下一段移动
+        const nextIndex = movementData.currentPathIndex + 1;
+        const nextHexId = movementData.path[nextIndex];
+        
+        // 取下一个点的位置，并加入随机偏移
+        const nextBasePosition = this._getHexCenterPosition(nextHexId);
+        const offset = movementData.pathOffsets[nextIndex];
+        
+        // 应用随机偏移
+        const nextPosition = {
+          longitude: nextBasePosition.longitude + offset.x / (111320 * Math.cos(nextBasePosition.latitude * Math.PI / 180)),
+          latitude: nextBasePosition.latitude + offset.y / 111320,
+          height: nextBasePosition.height
+        };
+        
+        // 更新移动状态
+        movementData.startPosition = { ...movementData.currentPosition };
+        movementData.targetPosition = nextPosition;
+        movementData.startTime = now;
+      }
+    }
+  }
+
+  /**
+   * 清理已完成移动的部队
+   * @private
+   */
+  _cleanupFinishedMovements() {
+    this.movingForces.forEach((data, forceId) => {
+      if (!data.isMoving) {
+        this.movingForces.delete(forceId);
+      }
+    });
+  }
+
+  /**
+   * 获取六角格中心位置
+   * @private
+   */
+  _getHexCenterPosition(hexId) {
+    const hex = this.store.getHexCellById(hexId);
+    if (!hex) return null;
+    
+    const center = hex.getCenter();
+    return {
+      longitude: center.longitude,
+      latitude: center.latitude,
+      height: center.height + this.layoutConfig.heightOffset
+    };
   }
 
   /**

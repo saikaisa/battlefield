@@ -1,7 +1,5 @@
 // src\layers\interaction-layer\ScenePanelManager.js
 // eslint-disable-next-line no-unused-vars
-import { CameraViewController } from '@/layers/scene-layer/components/CameraViewController';
-// eslint-disable-next-line no-unused-vars
 import { HexGridRenderer } from '@/layers/scene-layer/components/HexGridRenderer';
 // eslint-disable-next-line no-unused-vars
 import { ScreenInteractor } from '@/layers/interaction-layer/ScreenInteractor';
@@ -94,6 +92,32 @@ export class ScenePanelManager {
   handleSelectionMode(isMultiSelect) {
     if (typeof this.onSelectionModeChange === 'function') {
       this.onSelectionModeChange(isMultiSelect);
+    }
+  }
+
+  /**
+   * 处理回合切换
+   */
+  handleNextFaction() {
+    // 记录切换前的回合数
+    const prevRound = this.store.currentRound;
+
+    // 清空所有选中状态
+    this.store.clearSelectedHexIds();
+    this.store.clearSelectedForceIds();
+
+    // 切换到下一个阵营
+    this.store.switchToNextFaction();
+
+    // 如果回合数发生变化，说明进入新回合，需要重置所有部队状态
+    if (this.store.currentRound > prevRound) {
+      // 重置所有部队的行动力和战斗机会
+      const forces = this.store.getForces();
+      forces.forEach(force => {
+        force.resetActionPoints();
+        force.refreshCombatChance();
+        force.recoverTroopStrength();
+      });
     }
   }
 }

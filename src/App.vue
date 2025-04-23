@@ -5,8 +5,8 @@
 
     <!-- Viewer 初始化完成后再渲染 Panel 等 UI -->
     <div v-if="gameReady">
-      <ScenePanel :scenePanelManager="scenePanelManager" />
-      <!-- <MilitaryPanel :militaryPanelManager="militaryPanelManager" /> -->
+      <ScenePanel />
+      <MilitaryPanel />
       <router-view />
     </div>
 
@@ -47,19 +47,21 @@ onMounted(async () => {
   // 初始化场景控制面板管理器
   scenePanelManager = ScenePanelManager.getInstance(viewer);
   sceneManager.setPanelManager(scenePanelManager);
+  // 提供场景面板管理器给子组件
+  provide('scenePanelManager', scenePanelManager);
 
   // 初始化军事单位管理器
   // militaryManager = new MilitaryManager(viewer);
   // await militaryManager.init((done,total)=>console.log(`unit preload ${done}/${total}`));
 
-  // 初始化军事单位控制面板管理器
-  // militaryPanelManager = new MilitaryPanelManager(viewer, scenePanelManager);
+  // // 初始化军事单位控制面板管理器
+  // militaryPanelManager = new MilitaryPanelManager(viewer);
   // militaryManager.setPanelManager(militaryPanelManager);
+  // // 提供军事面板管理器给子组件
+  // provide('militaryPanelManager', militaryPanelManager);
 
   // 初始化完成
   gameReady.value = true;
-  // gameReady.value = await militaryManager.init();
-
 });
 
 onBeforeUnmount(() => {

@@ -87,7 +87,7 @@ export const HexForceMapper = reactive({
   },
 
   /** 
-   * 添加部队
+   * 往地图上添加部队
    * @param {string} forceId 部队ID
    * @param {string} hexId 六角格ID
    * @returns {boolean} 是否添加成功
@@ -101,7 +101,7 @@ export const HexForceMapper = reactive({
   },
 
   /** 
-   * 删除部队
+   * 删除地图上的部队
    * @param {string} forceId 部队ID
    * @returns {boolean} 是否删除成功
    */

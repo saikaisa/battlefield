@@ -7,6 +7,7 @@ import { MilitaryModelRenderer } from './components/MilitaryModelRenderer';
 import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
 import { HexForceMapper } from '@/utils/HexForceMapper';
 import { API } from "@/services/api";
+import { Formation } from '@/models/Formation';
 
 /**
  * 军事单位管理器
@@ -35,22 +36,27 @@ export class MilitaryManager {
     // 初始化 HexForceMapper
     this._initHexForceMapper();
 
-    this.loader = new MilitaryModelLoader(this.viewer);
-    await this.loader.preloadAll(onProgress);
+    // 初始化编队系统
+    this._initFormationSystem();
 
+    // 初始化模型加载器
+    this.loader = new MilitaryModelLoader(this.viewer);
+    await this.loader.preloadModelTemplates(onProgress);
+
+    // 初始化模型渲染器
     this.renderer = new MilitaryModelRenderer(this.viewer, this.loader);
     this.renderer.renderAllForces();
 
-    // 监听部队变化，同步渲染器和 HexForceMapper
+    // 监听部队变化，当部队数量发生变化时，同步渲染器和 HexForceMapper
     this._stopForceWatch = watch(
       () => Array.from(this.store.forceMap.keys()),
-      (newIds, oldIds) => {
-        this.renderer.syncForces(newIds, oldIds);
+      (newForceIds, oldForceIds) => {
+        this.renderer.handleForcesChange(newForceIds, oldForceIds);
         this._syncHexForceMapper();
       }
     );
 
-    // 监听六角格变化，同步 HexForceMapper
+    // 监听六角格变化，当六角格数量发生变化时，同步 HexForceMapper
     this._stopHexWatch = watch(
       () => Array.from(this.store.hexCellMap.keys()),
       () => this._syncHexForceMapper()
@@ -80,22 +86,87 @@ export class MilitaryManager {
     HexForceMapper.initMapping(hexCells, forces);
   }
 
+  /**
+   * 初始化编队系统
+   * @private
+   */
+  _initFormationSystem() {
+    // 创建蓝方默认编队
+    const blueDefault = new Formation({
+      formationId: 'FM_blue_default',  // 特殊ID，不使用自增ID
+      formationName: '蓝方预备队',
+      faction: 'blue',
+      forceIdList: []
+    });
+    this.store.formationMap.set(blueDefault.formationId, blueDefault);
+
+    // 创建红方默认编队
+    const redDefault = new Formation({
+      formationId: 'FM_red_default',  // 特殊ID，不使用自增ID
+      formationName: '红方预备队',
+      faction: 'red',
+      forceIdList: []
+    });
+    this.store.formationMap.set(redDefault.formationId, redDefault);
+
+    // 将现有部队分配到对应阵营的默认编队中
+    this.store.forceMap.forEach(force => {
+      const defaultFormationId = `FM_${force.faction}_default`;
+      const defaultFormation = this.store.formationMap.get(defaultFormationId);
+      if (defaultFormation && !defaultFormation.forceIdList.includes(force.forceId)) {
+        defaultFormation.forceIdList.push(force.forceId);
+      }
+    });
+  }
+
+  /**
+   * 创建新部队时，将其添加到指定编队
+   * @param {Force} force 新创建的部队
+   * @param {string} formationId 目标编队ID，如果不指定则添加到默认编队
+   */
+  _addForceToFormation(force, formationId = null) {
+    const targetFormationId = formationId || `FM_${force.faction}_default`;
+    const formation = this.store.formationMap.get(targetFormationId);
+    
+    if (formation && formation.faction === force.faction) {
+      if (!formation.forceIdList.includes(force.forceId)) {
+        formation.forceIdList.push(force.forceId);
+      }
+    }
+  }
+
   _bindPanelCommands() {
+    /**
+     * 移动命令
+     * @param {string} forceId 部队ID
+     * @param {string[]} path 路径（六角格ID数组）
+     */
     this.militaryPanelManager.onMoveCommand = async ({ forceId, path }) => {
       const res = await API.move(forceId, path);
       if (res.status === "success") {
-        // 更新部队位置
-        const force = this.store.getForceById(forceId);
-        if (force && res.data.final_path.length > 0) {
-          const finalHexId = res.data.final_path[res.data.final_path.length - 1];
-          force.hexId = finalHexId;
-          HexForceMapper.moveForceToHex(forceId, finalHexId);
+        // 获取后端返回的最终路径
+        const finalPath = res.data.final_path;
+        
+        if (finalPath && finalPath.length >= 2) {
+          // 启动部队沿路径移动的动画
+          this.renderer.moveForceAlongPath(forceId, finalPath);
+          
+          // 注意：部队最终位置的更新已经在 moveForceAlongPath 方法中完成
+          // 它会在移动结束时更新 force.hexId 和 HexForceMapper
+        } else {
+          console.warn('[MilitaryManager] 移动路径无效:', finalPath);
         }
       } else {
         console.error('[MilitaryManager] 移动失败:', res.message);
       }
     };
 
+    /**
+     * 攻击命令
+     * @param {string} commandForceId 指挥部队ID
+     * @param {string} targetHex 目标六角格ID
+     * @param {string[]} supportForceIds 支援部队ID数组
+     */
     this.militaryPanelManager.onAttackCommand = async ({ commandForceId, targetHex, supportForceIds }) => {
       const res = await API.attack(commandForceId, targetHex, supportForceIds);
       if (res.status === "success") {
@@ -122,19 +193,33 @@ export class MilitaryManager {
       }
     };
 
-    this.militaryPanelManager.onCreateForce = async ({ hexId, faction, composition }) => {
-      const res = await API.createForce(hexId, faction, composition);
+    /**
+     * 创建部队命令
+     * @param {string} hexId 六角格ID
+     * @param {string} faction 阵营
+     * @param {string} composition 部队组成
+     * @param {string} formationId 目标编队ID，如果不指定则添加到默认编队
+     */
+    this.militaryPanelManager.onCreateForce = async ({ hexId, faction, composition, formationId }) => {
+      const res = await API.createForce(hexId, faction, composition, formationId);
       if (res.status === "success") {
         // 添加新部队到 Store
         const newForce = res.data.force;
         this.store.addForce(newForce);
         // 更新 HexForceMapper
         HexForceMapper.addForceById(newForce.force_id, hexId);
+        // 将新部队添加到指定编队
+        this._addForceToFormation(newForce, formationId);
       } else {
         console.error('[MilitaryManager] 创建部队失败:', res.message);
       }
     };
 
+    /**
+     * 合并部队命令
+     * @param {string} hexId 六角格ID
+     * @param {string[]} forceIds 部队ID数组
+     */
     this.militaryPanelManager.onMergeForces = async ({ hexId, forceIds }) => {
       const res = await API.mergeForces(hexId, forceIds);
       if (res.status === "success") {
@@ -153,6 +238,11 @@ export class MilitaryManager {
       }
     };
 
+    /**
+     * 拆分部队命令
+     * @param {string} forceId 部队ID
+     * @param {string[]} splitDetails 拆分后的部队
+     */
     this.militaryPanelManager.onSplitForce = async ({ forceId, splitDetails }) => {
       const res = await API.splitForce(forceId, splitDetails);
       if (res.status === "success") {
@@ -170,6 +260,21 @@ export class MilitaryManager {
         });
       } else {
         console.error('[MilitaryManager] 拆分部队失败:', res.message);
+      }
+    };
+
+    /**
+     * 删除编队命令
+     * @param {string} formationId 编队ID
+     */
+    this.militaryPanelManager.onDeleteFormation = (formationId) => {
+      const formation = this.store.formationMap.get(formationId);
+      if (formation) {
+        // 将编队中的部队移到该阵营的默认编队
+        formation.forceIdList.forEach(forceId => {
+          this._addForceToFormation({ forceId, faction: formation.faction });
+        });
+        this.store.formationMap.delete(formationId);
       }
     };
   }

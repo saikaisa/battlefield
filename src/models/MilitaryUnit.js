@@ -38,7 +38,7 @@ export class Unit {
 
   constructor({
     // ===== Identification =====
-    unitId, unitName, service, category, unitAvailability,
+    unitId, unitName, service, category, factionAvailability,
     // ===== Combat Attributes =====
     attackPowerComposition, defensePowerComposition,
     // ===== Survival Attributes =====
@@ -52,7 +52,7 @@ export class Unit {
     this.unitName = unitName;
     this.service = service;
     this.category = category;
-    this.unitAvailability = unitAvailability;
+    this.factionAvailability = factionAvailability;
     this.attackPowerComposition = attackPowerComposition;
     this.defensePowerComposition = defensePowerComposition;
     this.visibilityRadius = visibilityRadius;
@@ -96,7 +96,7 @@ export class Unit {
       unitName: this.unitName,
       service: this.service,
       category: this.category,
-      unitAvailability: this.unitAvailability,
+      factionAvailability: this.factionAvailability,
       attackPowerComposition: this.attackPowerComposition,
       defensePowerComposition: this.defensePowerComposition,
       visibilityRadius: this.visibilityRadius,

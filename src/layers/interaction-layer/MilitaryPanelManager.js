@@ -27,13 +27,46 @@ export class MilitaryPanelManager {
     this.onCreateForce = null;
     this.onMergeForces = null;
     this.onSplitForce = null;
+    this.onDeleteFormation = null;
 
     /* ========= 只读派生 =========== */
+    // 当前选中的编队
     this.selectedFormation = computed(() => {
       const [fid] = Array.from(this.store.selectedForceIds);
       if (!fid) return null;
       return this.store.getFormations().find(fm => fm.forceIdList.includes(fid));
     });
+
+    // 当前操作阵营的编队列表（不包括空的默认编队）
+    this.formationList = computed(() => {
+      const currentFaction = this.store.currentFaction;
+      const formations = Array.from(this.store.formationMap.values())
+        .filter(formation => formation.faction === currentFaction);
+
+      return formations.map(formation => {
+        // 如果是默认编队且为空，则跳过
+        if (formation.formationId.includes('_default') && formation.forceIdList.length === 0) {
+          return null;
+        }
+
+        return {
+          ...formation,
+          // 是否可删除：非默认编队且无部队
+          canDelete: !formation.formationId.includes('_default') && formation.forceIdList.length === 0,
+          // 获取部队名称列表
+          forces: formation.forceIdList.map(fid => {
+            const force = this.store.getForceById(fid);
+            return {
+              id: fid,
+              name: force?.forceName || fid
+            };
+          })
+        };
+      }).filter(Boolean); // 移除空值
+    });
+
+    // 当前回合信息
+    this.roundInfo = computed(() => this.store.getRoundInfo());
 
     /* ========= 监听器 =========== */
     // 当选中编队变化 => 聚焦地图
@@ -51,6 +84,13 @@ export class MilitaryPanelManager {
     });
   }
 
+  /** 获取编队的可删除状态 */
+  canDeleteFormation(formationId) {
+    const formation = this.store.formationMap.get(formationId);
+    if (!formation) return false;
+    return !formation.formationId.includes('_default') && formation.forceIdList.length === 0;
+  }
+
   /** 点击编队标题 => 高亮所有部队所在格 */
   onFormationClick(formation) {
     this.store.clearSelectedHexIds();
@@ -62,10 +102,19 @@ export class MilitaryPanelManager {
 
   /** 点击部队名称 => 选中并定位一个部队 */
   onForceClick(force) {
+    if (!force) return;
     this.store.clearSelectedHexIds();
     this.store.clearSelectedForceIds();
     this.store.addSelectedForceId(force.forceId);
     this.store.addSelectedHexId(force.hexId);
+  }
+
+  /** 删除编队 */
+  deleteFormation(formationId) {
+    if (!this.canDeleteFormation(formationId)) return;
+    if (typeof this.onDeleteFormation === 'function') {
+      this.onDeleteFormation(formationId);
+    }
   }
 
   /** 发起移动命令 */
@@ -83,9 +132,9 @@ export class MilitaryPanelManager {
   }
 
   /** 发起创建部队命令 */
-  createForce(hexId, faction, composition) {
+  createForce(hexId, faction, composition, formationId = null) {
     if (typeof this.onCreateForce === 'function') {
-      this.onCreateForce({ hexId, faction, composition });
+      this.onCreateForce({ hexId, faction, composition, formationId });
     }
   }
 
