@@ -11,7 +11,7 @@
 //   * 部队‑六角格、部队‑编队 等关联全部由 HexForceMapper 维护。
 // ============================================================
 
-import { HexForceMapper }   from '@/utils/HexForceMapper';
+import { HexForceMapper }   from '@/layers/interaction-layer/HexForceMapper';
 import { openGameStore }    from '@/store';
 import { MilitaryConfig }   from '@/config/GameConfig';
 

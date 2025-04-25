@@ -3,26 +3,7 @@ import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 import { HexConfig } from "@/config/GameConfig";
 import { HexCell } from '@/models/HexCell';
-
-/**
- * 将米转换为纬度差（度），大致 111320 米=1 度
- * @param {number} meters 
- * @returns {number} 差值（度）
- */
-function metersToDegreesLat(meters) {
-  return meters / 111320;
-}
-
-/**
- * 将米转换为经度差（度），需要根据当前纬度进行校正
- * @param {number} meters 
- * @param {number} latDegrees 当前纬度（度）
- * @returns {number} 差值（度）
- */
-function metersToDegreesLon(meters, latDegrees) {
-  const latRadians = Cesium.Math.toRadians(latDegrees);
-  return meters / (111320 * Math.cos(latRadians));
-}
+import { GeoMathUtils } from "@/utils/GeoMathUtils";
 
 /**
  * 分批采样 DEM 高度信息，避免一次采样点过多造成堆栈溢出
@@ -46,7 +27,7 @@ async function sampleTerrainInBatches(terrainProvider, positions, batchSize = 50
  * HexGridGenerator 类用于生成六角网格数据（平顶六角格方案）
  */
 export class HexGridGenerator {
-  static instance = null;
+  static #instance = null;
 
   /**
    * 获取 HexGridGenerator 的单例实例
@@ -54,13 +35,13 @@ export class HexGridGenerator {
    * @returns {HexGridGenerator} 单例实例
    */
   static getInstance(viewer) {
-    if (!HexGridGenerator.instance) {
+    if (!HexGridGenerator.#instance) {
       if (!viewer) {
         throw new Error('首次创建 HexGridGenerator 实例时必须提供 viewer 参数');
       }
-      HexGridGenerator.instance = new HexGridGenerator(viewer);
+      HexGridGenerator.#instance = new HexGridGenerator(viewer);
     }
-    return HexGridGenerator.instance;
+    return HexGridGenerator.#instance;
   }
 
   /**
@@ -69,7 +50,7 @@ export class HexGridGenerator {
    * @private
    */
   constructor(viewer) {
-    if (HexGridGenerator.instance) {
+    if (HexGridGenerator.#instance) {
       throw new Error('HexGridGenerator 是单例类，请使用 getInstance() 方法获取实例');
     }
     this.viewer = viewer;
@@ -81,9 +62,9 @@ export class HexGridGenerator {
     this.hexHeightMeters = Math.sqrt(3) * this.hexRadius;
     this.midLat = (this.bounds.minLat + this.bounds.maxLat) / 2;
     // 水平间距：注意这里是六角格宽度的 3/4，即 1.5 * hexRadius
-    this.dx = metersToDegreesLon(this.hexWidthMeters * 0.75, this.midLat);
+    this.dx = GeoMathUtils.metersToDegreesLon(this.hexWidthMeters * 0.75, this.midLat);
     // 垂直间距：六角形高度转换成纬度差
-    this.dy = metersToDegreesLat(this.hexHeightMeters);
+    this.dy = GeoMathUtils.metersToDegreesLat(this.hexHeightMeters);
 
     console.log('[HexGridGenerator] 初始化：');
     console.log(`  hexRadius = ${this.hexRadius} m`);
@@ -117,8 +98,8 @@ export class HexGridGenerator {
           const angleRad = Cesium.Math.toRadians(60 * i);
           const dX = this.hexRadius * Math.cos(angleRad);
           const dY = this.hexRadius * Math.sin(angleRad);
-          const deltaLon = metersToDegreesLon(dX, lat);
-          const deltaLat = metersToDegreesLat(dY);
+          const deltaLon = GeoMathUtils.metersToDegreesLon(dX, lat);
+          const deltaLat = GeoMathUtils.metersToDegreesLat(dY);
           vertices.push({
             longitude: lon + deltaLon,
             latitude: lat + deltaLat,

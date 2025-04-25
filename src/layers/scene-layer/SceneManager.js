@@ -17,7 +17,7 @@ import { ScenePanelManager } from '@/layers/interaction-layer/ScenePanelManager'
  * 加载场景、六角格、相机视角等的总管理器
  */
 export class SceneManager {
-  static instance = null;
+  static #instance = null;
 
   /**
    * 获取 SceneManager 的单例实例
@@ -25,13 +25,13 @@ export class SceneManager {
    * @returns {SceneManager} 单例实例
    */
   static getInstance(containerId) {
-    if (!SceneManager.instance) {
+    if (!SceneManager.#instance) {
       if (!containerId) {
         throw new Error('首次创建 SceneManager 实例时必须提供 containerId');
       }
-      SceneManager.instance = new SceneManager(containerId);
+      SceneManager.#instance = new SceneManager(containerId);
     }
-    return SceneManager.instance;
+    return SceneManager.#instance;
   }
 
   /**
@@ -40,7 +40,7 @@ export class SceneManager {
    * @private
    */
   constructor(containerId) {
-    if (SceneManager.instance) {
+    if (SceneManager.#instance) {
       throw new Error('SceneManager 是单例类，请使用 getInstance() 方法获取实例');
     }
     this.containerId = containerId;

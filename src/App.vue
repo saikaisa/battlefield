@@ -21,9 +21,9 @@ import { ref, provide, onMounted, onBeforeUnmount, onUnmounted } from 'vue';
 import { SceneManager } from '@/layers/scene-layer/SceneManager';
 import { ScenePanelManager } from '@/layers/interaction-layer/ScenePanelManager';
 import ScenePanel from '@/components/hud/ScenePanel.vue';
-// import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
-// import MilitaryPanel from '@/components/hud/MilitaryPanel.vue';
-// import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
+import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
+import MilitaryPanel from '@/components/hud/MilitaryPanel.vue';
+import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
 
 // 创建共享组件状态
 const viewerRef = ref(null);
@@ -51,14 +51,14 @@ onMounted(async () => {
   provide('scenePanelManager', scenePanelManager);
 
   // 初始化军事单位管理器
-  // militaryManager = new MilitaryManager(viewer);
-  // await militaryManager.init((done,total)=>console.log(`unit preload ${done}/${total}`));
+  militaryManager = new MilitaryManager(viewer);
+  await militaryManager.init((done,total)=>console.log(`unit preload ${done}/${total}`));
 
-  // // 初始化军事单位控制面板管理器
-  // militaryPanelManager = new MilitaryPanelManager(viewer);
-  // militaryManager.setPanelManager(militaryPanelManager);
-  // // 提供军事面板管理器给子组件
-  // provide('militaryPanelManager', militaryPanelManager);
+  // 初始化军事单位控制面板管理器
+  militaryPanelManager = new MilitaryPanelManager(viewer);
+  militaryManager.setPanelManager(militaryPanelManager);
+  // 提供军事面板管理器给子组件
+  provide('militaryPanelManager', militaryPanelManager);
 
   // 初始化完成
   gameReady.value = true;

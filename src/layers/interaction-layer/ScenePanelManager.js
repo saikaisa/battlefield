@@ -11,7 +11,7 @@ import { openGameStore } from '@/store';
  * - 视角控制区
  */
 export class ScenePanelManager {
-  static instance = null;
+  static #instance = null;
 
   /**
    * 获取 ScenePanelManager 的单例实例
@@ -19,13 +19,13 @@ export class ScenePanelManager {
    * @returns {ScenePanelManager} 单例实例
    */
   static getInstance(viewer) {
-    if (!ScenePanelManager.instance) {
+    if (!ScenePanelManager.#instance) {
       if (!viewer) {
         throw new Error('首次创建 ScenePanelManager 实例时必须提供 viewer 参数');
       }
-      ScenePanelManager.instance = new ScenePanelManager(viewer);
+      ScenePanelManager.#instance = new ScenePanelManager(viewer);
     }
-    return ScenePanelManager.instance;
+    return ScenePanelManager.#instance;
   }
 
   /**
@@ -34,7 +34,7 @@ export class ScenePanelManager {
    * @private
    */
   constructor(viewer) {
-    if (ScenePanelManager.instance) {
+    if (ScenePanelManager.#instance) {
       throw new Error('ScenePanelManager 是单例类，请使用 getInstance() 方法获取实例');
     }
     this.viewer = viewer;

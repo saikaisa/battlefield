@@ -1,4 +1,4 @@
-// src\layers\military-layer\components\MilitaryModelLoader.js
+// src\layers\military-layer\components\ModelTemplateLoader.js
 import * as Cesium from "cesium";
 import { reactive } from 'vue';
 import { MilitaryConfig } from "@/config/GameConfig";
@@ -11,7 +11,26 @@ import { MilitaryConfig } from "@/config/GameConfig";
  * 2. 支持 LOD (Level of Detail) 分级加载
  * 3. 提供模型模板 (modelTemplate) 获取接口
  */
-export class MilitaryModelLoader {
+export class ModelTemplateLoader {
+  // 单例实例
+  static #instance = null;
+  
+  /**
+   * 获取单例实例
+   * @param {Cesium.Viewer} viewer Cesium Viewer实例
+   * @returns {ModelTemplateLoader} 单例实例
+   */
+  static getInstance(viewer) {
+    if (!ModelTemplateLoader.#instance) {
+      ModelTemplateLoader.#instance = new ModelTemplateLoader(viewer);
+    }
+    return ModelTemplateLoader.#instance;
+  }
+  
+  /**
+   * 私有构造函数，避免外部直接创建实例
+   * @param {Cesium.Viewer} viewer Cesium Viewer实例
+   */
   constructor(viewer) {
     this.viewer = viewer;
     /**
@@ -55,13 +74,16 @@ export class MilitaryModelLoader {
    */
   dispose() {
     for (const template of this.modelTemplateMap.values()) {
-      template.lod.forEach(item => {
+      template.lodModels.forEach(item => {
         if (item.model?.isDestroyed?.()) {
           item.model.destroy();
         }
       });
     }
     this.modelTemplateMap.clear();
+    
+    // 清理单例
+    ModelTemplateLoader.#instance = null;
   }
 
   /**

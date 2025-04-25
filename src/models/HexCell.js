@@ -1,7 +1,7 @@
 // src\models\HexCell.js
 import { HexConfig } from '@/config/GameConfig';
 import { HexVisualStyles } from '@/config/HexVisualStyles';
-import { HexForceMapper } from '@/utils/HexForceMapper';
+import { HexForceMapper } from '@/layers/interaction-layer/HexForceMapper';
 
 export class HexCell {
   /**

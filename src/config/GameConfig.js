@@ -74,9 +74,24 @@ export const MilitaryConfig = {
     }
   },
 
+  // 部队排布配置
+  layoutConfig: {
+    // 部队布局（随机散列）
+    forceLayout: {
+      disperseRadius: 0.4,    // 部队分散半径 = 六角格半径 * 此系数
+    },
+    // 部队内兵种布局（环形排列）
+    unitLayout: {
+      maxCount: 6,           // 部队内最多渲染的兵种实例数（六边形布局） 
+      radius: 5,             // 环形布局半径（米）
+      heightOffset: 2,       // 模型离地高度
+    },
+  },
+
   // 兵种模型资源路径与LOD配置
   models: {
     infantry_basic: {
+      priority: 1,
       scale: 60,
       animations: ["idle", "walk", "attack", "die"],
       lodLevels: [
@@ -86,6 +101,7 @@ export const MilitaryConfig = {
       ]
     },
     tank_mk1: {
+      priority: 2,
       scale: 95,
       animations: ["idle", "move", "fire", "destroy"],
       lodLevels: [
@@ -95,6 +111,7 @@ export const MilitaryConfig = {
       ]
     },
     plane_f16: {
+      priority: 3,
       scale: 110,
       animations: ["idle", "fly", "attack"],
       lodLevels: [

@@ -17,6 +17,25 @@ import { ScenePanelManager } from '@/layers/interaction-layer/ScenePanelManager'
  * - 兵种管理面板（默认隐藏）
  */
 export class MilitaryPanelManager {
+  // 单例实例
+  static #instance = null;
+  
+  /**
+   * 获取单例实例
+   * @param {Cesium.Viewer} viewer Cesium Viewer实例
+   * @returns {MilitaryPanelManager} 单例实例
+   */
+  static getInstance(viewer) {
+    if (!MilitaryPanelManager.#instance) {
+      MilitaryPanelManager.#instance = new MilitaryPanelManager(viewer);
+    }
+    return MilitaryPanelManager.#instance;
+  }
+
+  /**
+   * 私有构造函数，避免外部直接创建实例
+   * @param {Cesium.Viewer} viewer Cesium Viewer实例
+   */
   constructor(viewer) {
     this.store = openGameStore();
     this.cameraViewController = CameraViewController.getInstance(viewer);
@@ -152,5 +171,11 @@ export class MilitaryPanelManager {
     }
   }
 
-  // 可在此处添加更多命令接口...
+  /**
+   * 销毁管理器及所有相关资源
+   */
+  destroy() {
+    // 清理单例
+    MilitaryPanelManager.#instance = null;
+  }
 }

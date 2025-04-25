@@ -12,7 +12,7 @@ const geometryCache = new Map();
 const baseLayerCache = new Map();
 
 export class HexGridRenderer {
-  static instance = null;
+  static #instance = null;
 
   /**
    * 获取 HexGridRenderer 的单例实例
@@ -20,13 +20,13 @@ export class HexGridRenderer {
    * @returns {HexGridRenderer} 单例实例
    */
   static getInstance(viewer) {
-    if (!HexGridRenderer.instance) {
+    if (!HexGridRenderer.#instance) {
       if (!viewer) {
         throw new Error('首次创建 HexGridRenderer 实例时必须提供 viewer 参数');
       }
-      HexGridRenderer.instance = new HexGridRenderer(viewer);
+      HexGridRenderer.#instance = new HexGridRenderer(viewer);
     }
-    return HexGridRenderer.instance;
+    return HexGridRenderer.#instance;
   }
 
   /**
@@ -35,7 +35,7 @@ export class HexGridRenderer {
    * @private
    */
   constructor(viewer) {
-    if (HexGridRenderer.instance) {
+    if (HexGridRenderer.#instance) {
       throw new Error('HexGridRenderer 是单例类，请使用 getInstance() 方法获取实例');
     }
     this.viewer = viewer;

@@ -8,7 +8,7 @@ import { CameraView } from "@/models/CameraView";
  * 工具类：相机视角控制（单例模式）
  */
 export class CameraViewController {
-  static instance = null;
+  static #instance = null;
   
   /**
    * 获取 CameraViewController 的单例实例
@@ -16,13 +16,13 @@ export class CameraViewController {
    * @returns {CameraViewController} 单例实例
    */
   static getInstance(viewer) {
-    if (!CameraViewController.instance) {
+    if (!CameraViewController.#instance) {
       if (!viewer) {
         throw new Error('首次创建 CameraViewController 实例时必须提供 viewer 参数');
       }
-      CameraViewController.instance = new CameraViewController(viewer);
+      CameraViewController.#instance = new CameraViewController(viewer);
     }
-    return CameraViewController.instance;
+    return CameraViewController.#instance;
   }
 
   /**
@@ -31,7 +31,7 @@ export class CameraViewController {
    * @private
    */
   constructor(viewer) {
-    if (CameraViewController.instance) {
+    if (CameraViewController.#instance) {
       throw new Error('CameraViewController 是单例类，请使用 getInstance() 方法获取实例');
     }
     this.viewer = viewer;

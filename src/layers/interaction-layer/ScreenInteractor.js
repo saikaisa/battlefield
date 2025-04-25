@@ -14,7 +14,7 @@ import { HexGridRenderer } from "@/layers/scene-layer/components/HexGridRenderer
  *  - 单/多选模式下，对同一格点击是否可取消也可配置
  */
 export class ScreenInteractor {
-  static instance = null;
+  static #instance = null;
 
   /**
    * 获取 ScreenInteractor 的单例实例
@@ -23,13 +23,13 @@ export class ScreenInteractor {
    * @returns {ScreenInteractor} 单例实例
    */
   static getInstance(viewer, options = {}) {
-    if (!ScreenInteractor.instance) {
+    if (!ScreenInteractor.#instance) {
       if (!viewer) {
         throw new Error('首次创建 ScreenInteractor 实例时必须提供 viewer 和 hexGridRenderer 参数');
       }
-      ScreenInteractor.instance = new ScreenInteractor(viewer, options);
+      ScreenInteractor.#instance = new ScreenInteractor(viewer, options);
     }
-    return ScreenInteractor.instance;
+    return ScreenInteractor.#instance;
   }
 
   /**
@@ -43,7 +43,7 @@ export class ScreenInteractor {
    * @private
    */
   constructor(viewer, options = {}) {
-    if (ScreenInteractor.instance) {
+    if (ScreenInteractor.#instance) {
       throw new Error('ScreenInteractor 是单例类，请使用 getInstance() 方法获取实例');
     }
 
