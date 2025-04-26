@@ -1,14 +1,13 @@
+/* eslint-disable no-unused-vars */
 import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 // import { HexForceMapper } from '@/utils/HexForceMapper';
-// eslint-disable-next-line no-unused-vars
 import { ModelTemplateLoader } from "./ModelTemplateLoader";
-// eslint-disable-next-line no-unused-vars
+import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
 import { MilitaryMovementController } from "./MilitaryMovementController";
 import { ModelPoseCalculator } from "./ModelPoseCalculator";
-import { GeoMathUtils } from "@/utils/GeoMathUtils";
 
 /**
  * 军事单位实例渲染器
@@ -43,14 +42,14 @@ export class MilitaryInstanceRenderer {
     this.store = openGameStore();
 
     // 初始化模型姿态计算器
-    this.poseCalculator = ModelPoseCalculator.getInstance();
+    this.poseCalculator = ModelPoseCalculator.getInstance(viewer);
     // 初始化实例生成器
     this.generator = MilitaryInstanceGenerator.getInstance(viewer);
     // 初始化移动控制器
     this.movementController = MilitaryMovementController.getInstance(viewer);
     // 获取部队实例映射表
     this.forceInstanceMap = MilitaryInstanceGenerator.getforceInstanceMap();
-    
+    // 更新循环监听器
     this._updateHandle = null;
   }
 
@@ -86,7 +85,8 @@ export class MilitaryInstanceRenderer {
         // 设置兵种模型位置和姿态
         currentModel.modelMatrix = this.poseCalculator.computeUnitModelMatrix(
           forceInstance.pose,
-          unitInstance.localOffset
+          unitInstance.localOffset,
+          forceInstance.force.hexId
         );
         currentModel.allowPicking = true;
         
@@ -119,7 +119,7 @@ export class MilitaryInstanceRenderer {
   }
 
   /**
-   * 移动部队沿着路径前进
+   * 控制部队沿着路径移动
    * @param {string} forceId 部队ID
    * @param {string[]} path 路径（六角格ID数组）
    */
@@ -135,8 +135,8 @@ export class MilitaryInstanceRenderer {
       return;
     }
     
-    // 委托给移动控制器处理
-    this.movementController.moveForceAlongPath(forceId, path, forceInstance);
+    // 向移动控制器发起开始移动的请求
+    this.movementController.startMove(forceId, path);
     
     // 确保更新循环已启动
     this.update();

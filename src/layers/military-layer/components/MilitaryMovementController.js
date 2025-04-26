@@ -1,7 +1,10 @@
+/* eslint-disable no-unused-vars */
 import * as Cesium from "cesium";
 import { openGameStore } from "@/store";
-// eslint-disable-next-line no-unused-vars
+import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
+import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
+import { TerrainHeightCache } from "@/layers/scene-layer/components/TerrainHeightCache";
 
 /**
  * 军事单位移动控制器
@@ -35,8 +38,9 @@ export class MilitaryMovementController {
   constructor(viewer) {
     this.viewer = viewer;
     this.store = openGameStore();
-    this.hexGridManager = HexagonalGridManager.getInstance(viewer);
-    this.profileManager = SurfaceProfileManager.getInstance(viewer);
+    
+    // 获取地形高度缓存系统
+    this.terrainCache = TerrainHeightCache.getInstance(viewer);
     
     // 活动单位移动状态：Map<unitId, MoveState>
     this.moveStates = new Map();
@@ -46,6 +50,9 @@ export class MilitaryMovementController {
     this.lastUpdateTime = Date.now();
     this.updateIntervalMs = 100;    // 移动更新间隔
     this.heightOffset = 0;          // 高度偏移
+
+    // 获取部队实例映射表
+    this.forceInstanceMap = MilitaryInstanceGenerator.getforceInstanceMap();
     
     // 记录正在移动中的部队
     // movingForces: Map<forceId, movementState>
@@ -77,8 +84,10 @@ export class MilitaryMovementController {
    * @param {string[]} hexPath 路径（六角格ID数组）
    * @param {Object} forceInstance 渲染器中的部队实例
    */
-  moveForceAlongPath(forceId, hexPath, forceInstance) {
+  startMove(forceId, hexPath) {
     try {
+      const forceInstance = this.forceInstanceMap.get(forceId);
+
       // 将六角格路径转换为坐标点路径
       const coordinatePath = hexPath.map(hexId => {
         const hex = this.store.getHexCellById(hexId);
@@ -336,9 +345,11 @@ export class MilitaryMovementController {
    * 计算模型的朝向矩阵
    * @param {Object} position 位置
    * @param {Object} direction 方向
+   * @param {Object} localOffset 局部偏移
+   * @param {string} hexId 六角格ID，用于精确获取地形高度
    * @returns {Cesium.Matrix4} 变换矩阵
    */
-  computeOrientedModelMatrix(position, direction, localOffset = { x: 0, y: 0 }) {
+  computeOrientedModelMatrix(position, direction, localOffset = { x: 0, y: 0 }, hexId = null) {
     if (!position) return Cesium.Matrix4.IDENTITY;
 
     // 将局部偏移转换为经纬度偏移
@@ -346,11 +357,30 @@ export class MilitaryMovementController {
     const lonOffset = localOffset.x / (metersPerDegree * Math.cos(position.latitude * Math.PI / 180));
     const latOffset = localOffset.y / metersPerDegree;
 
+    // 计算最终经纬度
+    const finalLongitude = position.longitude + lonOffset;
+    const finalLatitude = position.latitude + latOffset;
+    
+    // 获取地形高度（如果实现了TerrainHeightCache）
+    let finalHeight = position.height;
+    if (hexId && this.terrainCache) {
+      try {
+        // 尝试获取更精确的地形高度
+        const terrainHeight = this.terrainCache.getPreciseHeight(
+          hexId, finalLongitude, finalLatitude
+        );
+        // 添加一点偏移，避免z-fighting
+        finalHeight = terrainHeight + 0.5;
+      } catch (e) {
+        console.warn('获取地形高度失败，使用默认高度', e);
+      }
+    }
+
     // 构建位置
     const cartesian = Cesium.Cartesian3.fromDegrees(
-      position.longitude + lonOffset,
-      position.latitude + latOffset,
-      position.height
+      finalLongitude,
+      finalLatitude,
+      finalHeight
     );
 
     // 创建基础ENU矩阵（东北上坐标系）

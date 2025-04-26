@@ -54,7 +54,7 @@ export class MilitaryInstanceGenerator {
     this.viewer = viewer;
     this.store = openGameStore();
     // 初始化模型姿态计算器
-    this.poseCalculator = ModelPoseCalculator.getInstance();
+    this.poseCalculator = ModelPoseCalculator.getInstance(viewer);
     // 获取模型加载器
     this.loader = ModelTemplateLoader.getInstance(viewer);
 

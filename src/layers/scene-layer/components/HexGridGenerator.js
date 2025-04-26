@@ -4,24 +4,7 @@ import { openGameStore } from '@/store';
 import { HexConfig } from "@/config/GameConfig";
 import { HexCell } from '@/models/HexCell';
 import { GeoMathUtils } from "@/utils/GeoMathUtils";
-
-/**
- * 分批采样 DEM 高度信息，避免一次采样点过多造成堆栈溢出
- * @param {Cesium.TerrainProvider} terrainProvider DEM 提供者
- * @param {Array} positions 需要采样的 Cartographic 数组
- * @param {number} batchSize 每个批次采样的数量，默认 500
- * @returns {Promise<Array>} 返回采样完成的 Cartographic 数组
- */
-async function sampleTerrainInBatches(terrainProvider, positions, batchSize = 500) {
-  let updatedPositions = [];
-  for (let i = 0; i < positions.length; i += batchSize) {
-    const batch = positions.slice(i, i + batchSize);
-    // 等待当前批次采样完成
-    const updatedBatch = await Cesium.sampleTerrainMostDetailed(terrainProvider, batch);
-    updatedPositions = updatedPositions.concat(updatedBatch);
-  }
-  return updatedPositions;
-}
+import { TerrainHeightCache } from './TerrainHeightCache';
 
 /**
  * HexGridGenerator 类用于生成六角网格数据（平顶六角格方案）
@@ -65,6 +48,9 @@ export class HexGridGenerator {
     this.dx = GeoMathUtils.metersToDegreesLon(this.hexWidthMeters * 0.75, this.midLat);
     // 垂直间距：六角形高度转换成纬度差
     this.dy = GeoMathUtils.metersToDegreesLat(this.hexHeightMeters);
+    
+    // 初始化地形高度缓存系统
+    this.terrainCache = TerrainHeightCache.getInstance(viewer);
 
     console.log('[HexGridGenerator] 初始化：');
     console.log(`  hexRadius = ${this.hexRadius} m`);
@@ -75,7 +61,6 @@ export class HexGridGenerator {
 
   /**
    * 异步生成六角网格数据，并更新每个六角格的高度（采样 DEM）
-   * @param {Cesium.TerrainProvider} terrainProvider DEM 地形数据提供者
    * @returns {Promise<Array>} 返回包含高度更新后的六角格对象数组
    */
   async generateGrid() {
@@ -146,37 +131,14 @@ export class HexGridGenerator {
     }
     console.log(`[HexGridGenerator] 初步生成 ${hexCells.length} 个六角格, 开始更新高度...`);
     
-    // 采样所有六角格中 7 个点（中心 + 6 个顶点）
-    const samplePositions = [];
-    hexCells.forEach(cell => {
-      cell.position.points.forEach(pt => {
-        samplePositions.push(Cesium.Cartographic.fromDegrees(pt.longitude, pt.latitude, pt.height));
-      });
-    });
-    
+    // 使用地形高度缓存系统更新六角格高度
     try {
-      // 分批采样：将 samplePositions 分批进行采样
-      const updatedPositions = await sampleTerrainInBatches(this.viewer.terrainProvider, samplePositions, 500);
-      hexCells.forEach((cell, cellIndex) => {
-        const base = cellIndex * 7;
-        // 更新所有 7 个点的高度
-        for (let j = 0; j < 7; j++) {
-          cell.position.points[j].height = updatedPositions[base + j].height;
-        }
-        // 计算加权平均高度，赋值给 terrainAttributes.elevation；中心点高度保持原采样值
-        const centerHeight = updatedPositions[base].height;
-        let verticesSum = 0;
-        for (let j = 1; j < 7; j++) {
-          verticesSum += updatedPositions[base + j].height;
-        }
-        cell.terrainAttributes.elevation = 0.4 * centerHeight + 0.1 * verticesSum;
-        cell.addVisualStyleByElevation(); // 更新地形类型和视觉样式
-        console.log(`[HexGridGenerator] Cell ${cell.hexId} 更新高度：center=${centerHeight.toFixed(2)}, elevation=${cell.terrainAttributes.elevation.toFixed(2)}`);
-      });
+      const updatedHexCells = await this.terrainCache.sampleHexCellsHeight(hexCells);
+      console.log(`[HexGridGenerator] 成功更新 ${updatedHexCells.length} 个六角格的高度`);
+      return updatedHexCells;
     } catch (err) {
-      console.error('更新六角格高度失败:', err);
+      console.error('[HexGridGenerator] 更新六角格高度失败:', err);
+      return hexCells; // 返回未更新高度的六角格
     }
-    
-    return hexCells;
   }
 }

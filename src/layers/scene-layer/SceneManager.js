@@ -7,6 +7,7 @@ import { openGameStore } from '@/store';
 import { CameraViewController } from '@/layers/scene-layer/components/CameraViewController';
 import { HexGridGenerator } from '@/layers/scene-layer/components/HexGridGenerator';
 import { HexGridRenderer } from '@/layers/scene-layer/components/HexGridRenderer';
+import { TerrainHeightCache } from '@/layers/scene-layer/components/TerrainHeightCache';
 import { ScreenInteractor } from '@/layers/interaction-layer/ScreenInteractor';
 // eslint-disable-next-line no-unused-vars
 import { ScenePanelManager } from '@/layers/interaction-layer/ScenePanelManager';
@@ -48,6 +49,7 @@ export class SceneManager {
     this.store = openGameStore();
     
     // 各个管理器实例
+    this.terrainHeightCache = null;
     this.hexGridGenerator = null;
     this.hexGridRenderer = null;
     this.cameraViewController = null;
@@ -86,6 +88,11 @@ export class SceneManager {
       // ---------------- 地形加载开始 ----------------
       await this._loadTerrain(this.viewer, CesiumConfig.terrainAssetId);
       // ---------------- 地形加载结束 ----------------
+      
+      // ---------------- 地形高度缓存系统初始化开始 ----------------
+      this.terrainHeightCache = TerrainHeightCache.getInstance(this.viewer);
+      console.log('[SceneManager] 地形高度缓存系统初始化完成');
+      // ---------------- 地形高度缓存系统初始化结束 ----------------
       
       // ---------------- 六角网格加载开始 ----------------
       this.hexGridGenerator = HexGridGenerator.getInstance(this.viewer);

@@ -1,8 +1,11 @@
+/* eslint-disable no-unused-vars */
 import * as Cesium from "cesium";
-import { HexConfig } from '@/config/GameConfig';
-import { MilitaryConfig } from '@/config/GameConfig';
+import { HexConfig, MilitaryConfi } from '@/config/GameConfig';
+import { HexCell } from "@/models/HexCell";
+import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { openGameStore } from "@/store";
 import { GeoMathUtils } from "@/utils/GeoMathUtils";
+import { TerrainHeightCache } from "@/layers/scene-layer/components/TerrainHeightCache";
 
 /**
  * 模型姿态计算器 - 工具类
@@ -18,24 +21,30 @@ export class ModelPoseCalculator {
   
   /**
    * 获取单例实例
+   * @param {Cesium.Viewer} viewer Cesium Viewer实例
    * @returns {ModelPoseCalculator} 单例实例
    */
-  static getInstance() {
+  static getInstance(viewer) {
     if (!ModelPoseCalculator.#instance) {
-      ModelPoseCalculator.#instance = new ModelPoseCalculator();
+      ModelPoseCalculator.#instance = new ModelPoseCalculator(viewer);
     }
     return ModelPoseCalculator.#instance;
   }
   
   /**
    * 私有构造函数，避免外部直接创建实例
+   * @param {Cesium.Viewer} viewer Cesium Viewer实例
    */
-  constructor() {
+  constructor(viewer) {
     this.store = openGameStore();
+    this.viewer = viewer;
+    
+    // 获取地形高度缓存系统实例
+    this.terrainCache = TerrainHeightCache.getInstance(viewer);
   }
 
   /**
-   * 计算部队在六角格内的位置
+   * 获取部队在六角格内的随机散列位置
    * @param {Object} force 部队对象 
    * @param {string} [hexId] 六角格ID，如不提供则使用force.hexId
    * @returns {Object} 计算后的位置 {longitude, latitude, height}
@@ -68,11 +77,18 @@ export class ModelPoseCalculator {
 
     // 使用GeoMathUtils将米偏移转换为经纬度坐标
     const offsetPos = GeoMathUtils.metersToLatLon(center, { x: offsetX, y: offsetY });
+    
+    // 使用地形高度缓存获取实际地形高度（使用六角格ID直接查询）
+    const height = this.terrainCache.getPreciseHeight(
+      hexIdToUse, 
+      offsetPos.longitude, 
+      offsetPos.latitude
+    );
 
     return {
       longitude: offsetPos.longitude,
       latitude: offsetPos.latitude,
-      height: center.height + config.unitLayout.heightOffset
+      height: height
     };
   }
 
@@ -82,7 +98,7 @@ export class ModelPoseCalculator {
    * @param {Object} localOffset 兵种局部偏移 {x, y}
    * @returns {Cesium.Matrix4} 最终变换矩阵
    */
-  computeUnitModelMatrix(forcePose, localOffset) {
+  computeUnitModelMatrix(forcePose, localOffset, hexId) {
     if (!forcePose?.position) return Cesium.Matrix4.IDENTITY;
 
     // 首先将局部偏移根据部队朝向进行旋转
@@ -90,13 +106,20 @@ export class ModelPoseCalculator {
     
     // 将旋转后的局部偏移转换为经纬度偏移
     const forcePosition = forcePose.position;
-    const offsetPos = GeoMathUtils.metersToLatLon(forcePosition, rotatedOffset);
+    const worldPos = GeoMathUtils.metersToLatLon(forcePosition, rotatedOffset);
+    
+    // 查询高度
+    const height = this.terrainCache.getPreciseHeight(
+      hexId, 
+      worldPos.longitude, 
+      worldPos.latitude
+    );
 
     // 计算最终的经纬度坐标（确保模型在地球上的位置）
     const finalPosition = Cesium.Cartesian3.fromDegrees(
-      offsetPos.longitude,
-      offsetPos.latitude,
-      forcePosition.height
+      worldPos.longitude,
+      worldPos.latitude,
+      height + MilitaryConfig.layoutConfig.unitLayout.heightOffset
     );
 
     // 创建基础的东北天(ENU)坐标系矩阵（确保模型垂直站在地面上）

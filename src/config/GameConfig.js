@@ -26,6 +26,9 @@ export const RuleConfig = {
 export const CesiumConfig = {
   terrainAssetId: 3957, // Cesium Ion地形数据的Asset ID
   genOsmBuildings: true, // 是否加载Cesium OSM Buildings
+  sampleBatchSize: 500,
+  decimalAccuracy: 7, // 去重时判断为同一位置的精确程度
+  timeout: 2000
 };
 
 /** 六角格相关配置 */ 
@@ -83,8 +86,8 @@ export const MilitaryConfig = {
     // 部队内兵种布局（环形排列）
     unitLayout: {
       maxCount: 6,           // 部队内最多渲染的兵种实例数（六边形布局） 
-      radius: 5,             // 环形布局半径（米）
-      heightOffset: 2,       // 模型离地高度
+      radius: 100,             // 环形布局半径（米）
+      heightOffset: 20,       // 模型离地高度（米）
     },
   },
 
