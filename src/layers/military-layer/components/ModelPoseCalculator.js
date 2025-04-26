@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 import * as Cesium from "cesium";
-import { HexConfig, MilitaryConfi } from '@/config/GameConfig';
+import { HexConfig, MilitaryConfig } from '@/config/GameConfig';
 import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { openGameStore } from "@/store";
@@ -93,12 +93,12 @@ export class ModelPoseCalculator {
   }
 
   /**
-   * 计算兵种模型的位置矩阵
+   * 计算兵种模型的位置
    * @param {Object} forcePose 部队位置和朝向 {position: {longitude, latitude, height}, heading}
    * @param {Object} localOffset 兵种局部偏移 {x, y}
    * @returns {Cesium.Matrix4} 最终变换矩阵
    */
-  computeUnitModelMatrix(forcePose, localOffset, hexId) {
+  computeUnitPosition(forcePose, localOffset, hexId) {
     if (!forcePose?.position) return Cesium.Matrix4.IDENTITY;
 
     // 首先将局部偏移根据部队朝向进行旋转
@@ -122,12 +122,22 @@ export class ModelPoseCalculator {
       height + MilitaryConfig.layoutConfig.unitLayout.heightOffset
     );
 
+    return finalPosition;
+  }
+
+  /**
+   * 计算兵种模型的变换矩阵，即除了位置还有姿态信息（朝向和站立角度）
+   * @param {Object} position 位置 {longitude, latitude, height}
+   * @param {Object} heading 朝向
+   * @returns {Cesium.Matrix4} 最终变换矩阵
+   */
+  computeUnitModelMatrix(position, heading) {
     // 创建基础的东北天(ENU)坐标系矩阵（确保模型垂直站在地面上）
-    const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(finalPosition);
+    const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(position);
     
     // 创建绕Z轴旋转的矩阵，使模型朝向正确（Z轴是垂直于地面的轴）
     const rotationMatrix = Cesium.Matrix4.fromRotationTranslation(
-      Cesium.Matrix3.fromRotationZ(forcePose.heading || 0),
+      Cesium.Matrix3.fromRotationZ(heading || 0),
       Cesium.Cartesian3.ZERO
     );
 

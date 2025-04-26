@@ -162,9 +162,10 @@ export class TerrainHeightCache {
    * @param {string} hexId 六角格ID
    * @param {number} longitude 经度
    * @param {number} latitude 纬度
-   * @returns {number} 估计高度，如果缓存未命中则返回0
+   * @param {string} [secondHexId] 可选的第二个六角格ID，当点不在第一个六角格内时使用
+   * @returns {number} 估计高度
    */
-  getApproxiHeight(hexId, longitude, latitude) {
+  getApproxiHeight(hexId, longitude, latitude, secondHexId) {
     // 检查缓存中是否有该六角格
     const hexCache = this.hexHeightCache.get(hexId);
     if (!hexCache) {
@@ -174,18 +175,38 @@ export class TerrainHeightCache {
     
     // 查找点所在的三角形
     const triangle = this._findContainingTriangle(hexCache, longitude, latitude);
-    if (!triangle) {
-      // 点不在任何三角形内，返回中心点高度
-      return hexCache.center.height;
+    if (triangle) {
+      // 使用重心坐标插值计算高度
+      return this._calcInterpolatedHeight(
+        {longitude, latitude},
+        triangle.points[0],
+        triangle.points[1],
+        triangle.points[2]
+      );
     }
     
-    // 使用重心坐标插值计算高度
-    return this._calcInterpolatedHeight(
-      {longitude, latitude},
-      triangle.points[0],
-      triangle.points[1],
-      triangle.points[2]
-    );
+    // 点不在第一个六角格的三角形内，尝试使用第二个六角格
+    if (secondHexId) {
+      const secondHexCache = this.hexHeightCache.get(secondHexId);
+      if (secondHexCache) {
+        const secondTriangle = this._findContainingTriangle(secondHexCache, longitude, latitude);
+        if (secondTriangle) {
+          // 在第二个六角格的三角形内找到了点
+          return this._calcInterpolatedHeight(
+            {longitude, latitude},
+            secondTriangle.points[0],
+            secondTriangle.points[1],
+            secondTriangle.points[2]
+          );
+        }
+        
+        // 不在任何三角形内，使用两个六角格中心高度的平均值
+        return (hexCache.center.height + secondHexCache.center.height) / 2;
+      }
+    }
+    
+    // 没有第二个六角格或第二个六角格没有缓存，返回第一个六角格的中心点高度
+    return hexCache.center.height;
   }
   
   /**

@@ -208,7 +208,12 @@ export class MilitaryManager {
           force.consumeActionPoints(actionPointCost);
           
           // 7. 在渲染器中执行移动动画
-          this.renderer.moveForceAlongPath(forceId, path);
+          const isFinished = await this.renderer.moveForceAlongPath(forceId, path);
+
+          // 8. 更新部队在六角格中的位置
+          if (isFinished) {
+            HexForceMapper.moveForceToHex(forceId, path[path.length - 1]);
+          }
           
           console.log(`部队 ${forceId} 开始移动，消耗行动力 ${actionPointCost}`);
         } else {

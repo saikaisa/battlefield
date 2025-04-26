@@ -82,51 +82,86 @@ export class GeoMathUtils {
   }
 
   /**
-   * 计算两点之间的大圆距离（米）
-   * @param {Object} point1 第一个点 {longitude, latitude}
-   * @param {Object} point2 第二个点 {longitude, latitude}
-   * @returns {number} 距离（米）
+   * 计算两点之间的航向角（heading）
+   * @param {Object} from 起点 {longitude, latitude}（十进制度数）
+   * @param {Object} to 终点 {longitude, latitude}（十进制度数）
+   * @returns {number} 航向角（弧度）
    */
-  static calculateDistance(point1, point2) {
-    const p1 = Cesium.Cartesian3.fromDegrees(
-      point1.longitude,
-      point1.latitude,
-      0
-    );
-    const p2 = Cesium.Cartesian3.fromDegrees(
-      point2.longitude,
-      point2.latitude,
-      0
-    );
-    return Cesium.Cartesian3.distance(p1, p2);
+  static calculateHeading(from, to) {
+    // 转换为Cesium坐标点
+    const fromCartographic = Cesium.Cartographic.fromDegrees(from.longitude, from.latitude);
+    const toCartographic = Cesium.Cartographic.fromDegrees(to.longitude, to.latitude);
+    
+    // 转换为笛卡尔坐标
+    const fromCartesian = Cesium.Cartographic.toCartesian(fromCartographic);
+    const toCartesian = Cesium.Cartographic.toCartesian(toCartographic);
+    
+    // 计算航向角
+    const direction = Cesium.Cartesian3.subtract(toCartesian, fromCartesian, new Cesium.Cartesian3());
+    Cesium.Cartesian3.normalize(direction, direction);
+    
+    return Cesium.Math.PI_OVER_TWO - Math.atan2(direction.y, direction.x);
   }
 
   /**
-   * 计算两点之间的方向（弧度）
-   * @param {Object} startPosition 起点 {longitude, latitude}
-   * @param {Object} endPosition 终点 {longitude, latitude}
-   * @returns {number} 方向（弧度，0-2π）
+   * 计算两点之间的距离（米）
+   * @param {Object} from 起点 {longitude, latitude}（十进制度数）
+   * @param {Object} to 终点 {longitude, latitude}（十进制度数）
+   * @returns {number} 距离（米）
    */
-  static calculateHeading(startPosition, endPosition) {
-    // 将经纬度转换为弧度计算
-    const startLon = startPosition.longitude * Math.PI / 180;
-    const startLat = startPosition.latitude * Math.PI / 180;
-    const endLon = endPosition.longitude * Math.PI / 180;
-    const endLat = endPosition.latitude * Math.PI / 180;
+  static calculateDistance(from, to) {
+    // 转换为Cesium坐标点
+    const fromCartographic = Cesium.Cartographic.fromDegrees(from.longitude, from.latitude);
+    const toCartographic = Cesium.Cartographic.fromDegrees(to.longitude, to.latitude);
     
-    // 计算方位角（heading，弧度）- 使用大圆航线公式计算
-    const y = Math.sin(endLon - startLon) * Math.cos(endLat);
-    const x = Math.cos(startLat) * Math.sin(endLat) -
-              Math.sin(startLat) * Math.cos(endLat) * 
-              Math.cos(endLon - startLon);
-    let heading = Math.atan2(y, x);
+    // 转换为笛卡尔坐标
+    const fromCartesian = Cesium.Cartographic.toCartesian(fromCartographic);
+    const toCartesian = Cesium.Cartographic.toCartesian(toCartographic);
     
-    // 确保heading在[0, 2π)范围内
-    if (heading < 0) {
-      heading += 2 * Math.PI;
-    }
+    // 计算距离
+    return Cesium.Cartesian3.distance(fromCartesian, toCartesian);
+  }
+
+  /**
+   * 线性插值两点之间的位置
+   * @param {Object} from 起点 {longitude, latitude}（十进制度数）
+   * @param {Object} to 终点 {longitude, latitude}（十进制度数）
+   * @param {number} t 插值因子 (0-1)
+   * @returns {Object} 插值结果 {longitude, latitude}
+   */
+  static lerpPosition(from, to, t) {
+    // 确保t在0-1范围内
+    t = Math.max(0, Math.min(1, t));
     
-    return heading;
+    // 线性插值经纬度
+    const longitude = from.longitude + (to.longitude - from.longitude) * t;
+    const latitude = from.latitude + (to.latitude - from.latitude) * t;
+    
+    return { longitude, latitude };
+  }
+
+  /**
+   * 角度插值（考虑最短路径）
+   * @param {number} fromAngle 起始角度（弧度）
+   * @param {number} toAngle 目标角度（弧度）
+   * @param {number} t 插值因子 (0-1)
+   * @returns {number} 插值结果（弧度）
+   */
+  static lerpAngle(fromAngle, toAngle, t) {
+    // 确保t在0-1范围内
+    t = Math.max(0, Math.min(1, t));
+    
+    // 标准化角度到 [-PI, PI] 范围
+    const from = Cesium.Math.zeroToTwoPi(fromAngle) % (2 * Math.PI);
+    let to = Cesium.Math.zeroToTwoPi(toAngle) % (2 * Math.PI);
+    
+    // 计算最短角度差
+    let diff = to - from;
+    if (diff > Math.PI) diff -= 2 * Math.PI;
+    if (diff < -Math.PI) diff += 2 * Math.PI;
+    
+    // 应用插值
+    return from + diff * t;
   }
 
   /**

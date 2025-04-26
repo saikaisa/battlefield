@@ -8,6 +8,7 @@ import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
 import { MilitaryMovementController } from "./MilitaryMovementController";
 import { ModelPoseCalculator } from "./ModelPoseCalculator";
+import { HexForceMapper } from "@/layers/interaction-layer/HexForceMapper";
 
 /**
  * 军事单位实例渲染器
@@ -123,26 +124,34 @@ export class MilitaryInstanceRenderer {
    * @param {string} forceId 部队ID
    * @param {string[]} path 路径（六角格ID数组）
    */
-  moveForceAlongPath(forceId, path) {
+  async moveForceAlongPath(forceId, path) {
     if (!path || path.length < 2) {
       console.warn("路径过短，无法进行移动");
-      return;
+      return false;
     }
     
     const forceInstance = this.forceInstanceMap.get(forceId);
     if (!forceInstance) {
       console.error(`未找到部队实例: ${forceId}`);
-      return;
+      return false;
     }
     
     // 向移动控制器发起开始移动的请求
-    this.movementController.startMove(forceId, path);
+    this.movementController.prepareMove(forceId, path);
     
     // 确保更新循环已启动
     this.update();
     
-    // 返回移动操作已开始的标志，可用于UI反馈
-    return true;
+    // 返回一个Promise，在移动完成时resolve
+    return new Promise(resolve => {
+      // 创建一个检查器，定期检查移动是否完成
+      const checkInterval = setInterval(() => {
+        if (!this.movementController.movingForces.has(forceId)) {
+          clearInterval(checkInterval);
+          resolve(true);
+        }
+      }, 200); // 每200毫秒检查一次
+    });
   }
 
   /**
@@ -153,12 +162,12 @@ export class MilitaryInstanceRenderer {
     this._updateHandle = this.viewer.scene.postUpdate.addEventListener(() => {
       // 更新所有部队
       this.forceInstanceMap.forEach((forceInstance, forceId) => {
-        // 首先检查部队是否在移动中（不计算位置，只检查状态）
+        // 首先检查部队是否在移动中
         const isMoving = this.movementController.movingForces.has(forceId);
         
         if (isMoving) {
           // 移动中的部队：计算新位置并更新
-          this._updateMovingModels(forceInstance);
+          this.movementController.updateMovingForces(forceId);
         } 
         else {
           // 静止部队：更新LOD
@@ -231,16 +240,5 @@ export class MilitaryInstanceRenderer {
         unitInstance.currentLOD = targetLOD;
       }
     });
-  }
-
-  /**
-   * 更新移动中的模型位置和朝向
-   * @private
-   */
-  _updateMovingModels(forceInstance) {
-    if (!forceInstance || !forceInstance.pose) return;
-    
-    // TODO:在这里利用movecontroller每帧更新部队模型位置
-    // ...
   }
 }
