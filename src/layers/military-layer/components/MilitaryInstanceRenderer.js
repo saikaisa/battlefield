@@ -70,7 +70,7 @@ export class MilitaryInstanceRenderer {
   }
 
   /**
-   * 渲染部队
+   * 渲染部队，新增的部队实例需要调用这个方法渲染到地图上，删除的不用
    * @param {Object} force 部队对象
    */
   renderForceInstance(force) {
@@ -100,29 +100,10 @@ export class MilitaryInstanceRenderer {
   }
 
   /**
-   * 处理部队数量变化（新增或删除部队）
-   */
-  syncForcesChange(newForceIds, oldForceIds) {
-    // 添加新部队
-    newForceIds.forEach(id => {
-      if (!this.forceInstanceMap.has(id)) {
-        const force = this.store.getForceById(id);
-        if (force) this.generator.createForceInstance(force);
-      }
-    });
-
-    // 移除旧部队
-    oldForceIds.forEach(id => {
-      if (!newForceIds.includes(id)) {
-        this.generator.removeForceInstanceById(id);
-      }
-    });
-  }
-
-  /**
-   * 控制部队沿着路径移动
+   * 移动操作入口，控制部队沿着路径移动
    * @param {string} forceId 部队ID
    * @param {string[]} path 路径（六角格ID数组）
+   * @returns {Promise<boolean>} 准备移动步骤是否成功
    */
   async moveForceAlongPath(forceId, path) {
     if (!path || path.length < 2) {
@@ -136,22 +117,22 @@ export class MilitaryInstanceRenderer {
       return false;
     }
     
-    // 向移动控制器发起开始移动的请求
-    this.movementController.prepareMove(forceId, path);
-    
-    // 确保更新循环已启动
-    this.update();
-    
-    // 返回一个Promise，在移动完成时resolve
-    return new Promise(resolve => {
-      // 创建一个检查器，定期检查移动是否完成
-      const checkInterval = setInterval(() => {
-        if (!this.movementController.movingForces.has(forceId)) {
-          clearInterval(checkInterval);
-          resolve(true);
-        }
-      }, 200); // 每200毫秒检查一次
-    });
+    try {
+      // 向移动控制器发起开始移动的请求(异步操作)
+      const prepareResult = await this.movementController.prepareMove(forceId, path);
+      if (!prepareResult) {
+        console.error(`部队 ${forceId} 准备移动失败`);
+        return false;
+      }
+      
+      // 确保更新循环已启动
+      this.update();
+
+      return true;
+    } catch (error) {
+      console.error(`部队 ${forceId} 准备移动失败:`, error);
+      return false;
+    }
   }
 
   /**
@@ -178,29 +159,6 @@ export class MilitaryInstanceRenderer {
       // 清理已完成移动的部队
       this.movementController.cleanupFinishedMovements();
     });
-  }
-
-  /**
-   * 清理所有实例
-   */
-  dispose() {
-    if (this._updateHandle) {
-      this.viewer.scene.postUpdate.removeEventListener(this._updateHandle);
-      this._updateHandle = null;
-    }
-    
-    this.forceInstanceMap.forEach(forceInstance => {
-      forceInstance.unitInstanceMap.forEach(unitInstance => {
-        this.viewer.scene.primitives.remove(unitInstance.currentModel);
-      });
-    });
-    this.forceInstanceMap.clear();
-    
-    // 清理移动控制器
-    this.movementController.dispose();
-    
-    // 清理单例
-    MilitaryInstanceRenderer.#instance = null;
   }
 
   /**
@@ -240,5 +198,42 @@ export class MilitaryInstanceRenderer {
         unitInstance.currentLOD = targetLOD;
       }
     });
+  }
+
+  /**
+   * 处理部队实例变化（新增或删除部队）
+   */
+  updateForceInstance(newForceIds, removedForceIds) {
+    // 渲染所有现存但还未渲染的部队
+    newForceIds.forEach(id => {
+      if (!this.forceInstanceMap.has(id)) {
+        const force = this.store.getForceById(id);
+        if (force) {
+          this.generator.createForceInstance(force);
+          this.renderForceInstance(force);
+        }
+      }
+    });
+
+    // 移除旧部队
+    removedForceIds.forEach(id => {
+      this.generator.removeForceInstanceById(id);
+    });
+  }
+
+  /**
+   * 清理所有实例
+   */
+  dispose() {
+    if (this._updateHandle) {
+      this.viewer.scene.postUpdate.removeEventListener(this._updateHandle);
+      this._updateHandle = null;
+    }
+    
+    // 清理移动控制器
+    this.movementController.dispose();
+    
+    // 清理单例
+    MilitaryInstanceRenderer.#instance = null;
   }
 }

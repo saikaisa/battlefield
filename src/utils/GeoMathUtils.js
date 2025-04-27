@@ -165,6 +165,25 @@ export class GeoMathUtils {
   }
 
   /**
+   * 计算两个角度之间的最短差值
+   * @param {number} fromAngle 起始角度（弧度）
+   * @param {number} toAngle 目标角度（弧度）
+   * @returns {number} 最短角度差（弧度），正值表示顺时针，负值表示逆时针
+   */
+  static calculateAngleDiff(fromAngle, toAngle) {
+    // 标准化角度到 [0, 2PI] 范围
+    const from = Cesium.Math.zeroToTwoPi(fromAngle) % (2 * Math.PI);
+    let to = Cesium.Math.zeroToTwoPi(toAngle) % (2 * Math.PI);
+    
+    // 计算最短角度差
+    let diff = to - from;
+    if (diff > Math.PI) diff -= 2 * Math.PI;
+    if (diff < -Math.PI) diff += 2 * Math.PI;
+    
+    return diff;
+  }
+
+  /**
    * 创建东北天(ENU)坐标系到ECEF的变换矩阵
    * @param {Object} position 位置 {longitude, latitude, height}
    * @param {Object} direction 方向 {heading, pitch, roll}

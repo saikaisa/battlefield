@@ -75,10 +75,16 @@ export class MilitaryInstanceGenerator {
   }
 
   /**
-   * 创建部队实例（包含多个兵种模型）并将其渲染在地图上
+   * 创建部队实例，但此时不会渲染到地图上
    */
   async createForceInstance(force) {
     try {
+      // 检查是否已存在该部队实例，避免重复创建
+      if (this.forceInstanceMap.has(force.forceId)) {
+        console.log(`部队实例已存在: ${force.forceId}`);
+        return this.forceInstanceMap.get(force.forceId);
+      }
+      
       const forceInstance = {
         force: force,
         unitInstanceMap: this.createUnitInstances(force),
@@ -96,7 +102,7 @@ export class MilitaryInstanceGenerator {
   }
 
   /**
-   * 移除部队实例
+   * 移除部队实例，及其在地图上的渲染
    */
   removeForceInstanceById(forceId) {
     const forceInstance = this.forceInstanceMap.get(forceId);
@@ -258,5 +264,21 @@ export class MilitaryInstanceGenerator {
     }
 
     return renderingGroups;
+  }
+
+  /**
+   * 清理所有实例
+   */
+  dispose() {
+    // 清理 forceInstanceMap
+    this.forceInstanceMap.forEach(forceInstance => {
+      forceInstance.unitInstanceMap.forEach(unitInstance => {
+        this.viewer.scene.primitives.remove(unitInstance.currentModel);
+      });
+    });
+    this.forceInstanceMap.clear();
+
+    // 清理单例
+    MilitaryInstanceGenerator.#instance = null;
   }
 }

@@ -74,7 +74,16 @@ export const MilitaryConfig = {
     fatigueFactor: {
       levelOne: 0.9,
       levelTwo: 0.8,
-    }
+    },
+  },
+
+  // 移动配置
+  movementConfig: {
+    defaultTurnDuration: 200, // 默认转向时间(毫秒)
+    baseSpeed: 20, // 基础移动速度（米/秒）
+    baseTurnRate: 3,  // 基础转向速率(弧度/秒)，角度越小越快
+    minTurnDuration: 100, // 最小转向时间(毫秒)
+    maxTurnDuration: 800, // 最大转向时间(毫秒)
   },
 
   // 部队排布配置

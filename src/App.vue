@@ -34,8 +34,8 @@ const gameReady = ref(false);
 
 let sceneManager;
 let scenePanelManager;
-// let militaryManager;
-// let militaryPanelManager;
+let militaryManager;
+let militaryPanelManager;
 
 // 生命周期钩子
 onMounted(async () => {

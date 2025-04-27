@@ -127,7 +127,7 @@ export const openGameStore = defineStore("gameStore", () => {
   const getFormations = () => Array.from(formationMap.values());
   /** 根据阵营获取编队 */
   const getFormationsByFaction = faction => getFormations().filter(f => f.faction === faction);
-  /** 添加部队到编队 */
+  /** 添加部队到编队，或将部队转移到另一个编队 */
   function addForceToFormation(forceId, formationId) {
     const force = forceMap.get(forceId);
     const formation = formationMap.get(formationId);

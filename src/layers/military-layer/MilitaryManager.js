@@ -9,7 +9,8 @@ import { MilitaryInstanceRenderer } from './components/MilitaryInstanceRenderer'
 // eslint-disable-next-line no-unused-vars
 import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
 import { HexForceMapper } from '@/layers/interaction-layer/HexForceMapper';
-import { API } from "@/services/api";
+import { showWarning, showError, showSuccess } from '@/layers/interaction-layer/MessageBox';
+import { MilitaryInstanceGenerator } from "./components/MilitaryInstanceGenerator";
 
 /**
  * 军事单位管理器
@@ -47,6 +48,7 @@ export class MilitaryManager {
     
     // 初始化管理器
     this.loader = null;
+    this.generator = null;
     this.renderer = null;
     this.panelManager = null;
     
@@ -65,16 +67,26 @@ export class MilitaryManager {
     this.loader = ModelTemplateLoader.getInstance(this.viewer);
     await this.loader.preloadModelTemplates(onProgress);
 
-    // 初始化模型渲染器
+    // 初始化军事单位实例生成器
+    this.generator = MilitaryInstanceGenerator.getInstance(this.viewer);
+
+    // 初始化军事单位实例渲染器
     this.renderer = MilitaryInstanceRenderer.getInstance(this.viewer);
     this.renderer.regenerateAllForceInstances();
 
-    // 监听部队变化，当部队数量发生变化时，同步渲染器和 HexForceMapper
+    // 监听部队变化，当部队发生增删时同步
     this._stopForceWatch = watch(
       () => Array.from(this.store.forceMap.keys()),
       (newForceIds, oldForceIds) => {
-        this.renderer.syncForcesChange(newForceIds, oldForceIds);
-        this._syncHexForceMapper();
+        // 计算新增和删除的部队ID
+        const addedForceIds = newForceIds.filter(id => !oldForceIds.includes(id));
+        const removedForceIds = oldForceIds.filter(id => !newForceIds.includes(id));
+        // 更新部队实例
+        this.renderer.updateForceInstance(newForceIds, removedForceIds);
+        // 更新新增和删除部队与六角格的位置映射
+        this._syncHexForceMapper(addedForceIds, removedForceIds);
+        // 更新编队中的部队
+        this._syncFormationSystem(addedForceIds, removedForceIds);
       }
     );
 
@@ -111,10 +123,27 @@ export class MilitaryManager {
    * 同步 HexForceMapper 的映射关系
    * @private
    */
-  _syncHexForceMapper() {
-    const hexCells = this.store.getHexCells();
-    const forces = this.store.getForces();
-    HexForceMapper.initMapping(hexCells, forces);
+  _syncHexForceMapper(newForceIds, oldForceIds) {
+    // 如果没有传入参数，则重新初始化所有映射关系
+    if (!newForceIds || !oldForceIds) {
+      this._initHexForceMapper();
+      return;
+    }
+    
+    // 处理新增的部队，将它们与对应的六角格建立映射关系
+    const addedForceIds = newForceIds.filter(id => !oldForceIds.includes(id));
+    addedForceIds.forEach(forceId => {
+      const force = this.store.getForceById(forceId);
+      if (force && force.hexId) {
+        HexForceMapper.addForceById(forceId, force.hexId);
+      }
+    });
+    
+    // 处理删除的部队，解除它们与六角格的映射关系
+    const removedForceIds = oldForceIds.filter(id => !newForceIds.includes(id));
+    removedForceIds.forEach(forceId => {
+      HexForceMapper.removeForceById(forceId);
+    });
   }
 
   /**
@@ -122,47 +151,75 @@ export class MilitaryManager {
    * @private
    */
   _initFormationSystem() {
-    // 创建蓝方默认编队
-    const blueDefault = new Formation({
-      formationId: 'FM_blue_default',  // 特殊ID，不使用自增ID
-      formationName: '蓝方预备队',
-      faction: 'blue',
-      forceIdList: []
-    });
-    this.store.formationMap.set(blueDefault.formationId, blueDefault);
+    // 检查蓝方默认编队是否存在，不存在则创建
+    if (!this.store.formationMap.has('FM_blue_default')) {
+      const blueDefault = new Formation({
+        formationId: 'FM_blue_default',  // 特殊ID，不使用自增ID
+        formationName: '预备队',
+        faction: 'blue',
+        forceIdList: []
+      });
+      this.store.formationMap.set(blueDefault.formationId, blueDefault);
+    }
 
-    // 创建红方默认编队
-    const redDefault = new Formation({
-      formationId: 'FM_red_default',  // 特殊ID，不使用自增ID
-      formationName: '红方预备队',
-      faction: 'red',
-      forceIdList: []
-    });
-    this.store.formationMap.set(redDefault.formationId, redDefault);
-
-    // 将现有部队分配到对应阵营的默认编队中
-    this.store.forceMap.forEach(force => {
-      const defaultFormationId = `FM_${force.faction}_default`;
-      const defaultFormation = this.store.formationMap.get(defaultFormationId);
-      if (defaultFormation && !defaultFormation.forceIdList.includes(force.forceId)) {
-        defaultFormation.forceIdList.push(force.forceId);
+    // 检查红方默认编队是否存在，不存在则创建
+    if (!this.store.formationMap.has('FM_red_default')) {
+      const redDefault = new Formation({
+        formationId: 'FM_red_default',  // 特殊ID，不使用自增ID
+        formationName: '预备队',
+        faction: 'red',
+        forceIdList: []
+      });
+      this.store.formationMap.set(redDefault.formationId, redDefault);
+    }
+    
+    // 将所有未在编队中的部队加入对应阵营的默认编队
+    const allForceIds = Array.from(this.store.forceMap.keys());
+    const allForceInFormation = new Set();
+    for (const formation of this.store.formationMap.values()) {
+      formation.forceIdList.forEach(id => allForceInFormation.add(id));
+    }
+    allForceIds.forEach(forceId => {
+      if (!allForceInFormation.has(forceId)) {
+        const force = this.store.getForceById(forceId);
+        if (force) {
+          this.store.addForceToFormation(forceId, `FM_${force.faction}_default`);
+        }
       }
     });
   }
 
   /**
-   * 创建新部队时，将其添加到指定编队
-   * @param {Force} force 新创建的部队
-   * @param {string} formationId 目标编队ID，如果不指定则添加到默认编队
+   * 同步编队系统，并且让新创建的部队自动加入默认编队
+   * @param {string[]} addedForceIds 新增的部队ID列表
+   * @param {string[]} removedForceIds 已删除的部队ID列表
+   * @private
    */
-  _addForceToFormation(force, formationId = null) {
-    const targetFormationId = formationId || `FM_${force.faction}_default`;
-    const formation = this.store.formationMap.get(targetFormationId);
+  _syncFormationSystem(addedForceIds, removedForceIds) {
+    // 如果没有传入参数，则重新初始化编队系统
+    if (!addedForceIds || !removedForceIds) {
+      this._initFormationSystem();
+      return;
+    }
     
-    if (formation && formation.faction === force.faction) {
-      if (!formation.forceIdList.includes(force.forceId)) {
-        formation.forceIdList.push(force.forceId);
-      }
+    // 从所有编队中移除已不存在的部队ID
+    if (removedForceIds && removedForceIds.length > 0) {
+      addedForceIds.forEach(forceId => {
+        const force = this.store.getForceById(forceId);
+        if (force) {
+          this.store.removeForceFromCurrentFormation(forceId);
+        }
+      });
+    }
+    
+    // 将新增的部队加入到对应阵营的默认编队中
+    if (addedForceIds && addedForceIds.length > 0) {
+      addedForceIds.forEach(forceId => {
+        const force = this.store.getForceById(forceId);
+        if (force) {
+          this.store.addForceToFormation(forceId, `FM_${force.faction}_default`);
+        }
+      });
     }
   }
 
@@ -180,14 +237,14 @@ export class MilitaryManager {
       try {
         // 1. 检查路径有效性
         if (!path || path.length < 2) {
-          console.warn("路径过短，无法进行移动");
+          showWarning("路径过短，无法进行移动");
           return;
         }
         
         // 2. 获取部队
         const force = this.store.getForceById(forceId);
         if (!force) {
-          console.error(`未找到部队: ${forceId}`);
+          showError(`未找到部队: ${forceId}`);
           return;
         }
         
@@ -196,31 +253,24 @@ export class MilitaryManager {
         
         // 4. 检查行动力是否足够
         if (actionPointCost > force.actionPoints) {
-          console.warn(`行动力不足. 需要: ${actionPointCost}, 剩余: ${force.actionPoints}`);
+          showWarning(`行动力不足. 需要: ${actionPointCost}, 剩余: ${force.actionPoints}`);
           return;
         }
         
-        // 5. 调用API（实际可能是后端验证）
-        const res = await API.move(forceId, path);
+        // 6. 更新行动力
+        force.consumeActionPoints(actionPointCost);
         
-        if (res.status === "success") {
-          // 6. 更新行动力
-          force.consumeActionPoints(actionPointCost);
-          
-          // 7. 在渲染器中执行移动动画
-          const isFinished = await this.renderer.moveForceAlongPath(forceId, path);
+        // 7. 在渲染器中执行移动动画
+        const isMoving = await this.renderer.moveForceAlongPath(forceId, path);
 
-          // 8. 更新部队在六角格中的位置
-          if (isFinished) {
-            HexForceMapper.moveForceToHex(forceId, path[path.length - 1]);
-          }
-          
-          console.log(`部队 ${forceId} 开始移动，消耗行动力 ${actionPointCost}`);
-        } else {
-          console.error(`移动失败: ${res.message}`);
+        // 8. 更新部队在六角格中的位置
+        if (isMoving) {
+          HexForceMapper.moveForceToHex(forceId, path[path.length - 1]);
         }
+        
+        showSuccess(`部队 ${forceId} 开始移动，消耗行动力 ${actionPointCost}`);
       } catch (error) {
-        console.error("移动部队时发生错误:", error);
+        showError(`移动命令执行失败: ${error.message}`);
       }
     };
 
@@ -231,78 +281,36 @@ export class MilitaryManager {
      * @param {string[]} supportForceIds 支援部队ID数组
      */
     this.panelManager.onAttackCommand = async ({ commandForceId, targetHex, supportForceIds }) => {
-      try {
-        // 此处实现攻击逻辑，包含后端验证、战斗解算等
-        const res = await API.attack(commandForceId, targetHex, supportForceIds);
-        
-        if (res.status === "success") {
-          // 处理战斗结果
-          console.log(`部队 ${commandForceId} 攻击 ${targetHex} 成功`);
-          
-          // 更新部队状态（兵力损失等）
-          const { losses } = res.data;
-          
-          // 更新指挥部队
-          const commandForce = this.store.getForceById(commandForceId);
-          if (commandForce) {
-            commandForce.troopStrength = Math.max(0, commandForce.troopStrength - losses.attacker);
-          }
-  
-          // 更新支援部队
-          supportForceIds.forEach(id => {
-            const force = this.store.getForceById(id);
-            if (force) {
-              force.troopStrength = Math.max(0, force.troopStrength - losses.attacker);
-            }
-          });
-        } else {
-          console.error(`攻击失败: ${res.message}`);
-        }
-      } catch (error) {
-        console.error("攻击目标时发生错误:", error);
-      }
+      
     };
 
     /**
      * 创建部队命令
-     * @param {string} hexId 六角格ID
-     * @param {string} faction 阵营
-     * @param {string} composition 部队组成
-     * @param {string} formationId 目标编队ID，如果不指定则添加到默认编队
+     * @param {Object} forceData 部队初始数据的PlainObject形式
+     * forceData: {
+     *   forceName: string,
+     *   faction: string,
+     *   service: string,
+     *   hexId: string,
+     *   composition: Array<Object>
+     * }
      */
-    this.panelManager.onCreateForce = async ({ hexId, faction, composition, formationId }) => {
+    this.panelManager.onCreateForce = async ({ forceData }) => {
       try {
-        // 实现创建部队逻辑
+        // 创建部队
         const force = new Force({
-          forceName: `${faction}部队_${Date.now()}`,
-          faction: faction,
-          hexId: hexId,
-          composition: composition
+          forceName: forceData.forceName,
+          faction: forceData.faction,
+          service: forceData.service,
+          hexId: forceData.hexId,
+          composition: forceData.composition
         });
+        // 添加到Store
+        this.store.addForce(force);
         
-        const res = await API.createForce(hexId, faction, composition, formationId);
-        
-        if (res.status === "success") {
-          // 添加到Store
-          this.store.addForce(force);
-          
-          if (formationId) {
-            // 添加到编队
-            const formation = this.store.formationMap.get(formationId);
-            if (formation) {
-              formation.forceIdList.push(force.forceId);
-            }
-          } else {
-            // 添加到默认编队
-            this._addForceToFormation(force);
-          }
-          
-          console.log(`创建部队成功: ${force.forceId}`);
-        } else {
-          console.error(`创建部队失败: ${res.message}`);
-        }
+        showSuccess(`创建部队成功: ${force.forceId}`);
       } catch (error) {
-        console.error("创建部队时发生错误:", error);
+        showError(`创建部队时发生错误: ${error.message}`);
       }
     };
 
@@ -313,30 +321,23 @@ export class MilitaryManager {
      */
     this.panelManager.onMergeForces = async ({ hexId, forceIds }) => {
       try {
-        // 实现合并部队逻辑
-        const res = await API.mergeForces(hexId, forceIds);
+        // 从 Store 中移除原部队
+        forceIds.forEach(fid => {
+          this.store.forceMap.delete(fid);
+          HexForceMapper.removeForceById(fid);
+        });
+
+        // 添加新部队到 Store
+        const newForce = res.data.new_force;
+        this.store.addForce(newForce);
+        HexForceMapper.addForceById(newForce.force_id, hexId);
         
-        if (res.status === "success") {
-          // 从 Store 中移除原部队
-          forceIds.forEach(fid => {
-            this.store.forceMap.delete(fid);
-            HexForceMapper.removeForceById(fid);
-          });
-  
-          // 添加新部队到 Store
-          const newForce = res.data.new_force;
-          this.store.addForce(newForce);
-          HexForceMapper.addForceById(newForce.force_id, hexId);
-          
-          // 添加到默认编队
-          this._addForceToFormation(newForce);
-          
-          console.log(`合并部队成功: ${forceIds.join(',')}`);
-        } else {
-          console.error(`合并部队失败: ${res.message}`);
-        }
+        // 添加到默认编队
+        this._addForceToFormation(newForce);
+        
+        showSuccess(`合并部队成功: ${forceIds.join(',')}`);
       } catch (error) {
-        console.error("合并部队时发生错误:", error);
+        showError(`合并部队时发生错误: ${error.message}`);
       }
     };
 
@@ -367,12 +368,12 @@ export class MilitaryManager {
             this._addForceToFormation(newForce);
           });
           
-          console.log(`拆分部队成功: ${forceId}`);
+          showSuccess(`拆分部队成功: ${forceId}`);
         } else {
-          console.error(`拆分部队失败: ${res.message}`);
+          showError(`拆分部队失败: ${res.message}`);
         }
       } catch (error) {
-        console.error("拆分部队时发生错误:", error);
+        showError(`拆分部队时发生错误: ${error.message}`);
       }
     };
 
@@ -385,12 +386,12 @@ export class MilitaryManager {
         const formation = this.store.formationMap.get(formationId);
         if (formation && formation.forceIdList.length === 0) {
           this.store.formationMap.delete(formationId);
-          console.log(`删除编队成功: ${formationId}`);
+          showSuccess(`删除编队成功: ${formationId}`);
         } else {
-          console.warn(`无法删除非空编队: ${formationId}`);
+          showWarning(`无法删除非空编队: ${formationId}`);
         }
       } catch (error) {
-        console.error("删除编队时发生错误:", error);
+        showError(`删除编队时发生错误: ${error.message}`);
       }
     };
   }

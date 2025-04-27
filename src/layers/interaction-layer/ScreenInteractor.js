@@ -8,10 +8,9 @@ import { HexGridRenderer } from "@/layers/scene-layer/components/HexGridRenderer
 
 /**
  * ScreenInteractor: 管理鼠标悬浮 / 点击选中交互
- *  - 悬浮灰块 hovered
- *  - 点击高亮 selected
- *  - 支持单选或多选模式
- *  - 单/多选模式下，对同一格点击是否可取消也可配置
+ *  - 悬浮、点击、选中、取消选中
+ *  - 框选统计（TODO）
+ *  - 移动、攻击、编队、合并、拆分时选择目标（TODO）
  */
 export class ScreenInteractor {
   static #instance = null;

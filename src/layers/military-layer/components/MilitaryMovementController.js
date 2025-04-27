@@ -63,11 +63,12 @@ export class MilitaryMovementController {
     //       unitPaths: Map<unitInstanceId, {    // 部队内各兵种的路径
     //         position: { longitude, latitude, height }, // 兵种在该六角格内的经纬度位置
     //         heading: number,           // 兵种在该六角格内的朝向，注意这与部队朝向并不一致！！！
-    //         matrix: Matrix4,           // 兵种在该六角格内的变换矩阵
+    //         matrix: Matrix4,           // 兵种在该六角格内的变换矩阵（检查点）
     //       }>,
     //       startTime: number(Date),     // 这段路径开始直线运动时的时间戳
     //       startTurnTime: number(Date), // 开始转弯时的时间戳
-    //       duration: number,            // 这段路径规定的直线运动时间
+    //       duration: number,            // 从该点到下一点直线运动需要的时间
+    //       turnDuration: number,        // 从该点出发时转向需要的转向时间。最后一个点的转向不参考该值，使用默认转向时间
     //     }
     //   ],
     //   currentPathIndex: number,        // 当前路径段索引，与起点编号相同
@@ -76,11 +77,7 @@ export class MilitaryMovementController {
     //   isComplete: boolean              // 是否完成移动
     // }
     this.movingForces = new Map();
-    
-    // 移动配置
-    this.movementConfig = {
-      turnDuration: 500,  // 转向时间
-    };
+    this.config = MilitaryConfig.movementConfig;
   }
 
   /**
@@ -88,59 +85,126 @@ export class MilitaryMovementController {
    * @param {string} forceId 部队ID
    * @param {string[]} hexPath 路径（六角格ID数组）
    */
-  prepareMove(forceId, hexPath) {
+  async prepareMove(forceId, hexPath) {
     const forceInstance = this.forceInstanceMap.get(forceId);
     const force = forceInstance.force;
     
-    // =========== 计算部队及内部兵种模型在每个途径六角格内分配到的位置和姿态 ===========
+    // =========== 批量预先计算所有位置信息 ===========
+    // 1. 批量计算所有路径点上的部队位置
+    // 注意：第一个点直接使用当前位置，不需要计算
+    const forcePositionsResult = await this.poseCalculator.computeForcePosition(force, hexPath.slice(1));
+    
+    // 构建兵种位置查询索引，便于根据hexId快速查找
+    const forcePositionsMap = {};
+    // 第一个点使用当前位置
+    const startHexId = hexPath[0];
+    forcePositionsMap[startHexId] = {...forceInstance.pose.position};
+    
+    // 其他点使用计算结果 (result中不包含第一个六角格)
+    forcePositionsResult.forEach(result => {
+      forcePositionsMap[result.hexId] = result.position;
+    });  
+    
+    // 2. 准备兵种单位位置计算参数
+    const unitPositionParams = [];
+    
+    // 起点特殊处理 - 使用当前位置
+    forceInstance.unitInstanceMap.forEach((unitInstance, unitInstanceId) => {
+      unitPositionParams.push({
+        forcePose: {...forceInstance.pose},
+        localOffset: unitInstance.localOffset,
+        hexId: startHexId,
+        unitInstanceId: unitInstanceId
+      });
+    });
+    
+    // 路径中其他点
+    for (let i = 1; i < hexPath.length; i++) {
+      const hexId = hexPath[i];
+      const prevHexId = hexPath[i-1];
+      const forcePos = forcePositionsMap[hexId];
+      
+      // 计算从上一个点到当前点的朝向
+      const prevForcePos = forcePositionsMap[prevHexId];
+      const forceHeading = GeoMathUtils.calculateHeading(prevForcePos, forcePos);
+      
+      // 为每个兵种准备位置计算参数 (包括第一个点)
+      forceInstance.unitInstanceMap.forEach((unitInstance, unitInstanceId) => {
+        unitPositionParams.push({
+          forcePose: { position: forcePos, heading: forceHeading },
+          localOffset: unitInstance.localOffset,
+          hexId: hexId,
+          unitInstanceId: unitInstanceId
+        });
+      });
+    }
+    
+    // 3. 批量计算所有兵种单位在各路径点的位置 (包括第一个点)
+    const unitPositionsResult = await this.poseCalculator.computeUnitPosition(unitPositionParams);
+    
+    // 构建兵种位置查询索引
+    const unitPositionsMap = {};
+    unitPositionsResult.forEach((result, index) => {
+      // 获取这个查询结果对应的原查询
+      const param = unitPositionParams[index];
+
+      // 确保结果有效
+      if (!result) return;
+
+      // 初始化hexId对应的映射
+      if (!unitPositionsMap[result.hexId]) {
+        unitPositionsMap[result.hexId] = {};
+      }
+      
+      // 后续通过六角格id和兵种模型id即可查到其位置
+      unitPositionsMap[result.hexId][param.unitInstanceId] = result.position;
+    });
+    
+    // =========== 构建路径信息 ===========
     const forcePaths = [];
     
-    // 使用当前部队位置作为起点
-    const unitPaths = new Map();
+    // 4. 处理起点
+    const startUnitPaths = new Map();
     forceInstance.unitInstanceMap.forEach((unitInstance, unitInstanceId) => {
-      const position = this.poseCalculator.computeUnitPosition(
-        forceInstance.pose, 
-        unitInstance.localOffset, 
-        force.hexId
-      );
+      const unitPos = unitPositionsMap[startHexId][unitInstanceId];
       const heading = forceInstance.pose.heading;
-      unitPaths.set(unitInstanceId, {
-        position: position,
+      
+      startUnitPaths.set(unitInstanceId, {
+        position: unitPos,
         heading: heading,
         matrix: unitInstance.currentModel.modelMatrix.clone()
       });
     });
-
-    // 起点
+    
+    // 添加起点
     forcePaths.push({
-      hexId: hexPath[0],
+      hexId: startHexId,
       position: {...forceInstance.pose.position},
       heading: forceInstance.pose.heading,
-      unitPaths: new Map(unitPaths),
+      unitPaths: startUnitPaths,
       startTime: 0, // 会在后面设置
-      startTurnTime: 0,
-      duration: 0   // 第一个点不需要持续时间，因为它是起点
+      startTurnTime: 0, // 会在后面设置
+      duration: 0,   // 第一个点不需要持续时间，因为它是起点
+      turnDuration: this.config.defaultTurnDuration // 会在后面设置计算值
     });
     
-    // 计算路径上后续的每个点
+    // 5. 处理路径上的其他点
     for (let i = 1; i < hexPath.length; i++) {
       const hexId = hexPath[i];
-      const forcePos = this.poseCalculator.computeForcePosition(force, hexId);
+      // 为部队计算从上一个点到当前点的朝向
+      const prevHexId = hexPath[i-1];
+      const forcePos = forcePositionsMap[hexId];
+      const prevForcePos = forcePositionsMap[prevHexId]; 
+      const forceHeading = GeoMathUtils.calculateHeading(prevForcePos, forcePos);
       
-      // 计算从上一个点到当前点的朝向
-      const forceHeading = GeoMathUtils.calculateHeading(forcePaths[i-1].position, forcePos);
-      
-      // 为每个单位计算位置和朝向
+      // 为每个兵种模型计算位置和朝向
       const unitPaths = new Map();
       forceInstance.unitInstanceMap.forEach((unitInstance, unitInstanceId) => {
-        // 计算单位在该六角格内的位置
-        const unitPos = this.poseCalculator.computeUnitPosition(
-          { position: forcePos, heading: forceHeading },
-          unitInstance.localOffset, 
-          hexId
-        );
-        const preUnitInstance = forcePaths[i-1].unitPaths.get(unitInstanceId);
-        const unitHeading = GeoMathUtils.calculateHeading(preUnitInstance.position, unitPos);
+        const unitPos = unitPositionsMap[hexId][unitInstanceId];
+        const preUnitPos = unitPositionsMap[prevHexId][unitInstanceId];
+        
+        // 计算单位朝向
+        const unitHeading = GeoMathUtils.calculateHeading(preUnitPos, unitPos);
         
         unitPaths.set(unitInstanceId, {
           position: unitPos,
@@ -149,13 +213,19 @@ export class MilitaryMovementController {
         });
       });
 
-      // 计算这段路径移动持续时间
-      const cell = this.store.getHexCellById(hexId); // 获取六角格
-      const distance = GeoMathUtils.calculateDistance(forcePaths[i-1].position, forcePos); // 两点直线距离
-      const terrainFactor = 1 - (cell.terrainAttributes.elevation / 1000) * 0.5; // 地形影响因子
-      const adjustedSpeed = 20 * Math.max(0.5, terrainFactor); // 基础速度20米/秒，根据地形调整
-      const rawDuration = distance / adjustedSpeed * 1000; // 毫秒
-      const duration = Math.max(2000, Math.min(6000, rawDuration)); // 最小2秒，最大6秒
+      // 计算路径持续时间
+      const cell = this.store.getHexCellById(hexId);
+      const duration = this._calMovementDuration(
+        cell.terrainAttributes.elevation, 
+        prevForcePos, 
+        forcePos
+      );
+
+      // 计算上一个点的转向时间：使用上一点的朝向与当前路径点所需朝向的角度差计算，得到的是上一点的转向时间
+      const prevHeading = forcePaths[i-1].heading;
+      const angleDiff = Math.abs(GeoMathUtils.calculateAngleDiff(prevHeading, forceHeading));
+      const prevTurnDuration = this._calTurnDuration(angleDiff);
+      forcePaths[i-1].turnDuration = prevTurnDuration;
 
       // 添加到路径数组
       forcePaths.push({
@@ -165,7 +235,8 @@ export class MilitaryMovementController {
         unitPaths: unitPaths,
         startTime: 0, // 后续设置
         startTurnTime: 0,
-        duration: duration
+        duration: duration,
+        turnDuration: this.config.defaultTurnDuration
       });
     }
 
@@ -179,7 +250,7 @@ export class MilitaryMovementController {
       isComplete: false
     };
     
-    // 设置开始时间，一开始为转向
+    // 设置开始时间，开始移动前先进行转向操作
     movementState.forcePaths[0].startTurnTime = Date.now();
     
     // =========== 存储移动状态 ===========
@@ -192,6 +263,13 @@ export class MilitaryMovementController {
    * 更新移动中的部队
    * @param {string} forceId 部队ID
    * @returns {boolean} 是否继续移动
+   * 
+   * 流程：
+   * 1. 获取movementState，先检查这个部队是否正在移动
+   * 2. 根据movementState的currentPathIndex，获取当前直线路程的起点start和终点target (forcePath)
+   * 3. 先转向：在起点处对模型进行转向，转到终点unitPaths的各模型对应的heading，计算转向插值，位置保持不变
+   * 4. 再移动：对模型进行直线移动，移动到终点unitPaths的各模型对应的position，计算位置插值，转向保持不变
+   * 5. 循环 3,4 步，到最终点后，将模型旋转至与部队朝向一致
    */
   updateMovingForces(forceId) {
     const movementState = this.movingForces.get(forceId);
@@ -217,8 +295,8 @@ export class MilitaryMovementController {
       return this._handleTurning(movementState, forceInstance, start, target, now);
     }
     
-    // 如果到达下一个点，则开启下一轮
-    if (elapsed >= target.duration && movementState.isMoving || currentPathIndex === movementState.forcePaths.length - 1) {
+    // 触发条件：移动到每段路径的规定时间，或已经到达终点
+    if ((movementState.isMoving && elapsed >= target.duration) || currentPathIndex === movementState.forcePaths.length - 1) {
       return this._handleReachingNextPoint(movementState, forceInstance, start, target, now);
     }
     
@@ -227,22 +305,21 @@ export class MilitaryMovementController {
   }
 
   /**
-   * 处理部队到达下一个点的逻辑
+   * 处理部队到达下一个点时的逻辑
    * @private
-   * @param {string} forceId 部队ID
    * @param {Object} movementState 移动状态
    * @param {Object} forceInstance 部队实例
-   * @param {number} currentPathIndex 当前路径索引
-   * @param {Object} target 目标点
+   * @param {Object} start 起点路径对象
+   * @param {Object} target 目标点路径对象
    * @param {number} now 当前时间戳
    * @returns {boolean} 是否继续移动
    */
   _handleReachingNextPoint(movementState, forceInstance, start, target, now) {
+    // 尚未移动到最终点，切换到下一条路径
     if (movementState.currentPathIndex < movementState.forcePaths.length - 1) {
-      // 修正位置
+      // 使用存储的 matrix 检查点,修正位置
       target.unitPaths.forEach((targetUnitPath, unitInstanceId) => {
         const unitInstance = forceInstance.unitInstanceMap.get(unitInstanceId);
-        // 更新模型矩阵
         unitInstance.currentModel.modelMatrix = targetUnitPath.matrix;
       });
       // 更新状态和计时器
@@ -252,38 +329,37 @@ export class MilitaryMovementController {
       movementState.currentPathIndex++;
       
       return true;
-    } else {
-      // 移动完成
-      movementState.isMoving = false;
-      movementState.isTurning = false;
-
+    } 
+    // 特殊处理：已移动到最终点，旋转方向至与部队方向一致
+    else {
       // 将兵种模型旋转至与部队朝向一致
       const turnElapsed = now - start.startTurnTime;
 
       // 检查转向是否完成
-      if (turnElapsed >= this.movementConfig.turnDuration) {
+      if (turnElapsed >= start.turnDuration) {
         // 修正角度
         start.unitPaths.forEach((startUnitPath, unitInstanceId) => {
           const unitInstance = forceInstance.unitInstanceMap.get(unitInstanceId);
           if (startUnitPath && unitInstance) {              
-            // 计算矩阵
+            // 更新模型矩阵
             const newMatrix = this.poseCalculator.computeUnitModelMatrix(
               startUnitPath.position,
               start.heading
             );
-            // 更新模型矩阵
             unitInstance.currentModel.modelMatrix = newMatrix;
           }
         });
 
         forceInstance.pose.position = {...start.position};
         forceInstance.pose.heading = start.heading;
+        movementState.isMoving = false;
+        movementState.isTurning = false;
         movementState.isComplete = true; // 完成移动
         return false;
       }
 
       // 转向未完成，计算转向进度
-      const turnProgress = Math.min(1.0, turnElapsed / this.movementConfig.turnDuration);
+      const turnProgress = Math.min(1.0, turnElapsed / start.turnDuration);
       
       // 遍历start和target的相同unitInstanceId的兵种并计算每帧姿态
       start.unitPaths.forEach((startUnitPath, unitInstanceId) => {
@@ -313,9 +389,9 @@ export class MilitaryMovementController {
    * 处理部队转向逻辑
    * @private
    * @param {Object} movementState 移动状态
-   * @param {Object} start 当前点
-   * @param {Object} target 目标点
    * @param {Object} forceInstance 部队实例
+   * @param {Object} start 当前点路径对象
+   * @param {Object} target 目标点路径对象
    * @param {number} now 当前时间戳
    * @returns {boolean} 是否继续移动
    */
@@ -323,7 +399,7 @@ export class MilitaryMovementController {
     const turnElapsed = now - start.startTurnTime;
     
     // 检查转向是否完成
-    if (turnElapsed >= this.movementConfig.turnDuration) {
+    if (turnElapsed >= start.turnDuration) {
       // 修正角度
       start.unitPaths.forEach((startUnitPath, unitInstanceId) => {
         const targetUnitPath = target.unitPaths.get(unitInstanceId);
@@ -351,7 +427,7 @@ export class MilitaryMovementController {
     }
     
     // 转向未完成，计算转向进度
-    const turnProgress = Math.min(1.0, turnElapsed / this.movementConfig.turnDuration);
+    const turnProgress = Math.min(1.0, turnElapsed / start.turnDuration);
     
     // 遍历start和target的相同unitInstanceId的兵种并计算每帧姿态
     start.unitPaths.forEach((startUnitPath, unitInstanceId) => {
@@ -433,16 +509,56 @@ export class MilitaryMovementController {
   }
 
   /**
+   * 计算两点间移动持续时间
+   * @private
+   * @param {string} elevation 高度
+   * @param {Object} fromPosition 起点位置 {longitude, latitude, height}
+   * @param {Object} toPosition 终点位置 {longitude, latitude, height}
+   * @returns {number} 移动持续时间（毫秒）
+   */
+  _calMovementDuration(elevation, fromPosition, toPosition) {
+    // 计算两点之间的直线距离(米)
+    const distanceMeters = GeoMathUtils.calculateDistance(fromPosition, toPosition);
+    
+    // 计算地形影响因子（高度越高，速度越慢）
+    const terrainFactor = 1 - (elevation / 1000) * 0.5;
+    
+    // 计算实际移动速度(米/秒)
+    const actualSpeed = MilitaryConfig.limit.baseSpeed * Math.max(0.5, terrainFactor);
+    
+    // 计算理论移动时间(秒)
+    const timeSeconds = distanceMeters / actualSpeed;
+    
+    // 转换为毫秒并限制最小2秒，最大6秒
+    return Math.max(2000, Math.min(6000, timeSeconds * 1000));
+  }
+
+  /**
+   * 计算转向时间
+   * @private
+   * @param {number} angleDiff 角度差（弧度）
+   * @returns {number} 转向时间（毫秒）
+   */
+  _calTurnDuration(angleDiff) {
+    // 将角度差转换为正值
+    const absDiff = Math.abs(angleDiff);
+    
+    // 基于角度差计算转向时间，角度越大，时间越长
+    // 将角度差(弧度)除以基础转向速率(弧度/秒)得到转向时间(秒)
+    const turnTimeSeconds = absDiff / this.config.baseTurnRate;
+    
+    // 转换为毫秒并限制在最小和最大转向时间范围内
+    return Math.max(
+      this.config.minTurnDuration, 
+      Math.min(this.config.maxTurnDuration, turnTimeSeconds * 1000)
+    );
+  }
+
+  /**
    * 清理资源
    */
   dispose() {
-    // 停止所有移动
-    this.movingForces.forEach((_, forceId) => {
-      this.stopMovement(forceId);
-    });
     this.movingForces.clear();
-    
-    // 清理单例
     MilitaryMovementController.#instance = null;
   }
 }
