@@ -64,38 +64,61 @@ export class MilitaryInstanceRenderer {
       // 创建新的部队实例
       this.generator.createForceInstance(force);
       // 将新的部队实例渲染在地图上
-      this.renderForceInstance(force);
+      this._renderForceInstance(force);
     });
     this.update();
   }
 
   /**
-   * 渲染部队，新增的部队实例需要调用这个方法渲染到地图上，删除的不用
-   * @param {Object} force 部队对象
+   * 处理部队实例变化（新增删除和渲染）
+   * 根据传入的部队ID列表，更新地图上的部队实例显示
+   * 
+   * @param {string[]} [newForceIds] - 新的完整部队ID列表
+   * @param {string[]} [removedForceIds] - 已被移除的部队ID列表
+   * 
+   * 当两个参数都为空时，会重新同步所有部队实例
    */
-  renderForceInstance(force) {
-    const forceInstance = this.forceInstanceMap.get(force.forceId);
-    if (!forceInstance || !forceInstance.unitInstanceMap) return;
-
-    // 遍历所有兵种实例，设置位置并添加到场景中
-    forceInstance.unitInstanceMap.forEach(unitInstance => {
-      const currentModel = unitInstance.currentModel;
+  updateForceInstance(newForceIds, removedForceIds) {
+    // 如果未传入参数，则重新渲染所有部队
+    if (!newForceIds || !removedForceIds) {
+      // 遍历所有存在的部队
+      const allForces = this.store.getForces();
+      const allForceIds = allForces.map(force => force.forceId);
       
-      // 检查模型是否已经在场景中
-      if (!this.viewer.scene.primitives.contains(currentModel)) {
-        // 设置兵种模型位置和姿态
-        currentModel.modelMatrix = this.poseCalculator.computeUnitModelMatrix(
-          forceInstance.pose,
-          unitInstance.localOffset,
-          forceInstance.force.hexId
-        );
-        currentModel.allowPicking = true;
-        
-        // 添加到场景中
-        this.viewer.scene.primitives.add(currentModel);
-      } else {
-        console.warn(`禁止重复渲染兵种模型！`);
+      // 清理那些已从部队数据中删除，但仍然存在于forceInstanceMap中的部队实例
+      for (const instanceId of this.forceInstanceMap.keys()) {
+        if (!allForceIds.includes(instanceId)) {
+          this.generator.removeForceInstanceById(instanceId);
+        }
       }
+      
+      // 渲染所有存在的部队
+      allForces.forEach(force => {
+        // 检查部队是否已有实例
+        if (!this.forceInstanceMap.has(force.forceId)) {
+          // 对于没有实例的部队，创建实例
+          this.generator.createForceInstance(force);
+        }
+        // 无论是否已有实例，都调用渲染方法（内部会判断是否重复显示）
+        this._renderForceInstance(force);
+      });
+      return;
+    }
+    
+    // 为新的完整部队ID列表中不在forceInstanceMap里的部队创建渲染实例并渲染
+    newForceIds.forEach(id => {
+      if (!this.forceInstanceMap.has(id)) {
+        const force = this.store.getForceById(id);
+        if (force) {
+          this.generator.createForceInstance(force);
+          this._renderForceInstance(force);
+        }
+      }
+    });
+
+    // 移除已删除部队的渲染实例
+    removedForceIds.forEach(id => {
+      this.generator.removeForceInstanceById(id);
     });
   }
 
@@ -140,6 +163,7 @@ export class MilitaryInstanceRenderer {
    */
   update() {
     if (this._updateHandle) return;
+    
     this._updateHandle = this.viewer.scene.postUpdate.addEventListener(() => {
       // 更新所有部队
       this.forceInstanceMap.forEach((forceInstance, forceId) => {
@@ -158,6 +182,66 @@ export class MilitaryInstanceRenderer {
       
       // 清理已完成移动的部队
       this.movementController.cleanupFinishedMovements();
+    });
+  }
+
+  /**
+   * 更新部队实例的可见性
+   * 根据当前阵营和六角格可见性设置更新部队模型的显示状态
+   */
+  updateForceInstanceVisibility() {
+    const currentFaction = this.store.currentFaction;
+    
+    // 遍历所有部队实例，更新其可见性
+    this.forceInstanceMap.forEach((forceInstance, forceId) => {
+      const force = forceInstance.force;
+      if (!force) return;
+      
+      // 获取部队所在的六角格
+      const hexId = force.hexId;
+      if (!hexId) return;
+      
+      // 获取六角格对象
+      const hexCell = this.store.getHexCellById(hexId);
+      if (!hexCell) return;
+      
+      // 检查六角格是否对当前阵营可见
+      const isVisible = hexCell.visibility?.visibleTo?.[currentFaction] || true;
+      
+      // 更新所有兵种实例的可见性
+      forceInstance.unitInstanceMap.forEach(unitInstance => {
+        if (unitInstance.currentModel) {
+          unitInstance.currentModel.show = isVisible;
+        }
+      });
+    });
+  }
+
+  /**
+   * 渲染部队，新增的部队实例需要调用这个方法渲染到地图上，删除的不用
+   * @param {Object} force 部队对象
+   * @private
+   */
+  _renderForceInstance(force) {
+    const forceInstance = this.forceInstanceMap.get(force.forceId);
+    if (!forceInstance || !forceInstance.unitInstanceMap) return;
+    
+    // 遍历所有兵种实例，设置位置并添加到场景中
+    forceInstance.unitInstanceMap.forEach(unitInstance => {
+      const currentModel = unitInstance.currentModel;
+      
+      // 检查模型是否已经在场景中
+      if (!this.viewer.scene.primitives.contains(currentModel)) {
+        // 设置兵种模型位置和姿态
+        currentModel.modelMatrix = this.poseCalculator.computeUnitModelMatrix(
+          forceInstance.pose.position,
+          forceInstance.pose.heading || 0
+        );
+        currentModel.allowPicking = true;
+        
+        // 添加到场景中
+        this.viewer.scene.primitives.add(currentModel);
+      }
     });
   }
 
@@ -197,27 +281,6 @@ export class MilitaryInstanceRenderer {
         unitInstance.currentModel = targetModel;
         unitInstance.currentLOD = targetLOD;
       }
-    });
-  }
-
-  /**
-   * 处理部队实例变化（新增或删除部队）
-   */
-  updateForceInstance(newForceIds, removedForceIds) {
-    // 渲染所有现存但还未渲染的部队
-    newForceIds.forEach(id => {
-      if (!this.forceInstanceMap.has(id)) {
-        const force = this.store.getForceById(id);
-        if (force) {
-          this.generator.createForceInstance(force);
-          this.renderForceInstance(force);
-        }
-      }
-    });
-
-    // 移除旧部队
-    removedForceIds.forEach(id => {
-      this.generator.removeForceInstanceById(id);
     });
   }
 

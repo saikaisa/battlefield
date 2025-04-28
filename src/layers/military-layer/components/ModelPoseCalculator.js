@@ -47,7 +47,7 @@ export class ModelPoseCalculator {
    * 获取部队在六角格内的随机散列位置(支持批量处理)
    * @param {Object} force 部队对象 
    * @param {string|string[]} hexIds 六角格ID或ID数组，如不提供则使用force.hexId
-   * @returns {Object|Array<Object>} 计算后的位置 { hexId, position: {longitude, latitude, height} }
+   * @returns {Promise<Object|Array<Object>>} 计算后的位置 { hexId, position: {longitude, latitude, height} }
    */
   async computeForcePosition(force, hexIds) {
     // 标准化为数组形式

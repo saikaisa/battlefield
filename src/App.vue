@@ -7,6 +7,7 @@
     <div v-if="gameReady">
       <ScenePanel />
       <MilitaryPanel />
+      <CommandPanel />
       <router-view />
     </div>
 
@@ -24,6 +25,8 @@ import ScenePanel from '@/components/hud/ScenePanel.vue';
 import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
 import MilitaryPanel from '@/components/hud/MilitaryPanel.vue';
 import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
+import CommandPanel from '@/components/hud/CommandPanel.vue';
+import { CommandDispatcher } from '@/layers/interaction-layer/CommandDispatcher';
 
 // 创建共享组件状态
 const viewerRef = ref(null);
@@ -36,6 +39,7 @@ let sceneManager;
 let scenePanelManager;
 let militaryManager;
 let militaryPanelManager;
+let commandDispatcher;
 
 // 生命周期钩子
 onMounted(async () => {
@@ -59,6 +63,9 @@ onMounted(async () => {
   militaryManager.setPanelManager(militaryPanelManager);
   // 提供军事面板管理器给子组件
   provide('militaryPanelManager', militaryPanelManager);
+  
+  // 初始化命令分发器
+  commandDispatcher = CommandDispatcher.getInstance(viewer);
 
   // 初始化完成
   gameReady.value = true;
@@ -67,6 +74,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   // militaryManager?.dispose();
   sceneManager?.destroy();
+  commandDispatcher?.destroy();
 });
 
 onUnmounted(() => {

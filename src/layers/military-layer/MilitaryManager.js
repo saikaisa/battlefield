@@ -21,6 +21,7 @@ import { MilitaryInstanceGenerator } from "./components/MilitaryInstanceGenerato
  *  3. Pinia forceMap 数据同步
  *  4. 交互面板 (PanelManager) 命令回调对接
  *  5. 维护 HexForceMapper 映射关系
+ *  6. 管理部队编队和组织体系
  */
 export class MilitaryManager {
   // 单例实例
@@ -54,8 +55,15 @@ export class MilitaryManager {
     
     this._stopForceWatch = null;
     this._stopHexWatch = null;
+    this._stopFactionWatch = null;
+    this._stopHexVisibilityWatch = null;
   }
 
+  /**
+   * 初始化管理器及其组件
+   * @param {Function} onProgress 加载进度回调 (当前进度, 总数)
+   * @returns {Promise<boolean>} 初始化是否成功
+   */
   async init(onProgress) {
     // 初始化 HexForceMapper
     this._initHexForceMapper();
@@ -74,6 +82,9 @@ export class MilitaryManager {
     this.renderer = MilitaryInstanceRenderer.getInstance(this.viewer);
     this.renderer.regenerateAllForceInstances();
 
+    // 设置初始可见性
+    this.renderer.updateForceInstanceVisibility();
+
     // 监听部队变化，当部队发生增删时同步
     this._stopForceWatch = watch(
       () => Array.from(this.store.forceMap.keys()),
@@ -87,13 +98,51 @@ export class MilitaryManager {
         this._syncHexForceMapper(addedForceIds, removedForceIds);
         // 更新编队中的部队
         this._syncFormationSystem(addedForceIds, removedForceIds);
+        // 更新现存部队的可见性
+        this.renderer.updateForceInstanceVisibility();
       }
+    );
+
+    // 监听阵营变化，更新部队可见性
+    this._stopFactionWatch = watch(
+      () => this.store.currentFaction,
+      () => {
+        // 更新所有部队可见性
+        this.renderer.updateForceInstanceVisibility();
+      }
+    );
+
+    // 监听六角格可见性变化
+    this._stopHexVisibilityWatch = watch(
+      () => {
+        // 监听所有六角格的visibleTo属性变化
+        const visibilityStates = [];
+        this.store.hexCellMap.forEach(hexCell => {
+          if (hexCell.visibility && hexCell.visibility.visibleTo) {
+            visibilityStates.push({
+              hexId: hexCell.hexId,
+              blue: hexCell.visibility.visibleTo.blue,
+              red: hexCell.visibility.visibleTo.red
+            });
+          }
+        });
+        return visibilityStates;
+      },
+      () => {
+        // 更新所有部队可见性
+        this.renderer.updateForceInstanceVisibility();
+      },
+      { deep: true } // 深度监听对象属性变化
     );
 
     // 监听六角格变化，当六角格数量发生变化时，同步 HexForceMapper
     this._stopHexWatch = watch(
       () => Array.from(this.store.hexCellMap.keys()),
-      () => this._syncHexForceMapper()
+      () => {
+        this._syncHexForceMapper();
+        // 更新部队可见性
+        this.renderer.updateForceInstanceVisibility();
+      }
     );
 
     this._bindPanelCommands();
@@ -122,28 +171,32 @@ export class MilitaryManager {
   /**
    * 同步 HexForceMapper 的映射关系
    * @private
+   * @param {string[]} addedForceIds 新增的部队ID列表
+   * @param {string[]} removedForceIds 已删除的部队ID列表
    */
-  _syncHexForceMapper(newForceIds, oldForceIds) {
+  _syncHexForceMapper(addedForceIds, removedForceIds) {
     // 如果没有传入参数，则重新初始化所有映射关系
-    if (!newForceIds || !oldForceIds) {
+    if (!addedForceIds || !removedForceIds) {
       this._initHexForceMapper();
       return;
     }
     
     // 处理新增的部队，将它们与对应的六角格建立映射关系
-    const addedForceIds = newForceIds.filter(id => !oldForceIds.includes(id));
-    addedForceIds.forEach(forceId => {
-      const force = this.store.getForceById(forceId);
-      if (force && force.hexId) {
-        HexForceMapper.addForceById(forceId, force.hexId);
-      }
-    });
+    if (addedForceIds.length > 0) {
+      addedForceIds.forEach(forceId => {
+        const force = this.store.getForceById(forceId);
+        if (force && force.hexId) {
+          HexForceMapper.addForceById(forceId, force.hexId);
+        }
+      });
+    }
     
     // 处理删除的部队，解除它们与六角格的映射关系
-    const removedForceIds = oldForceIds.filter(id => !newForceIds.includes(id));
-    removedForceIds.forEach(forceId => {
-      HexForceMapper.removeForceById(forceId);
-    });
+    if (removedForceIds.length > 0) {
+      removedForceIds.forEach(forceId => {
+        HexForceMapper.removeForceById(forceId);
+      });
+    }
   }
 
   /**
@@ -204,11 +257,8 @@ export class MilitaryManager {
     
     // 从所有编队中移除已不存在的部队ID
     if (removedForceIds && removedForceIds.length > 0) {
-      addedForceIds.forEach(forceId => {
-        const force = this.store.getForceById(forceId);
-        if (force) {
-          this.store.removeForceFromCurrentFormation(forceId);
-        }
+      removedForceIds.forEach(forceId => {
+        this.store.removeForceFromCurrentFormation(forceId);
       });
     }
     
@@ -407,6 +457,14 @@ export class MilitaryManager {
     if (this._stopHexWatch) {
       this._stopHexWatch();
       this._stopHexWatch = null;
+    }
+    if (this._stopFactionWatch) {
+      this._stopFactionWatch();
+      this._stopFactionWatch = null;
+    }
+    if (this._stopHexVisibilityWatch) {
+      this._stopHexVisibilityWatch();
+      this._stopHexVisibilityWatch = null;
     }
     
     this.renderer?.dispose();

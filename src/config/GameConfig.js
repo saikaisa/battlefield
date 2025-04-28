@@ -134,18 +134,3 @@ export const MilitaryConfig = {
     }
   }
 };
-
-/** API配置 */ 
-export const ApiConfig = {
-  baseUrl: "http://localhost:8080/api", // 后续根据实际部署环境更改
-  endpoints: {
-    move: "/command/move",
-    attack: "/command/attack",
-    createForce: "/command/create-force",
-    mergeForces: "/command/merge-forces",
-    splitForce: "/command/split-force",
-    queryHex: "/query/hex",
-    queryForces: "/query/forces",
-    queryUnitTypes: "/query/unit-types",
-  },
-};

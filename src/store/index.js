@@ -4,7 +4,7 @@ import { reactive, ref, isReactive } from "vue";
 import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { RuleConfig } from "@/config/GameConfig";
-
+import { CommandLimit } from "@/config/CommandConfig";
 /** 工具函数：把传入对象转成"已 reactive 的指定类实例" */
 function Rea(input, ClassCtor) {
   let inst = input instanceof ClassCtor ? input : new ClassCtor(input);
@@ -31,6 +31,17 @@ export const openGameStore = defineStore("gameStore", () => {
   /* 4. 选中状态 */
   const selectedHexIds   = reactive(new Set());
   const selectedForceIds = reactive(new Set());
+
+  /* 5. 命令系统相关状态 */
+  const autoMode = ref(false);          // 是否处于自动模式
+  const isExecuting = ref(false);      // 是否有命令正在执行
+  const commandQueue = reactive([]);    // 命令队列 [{id, type, params, startTime, endTime, interval, source, status}]
+  const currentCommand = ref(null);     // 当前执行的命令
+  const commandHistory = reactive([]);  // 命令执行历史
+  
+  // 命令队列和历史记录的过滤器状态
+  const commandQueueFilter = reactive({ API: true, FILE: true, MANUAL: true });
+  const commandHistoryFilter = reactive({ UI: true, API: true, FILE: true, MANUAL: true });
 
   /* ========================= 方法定义 ========================= */
   // -------------------- 图层控制 --------------------
@@ -171,6 +182,107 @@ export const openGameStore = defineStore("gameStore", () => {
   /** 获取选中部队 */
   const getSelectedForceIds = () => selectedForceIds;
 
+  // -------------------- 命令系统操作 --------------------
+  /** 设置自动模式 */
+  function setAutoMode(mode) {
+    autoMode.value = mode;
+  }
+
+  /** 添加命令到队列 */
+  function addCommandToQueue(command) {
+    // 限制队列长度，每种source的命令单独具有上限
+    const sourceCommands = commandQueue.filter(cmd => cmd.source === command.source);
+    if (sourceCommands.length >= CommandLimit.QUEUE_LIMIT) {
+      // 找到相同source的最早的命令并移除
+      const oldestIndex = commandQueue.findIndex(cmd => cmd.source === command.source);
+      if (oldestIndex !== -1) {
+        commandQueue.splice(oldestIndex, 1);
+      }
+    }
+    
+    // 添加必要的字段，如果缺少的话
+    if (!command.status) command.status = 'pending';
+    if (command.interval === undefined) command.interval = 0;
+    
+    commandQueue.push(command);
+    return command;
+  }
+  
+  /** 从队列中移除命令 */
+  function removeCommandFromQueue(commandId) {
+    const index = commandQueue.findIndex(cmd => cmd.id === commandId);
+    if (index !== -1) {
+      commandQueue.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+  
+  /** 更新队列中命令的顺序 */
+  function reorderCommandQueue(newOrderedIds) {
+    // 创建一个按新顺序排列的命令列表
+    const newQueue = [];
+    
+    // 首先添加按新顺序排列的命令（这些是显示/未被过滤的命令）
+    for (const id of newOrderedIds) {
+      const cmd = commandQueue.find(c => c.id === id);
+      if (cmd) newQueue.push(cmd);
+    }
+    
+    // 确保所有命令都在，以防新列表漏掉什么
+    for (const cmd of commandQueue) {
+      if (!newQueue.some(c => c.id === cmd.id)) {
+        newQueue.push(cmd);
+      }
+    }
+    
+    // 清空并重新填充队列
+    commandQueue.splice(0, commandQueue.length, ...newQueue);
+  }
+  
+  /** 添加命令到历史记录 */
+  function addCommandToHistory(commandObj) {
+    commandHistory.unshift(commandObj);
+    // 限制历史记录的长度，所有source共用这个上限
+    if (commandHistory.length > CommandLimit.HISTORY_LIMIT) {
+      commandHistory.pop();
+    }
+  }
+  
+  /** 清空命令队列 */
+  function clearCommandQueue() {
+    commandQueue.splice(0, commandQueue.length);
+  }
+  
+  /** 清空命令历史 */
+  function clearCommandHistory() {
+    commandHistory.splice(0, commandHistory.length);
+  }
+  
+  /** 设置当前命令 */
+  function setCurrentCommand(command) {
+    currentCommand.value = command;
+    isExecuting.value = !!command;
+  }
+  
+  /** 设置命令队列过滤器 */
+  function setCommandQueueFilter(filter) {
+    Object.keys(commandQueueFilter).forEach(key => {
+      if (filter[key] !== undefined) {
+        commandQueueFilter[key] = filter[key];
+      }
+    });
+  }
+  
+  /** 设置命令历史过滤器 */
+  function setCommandHistoryFilter(filter) {
+    Object.keys(commandHistoryFilter).forEach(key => {
+      if (filter[key] !== undefined) {
+        commandHistoryFilter[key] = filter[key];
+      }
+    });
+  }
+
   return {
     // 状态导出
     layerIndex,
@@ -184,6 +296,15 @@ export const openGameStore = defineStore("gameStore", () => {
     formationMap,
     selectedHexIds,
     selectedForceIds,
+    
+    // 命令系统状态
+    autoMode,
+    isExecuting,
+    commandQueue,
+    currentCommand,
+    commandHistory,
+    commandQueueFilter,
+    commandHistoryFilter,
 
     // 方法导出
     setLayerIndex,
@@ -232,5 +353,17 @@ export const openGameStore = defineStore("gameStore", () => {
     removeSelectedForceId,
     clearSelectedForceIds,
     getSelectedForceIds,
+    
+    // 命令系统方法
+    setAutoMode,
+    addCommandToQueue,
+    removeCommandFromQueue,
+    reorderCommandQueue,
+    addCommandToHistory,
+    clearCommandQueue,
+    clearCommandHistory,
+    setCurrentCommand,
+    setCommandQueueFilter,
+    setCommandHistoryFilter,
   };
 });

@@ -10,10 +10,10 @@ import { reactive } from 'vue';
  * 3. 确保数据一致性
  */
 export const HexForceMapper = reactive({
-  // 六角格ID -> Set(部队ID)
+  // 六角格ID -> 部队ID集合: Map<string, Set<string>>
   hexToForceMap: new Map(),
 
-  // 部队ID -> 六角格ID
+  // 部队ID -> 六角格ID: Map<string, string>
   forceToHexMap: new Map(),
 
   /** 

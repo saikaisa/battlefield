@@ -76,6 +76,8 @@ export class MilitaryInstanceGenerator {
 
   /**
    * 创建部队实例，但此时不会渲染到地图上
+   * @param {Force} force 部队对象
+   * @returns {Promise<Object|null>} 部队实例对象或null（如果创建失败）
    */
   async createForceInstance(force) {
     try {
@@ -85,11 +87,19 @@ export class MilitaryInstanceGenerator {
         return this.forceInstanceMap.get(force.forceId);
       }
       
+      // 计算部队位置
+      const posInfo = await this.poseCalculator.computeForcePosition(force);
+
+      if (!posInfo) {
+        console.error(`无法创建部队实例: ${force.forceId}，位置计算失败`);
+        return null;
+      }
+      
       const forceInstance = {
         force: force,
-        unitInstanceMap: this.createUnitInstances(force),
+        unitInstanceMap: await this.createUnitInstances(force),
         pose: {
-          position: this.poseCalculator.computeForcePosition(force),
+          position: posInfo.position,
           heading: 0, // 初始朝向为0
         },
       };
@@ -98,6 +108,7 @@ export class MilitaryInstanceGenerator {
       return forceInstance;
     } catch (error) {
       console.error(`创建部队实例失败: ${force.forceId}`, error);
+      return null;
     }
   }
 
@@ -116,8 +127,8 @@ export class MilitaryInstanceGenerator {
 
   /**
    * 创建兵种实例
-   * @param {string} force 部队对象
-   * @returns {Map<string, Object>} 兵种实例集合
+   * @param {Force} force 部队对象
+   * @returns {Promise<Map<string, Object>>} 兵种实例集合
    */
   async createUnitInstances(force) {
     // 计算渲染组
