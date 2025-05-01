@@ -69,7 +69,8 @@ export const MilitaryConfig = {
     maxActionPoints: 100, // 最大行动力
     combatChance: {
       max: 1,
-      min: -2
+      min: -2,
+      gain: 2  // 每回合增加的战斗机会
     },
     fatigueFactor: {
       levelOne: 0.9,

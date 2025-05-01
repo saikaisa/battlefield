@@ -83,12 +83,36 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.GRAY.withAlpha(0.5),
     showFill: true,
   },
-  // 选中高亮
+  // 选中高亮：默认黄色
   selected: {
     layer: 'interaction',
     type: 'selected',
     priority: 2,
     fillColor: Cesium.Color.YELLOW.withAlpha(0.3),
+    showFill: true,
+  },
+  // 选中高亮：蓝色
+  selectedBlue: {
+    layer: 'interaction',
+    type: 'selected',
+    priority: 2,
+    fillColor: Cesium.Color.BLUE.withAlpha(0.3),
+    showFill: true,
+  },
+  // 选中高亮：红色
+  selectedRed: {
+    layer: 'interaction',
+    type: 'selected',
+    priority: 2,
+    fillColor: Cesium.Color.RED.withAlpha(0.3),
+    showFill: true,
+  },
+  // 选中高亮：绿色
+  selectedGreen: {
+    layer: 'interaction',
+    type: 'selected',
+    priority: 2,
+    fillColor: Cesium.Color.GREEN.withAlpha(0.3),
     showFill: true,
   },
   // 提示不合法的高亮

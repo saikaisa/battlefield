@@ -8,9 +8,9 @@ import { CameraViewController } from '@/layers/scene-layer/components/CameraView
 import { HexGridGenerator } from '@/layers/scene-layer/components/HexGridGenerator';
 import { HexGridRenderer } from '@/layers/scene-layer/components/HexGridRenderer';
 import { TerrainHeightCache } from '@/layers/scene-layer/components/TerrainHeightCache';
-import { ScreenInteractor } from '@/layers/interaction-layer/ScreenInteractor';
+import { SceneInteractor } from '@/layers/interaction-layer/SceneInteractor';
 // eslint-disable-next-line no-unused-vars
-import { ScenePanelManager } from '@/layers/interaction-layer/ScenePanelManager';
+import { ScenePanelManager } from '@/layers/interaction-layer/legacy/ScenePanelManager';
 
 /**
  * 场景管理器（单例模式）
@@ -76,6 +76,7 @@ export class SceneManager {
         infoBox: false,
         selectionIndicator: false,
         shadows: true,
+        scene3DOnly: true,  // 如果报错了看下这里
         shouldAnimate: true
       });
       // 隐藏版权信息区域
@@ -106,7 +107,7 @@ export class SceneManager {
       // ---------------- 六角网格渲染结束 ----------------
 
       // ---------------- 屏幕交互器加载开始 ----------------
-      this.screenInteractor = ScreenInteractor.getInstance(this.viewer, {
+      this.screenInteractor = SceneInteractor.getInstance(this.viewer, {
         enabled: true,
         multiSelect: false,
         allowCancelSingle: true,

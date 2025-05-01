@@ -6,7 +6,7 @@ import 'element-plus/dist/index.css'
 import './style/index.css'
 import { createPinia } from 'pinia';
 import * as Cesium from 'cesium';
-import { MessageBoxPlugin } from '@/layers/interaction-layer/MessageBox';
+import { MessageBoxPlugin } from '@/layers/interaction-layer/utils/MessageBox';
 
 Cesium.Ion.defaultAccessToken = process.env.VUE_APP_CESIUM_ION_TOKEN;
 

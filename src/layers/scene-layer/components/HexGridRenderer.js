@@ -4,7 +4,7 @@ import { openGameStore } from '@/store';
 import { HexVisualStyles } from '@/config/HexVisualStyles';
 // eslint-disable-next-line no-unused-vars
 import { HexCell } from '@/models/HexCell';
-import { computed } from "vue";
+import { computed, watch } from "vue";
 
 // 缓存：每个六角格几何 (fillGeom, borderGeom)
 const geometryCache = new Map();
@@ -44,7 +44,15 @@ export class HexGridRenderer {
     this.layerIndex = computed(() => this.store.layerIndex);
     // console.log(`layerIndex: ${this.layerIndex.value}`)
     this.interactGridPrimitives = null; // 交互层
-    this.selectedHexIds = this.store.getSelectedHexIds(); // 鼠标选中的六角格，保存至全局状态
+  
+    // 监听 selectedHexIds 的变化，更新六角格高亮样式
+    watch(
+      () => this.store.getSelectedHexIds(),
+      (newSelectedIds, oldSelectedIds) => {
+        this._updateSelectedHexStyles(newSelectedIds, oldSelectedIds);
+      },
+      { deep: true }
+    );
   }
 
   /**
@@ -126,7 +134,6 @@ export class HexGridRenderer {
         collection.show = (this.layerIndex.value === idx);
       });
     }
-
   }
 
   /**
@@ -170,6 +177,37 @@ export class HexGridRenderer {
     this.viewer.scene.primitives.add(this.interactGridPrimitives);
   }
 
+  /**
+   * 监听selectedHexIds变化的回调，用于更新六角格的样式
+   * @param {Set<string>} newSelectedIds - 新的选中ID集合
+   * @param {Set<string>} oldSelectedIds - 旧的选中ID集合
+   */
+  _updateSelectedHexStyles(newSelectedIds, oldSelectedIds) {
+    // 先处理移除的六角格（在旧集合中但不在新集合中）
+    if (oldSelectedIds) {
+      for (const hexId of oldSelectedIds) {
+        if (!newSelectedIds.has(hexId)) {
+          const hexCell = this.store.getHexCellById(hexId);
+          if (hexCell) {
+            hexCell.removeVisualStyleByType("selected");
+          }
+        }
+      }
+    }
+    
+    // 再处理新增的六角格（在新集合中但不在旧集合中）
+    for (const hexId of newSelectedIds) {
+      if (!oldSelectedIds || !oldSelectedIds.has(hexId)) {
+        const hexCell = this.store.getHexCellById(hexId);
+        if (hexCell) {
+          hexCell.addVisualStyle(this.store.highlightStyle);
+        }
+      }
+    }
+    // 重新渲染交互层
+    this.renderInteractGrid();
+  }
+  
   /**
    * 获取或创建六角格几何
    */

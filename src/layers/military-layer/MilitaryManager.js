@@ -7,9 +7,9 @@ import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { ModelTemplateLoader } from './components/ModelTemplateLoader';
 import { MilitaryInstanceRenderer } from './components/MilitaryInstanceRenderer';
 // eslint-disable-next-line no-unused-vars
-import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
-import { HexForceMapper } from '@/layers/interaction-layer/HexForceMapper';
-import { showWarning, showError, showSuccess } from '@/layers/interaction-layer/MessageBox';
+import { MilitaryPanelManager } from '@/layers/interaction-layer/legacy/MilitaryPanelManager';
+import { HexForceMapper } from '@/layers/interaction-layer/utils/HexForceMapper';
+import { showWarning, showError, showSuccess } from '@/layers/interaction-layer/utils/MessageBox';
 import { MilitaryInstanceGenerator } from "./components/MilitaryInstanceGenerator";
 
 /**

@@ -20,11 +20,11 @@
 <script setup>
 import { ref, provide, onMounted, onBeforeUnmount, onUnmounted } from 'vue';
 import { SceneManager } from '@/layers/scene-layer/SceneManager';
-import { ScenePanelManager } from '@/layers/interaction-layer/ScenePanelManager';
+import { ScenePanelManager } from '@/layers/interaction-layer/legacy/ScenePanelManager';
 import ScenePanel from '@/components/hud/ScenePanel.vue';
 import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
 import MilitaryPanel from '@/components/hud/MilitaryPanel.vue';
-import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
+import { MilitaryPanelManager } from '@/layers/interaction-layer/legacy/MilitaryPanelManager';
 import CommandPanel from '@/components/hud/CommandPanel.vue';
 import { CommandDispatcher } from '@/layers/interaction-layer/CommandDispatcher';
 

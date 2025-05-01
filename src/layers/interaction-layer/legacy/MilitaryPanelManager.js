@@ -2,7 +2,7 @@ import { watch, computed } from 'vue';
 import { openGameStore } from '@/store';
 import { CameraViewController } from '@/layers/scene-layer/components/CameraViewController';
 // eslint-disable-next-line no-unused-vars
-import { ScenePanelManager } from '@/layers/interaction-layer/ScenePanelManager';
+import { ScenePanelManager } from '@/layers/interaction-layer/legacy/ScenePanelManager';
 
 /**
  * 军事单位/命令操作相关面板管理器

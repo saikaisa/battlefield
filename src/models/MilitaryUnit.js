@@ -11,7 +11,7 @@
 //   * 部队‑六角格、部队‑编队 等关联全部由 HexForceMapper 维护。
 // ============================================================
 
-import { HexForceMapper }   from '@/layers/interaction-layer/HexForceMapper';
+import { HexForceMapper }   from '@/layers/interaction-layer/utils/HexForceMapper';
 import { openGameStore }    from '@/store';
 import { MilitaryConfig }   from '@/config/GameConfig';
 
@@ -134,15 +134,18 @@ export class Force {
     // 兵种组成：[{ unitId, unitCount }]
     this.composition = composition;
 
-    this.troopStrength = troopStrength; // 0‑100
+    this.troopStrength = Math.min(MilitaryConfig.limit.maxTroopStrength, 
+                                Math.max(0, troopStrength || 0));
     // this.morale = get from troopStrength, commandCapability;
     // this.attackFirepower  = get from Unit.attackPower , unitCount, morale;
     // this.defenseFirepower = get from Unit.defensePower, unitCount, morale;
-    this.combatChance = combatChance; // 初始 0，回合结束 +2，上限 1，下限 -2
+    this.combatChance = Math.min(MilitaryConfig.limit.combatChance.max, 
+                                Math.max(MilitaryConfig.limit.combatChance.min, combatChance)); 
     // this.fatigueFactor = get from combatChance;
 
     // this.visibilityRadius = get from Unit.visibilityRadius;
-    this.actionPoints = actionPoints; // 0-100. updated from Unit.actionPointCost, HexCell;
+    this.actionPoints = Math.min(MilitaryConfig.limit.maxActionPoints, 
+                                Math.max(0, actionPoints || 0)); 
     // this.recoveryRate = get from Unit.recoveryRate, fatigueFactor;
 
     // this.commandCapability = get from Unit.commandCapability;
@@ -210,7 +213,7 @@ export class Force {
   /**
    * 回合结束：刷新战斗机会次数
    */
-  refreshCombatChance(gain = 2) {
+  refreshCombatChance(gain = MilitaryConfig.limit.combatChance.gain) {
     return this.combatChance = Math.min(MilitaryConfig.limit.combatChance.max, this.combatChance + gain);
   }
 

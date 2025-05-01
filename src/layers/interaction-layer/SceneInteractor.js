@@ -1,49 +1,47 @@
-// src\layers\interaction-layer\ScreenInteractor.js
+// src\layers\interaction-layer\SceneInteractor.js
 import { watch } from 'vue';
 import * as Cesium from "cesium";
 import { openGameStore } from "@/store";
 import { HexVisualStyles } from "@/config/HexVisualStyles";
 // eslint-disable-next-line no-unused-vars
 import { HexGridRenderer } from "@/layers/scene-layer/components/HexGridRenderer";
+import { SelectValidator } from "./utils/HexSelectValidator";
 
 /**
- * ScreenInteractor: 管理鼠标悬浮 / 点击选中交互
- *  - 悬浮、点击、选中、取消选中
- *  - 框选统计（TODO）
- *  - 移动、攻击、编队、合并、拆分时选择目标（TODO）
+ * SceneInteractor: 管理鼠标悬浮 / 点击选中交互
+ *  - 悬浮、点击、选中、取消选中，并将屏幕上的点击与六角格选中列表同步
+ *  - 根据不同游戏模式来控制六角格的单选/多选/禁止选择
  */
-export class ScreenInteractor {
+export class SceneInteractor {
   static #instance = null;
 
   /**
-   * 获取 ScreenInteractor 的单例实例
+   * 获取 SceneInteractor 的单例实例
    * @param {Cesium.Viewer} viewer - Cesium Viewer 实例（仅首次调用时需要）
    * @param {Object} options - 配置选项
-   * @returns {ScreenInteractor} 单例实例
+   * @returns {SceneInteractor} 单例实例
    */
   static getInstance(viewer, options = {}) {
-    if (!ScreenInteractor.#instance) {
+    if (!SceneInteractor.#instance) {
       if (!viewer) {
-        throw new Error('首次创建 ScreenInteractor 实例时必须提供 viewer 和 hexGridRenderer 参数');
+        throw new Error('首次创建 SceneInteractor 实例时必须提供 viewer 和 hexGridRenderer 参数');
       }
-      ScreenInteractor.#instance = new ScreenInteractor(viewer, options);
+      SceneInteractor.#instance = new SceneInteractor(viewer, options);
     }
-    return ScreenInteractor.#instance;
+    return SceneInteractor.#instance;
   }
 
   /**
    * 私有构造函数
    * @param {Cesium.Viewer} viewer - Cesium Viewer 实例
    * @param {Object} options
-   * @param {boolean} [options.enabled=true] - 是否启用鼠标交互
+   * @param {boolean} [options.enabled=true] - 是否启用鼠标交互，包括悬浮、点击
    * @param {boolean} [options.multiSelect=false] - 是否多选
-   * @param {boolean} [options.allowCancelSingle=true] - 单选模式下，点击已选的格子是否可取消
-   * @param {boolean} [options.allowCancelMulti=false] - 多选模式下，点击已选的格子是否可取消
    * @private
    */
   constructor(viewer, options = {}) {
-    if (ScreenInteractor.#instance) {
-      throw new Error('ScreenInteractor 是单例类，请使用 getInstance() 方法获取实例');
+    if (SceneInteractor.#instance) {
+      throw new Error('SceneInteractor 是单例类，请使用 getInstance() 方法获取实例');
     }
 
     this.viewer = viewer;
@@ -53,10 +51,6 @@ export class ScreenInteractor {
     // 基本交互设置
     this.enabled = options.enabled !== undefined ? options.enabled : true;
     this.multiSelect = options.multiSelect !== undefined ? options.multiSelect : false;
-
-    // 关于"点击已选格能否取消"
-    this.allowCancelSingle = options.allowCancelSingle !== undefined ? options.allowCancelSingle : true;
-    this.allowCancelMulti = options.allowCancelMulti !== undefined ? options.allowCancelMulti : false;
 
     // 记录当前悬浮的 hexId 和 primitive（只能有一个）
     this.hoveredHexId = null;
@@ -74,6 +68,20 @@ export class ScreenInteractor {
         }
       },
       { immediate: true }   // 首次立即触发一次，以设置 enabled
+    );
+
+    // 监听hexSelectMode变化，更新鼠标交互状态
+    watch(
+      () => this.store.hexSelectMode,
+      (mode) => {
+        if (mode === 'none') {
+          this.enabled = false;
+        } else {
+          this.enabled = true;
+          this.multiSelect = mode === 'multi';
+        }
+      },
+      { immediate: true }
     );
 
     // Hover 降频调度
@@ -112,15 +120,7 @@ export class ScreenInteractor {
       if (Cesium.defined(pickedObj) && pickedObj.id && pickedObj.id.includes("_fill")) {
         const hexId = pickedObj.id.replace("_fill", "");
         this._handleClick(hexId);
-      } else {
-        // 点到空白
-        if (!this.multiSelect) {
-          // 单选模式下点击空白就清空
-          this._removeStyleFromAll("selected");
-          this.store.clearSelectedHexIds();
-        }
       }
-      this.hexGridRenderer.renderInteractGrid();
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
   
@@ -175,54 +175,37 @@ export class ScreenInteractor {
   }
 
   /**
-   * 点击处理：单选或多选，根据配置决定能否取消
+   * 点击处理：只负责更新store中的selectedHexIds，不直接操作样式
    */
   _handleClick(hexId) {
     if (!this.enabled) return;
-    
+
+    // 使用验证器检查选择是否有效
+    if (!SelectValidator.validate(hexId)) {
+      console.log(`无效的选择: ${hexId}`);
+      return;
+    }
+
     const selectedIds = this.store.getSelectedHexIds();
     const isSelected = selectedIds.has(hexId);
 
     if (!this.multiSelect) {
       // ================== 单选模式 ==================
       if (isSelected) {
-        // 如果已经选中
-        if (this.allowCancelSingle) {
-          // 允许取消，则移除
+        // 如果已经选中，则移除
           this.store.removeSelectedHexId(hexId);
-          this._removeVisualStyleByType(hexId, "selected");
-        } else {
-          // 不允许取消 => 什么都不做
-        }
       } else {
         // 没选中 => 先清空，再选它
-        this._removeStyleFromAll("selected");
         this.store.clearSelectedHexIds();
-
         this.store.addSelectedHexId(hexId);
-        const hexCell = this.store.getHexCellById(hexId);
-        if (hexCell) {
-          hexCell.addVisualStyle(HexVisualStyles.selected);
-        }
       }
-
     } else {
       // ================== 多选模式 ==================
       if (isSelected) {
-        if (this.allowCancelMulti) {
-          // 允许取消 => 移除
-          this.store.removeSelectedHexId(hexId);
-          this._removeVisualStyleByType(hexId, "selected");
-        } else {
-          // 不允许取消 => 不做处理
-        }
+        this.store.removeSelectedHexId(hexId);
       } else {
         // 新增选中
         this.store.addSelectedHexId(hexId);
-        const hexCell = this.store.getHexCellById(hexId);
-        if (hexCell) {
-          hexCell.addVisualStyle(HexVisualStyles.selected);
-        }
       }
     }
   }
@@ -256,18 +239,6 @@ export class ScreenInteractor {
   }
 
   // =============== 辅助方法 ===============
-  _removeVisualStyleByType(hexId, styleType) {
-    const cell = this.store.getHexCellById(hexId);
-    if (!cell) return;
-    cell.removeVisualStyleByType(styleType);
-  }
-
-  _removeStyleFromAll(type) {
-    const hexCells = this.store.getHexCells();
-    hexCells.forEach((hexCell) => {
-      hexCell.removeVisualStyleByType(type);
-    });
-  }
   /**
    * 隐藏当前悬浮灰块
    */

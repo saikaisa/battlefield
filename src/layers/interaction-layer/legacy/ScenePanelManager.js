@@ -2,7 +2,7 @@
 // eslint-disable-next-line no-unused-vars
 import { HexGridRenderer } from '@/layers/scene-layer/components/HexGridRenderer';
 // eslint-disable-next-line no-unused-vars
-import { ScreenInteractor } from '@/layers/interaction-layer/ScreenInteractor';
+import { SceneInteractor } from '@/layers/interaction-layer/SceneInteractor';
 import { openGameStore } from '@/store';
 
 /**

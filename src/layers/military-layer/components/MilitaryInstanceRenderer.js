@@ -8,7 +8,7 @@ import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
 import { MilitaryMovementController } from "./MilitaryMovementController";
 import { ModelPoseCalculator } from "./ModelPoseCalculator";
-import { HexForceMapper } from "@/layers/interaction-layer/HexForceMapper";
+import { HexForceMapper } from "@/layers/interaction-layer/utils/HexForceMapper";
 
 /**
  * 军事单位实例渲染器

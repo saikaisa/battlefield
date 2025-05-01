@@ -1,10 +1,13 @@
 // src\store\index.js
 import { defineStore } from "pinia";
-import { reactive, ref, isReactive } from "vue";
+import { reactive, ref, isReactive, watch } from "vue";
 import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { RuleConfig } from "@/config/GameConfig";
 import { CommandLimit } from "@/config/CommandConfig";
+import { GameMode } from "@/config/GameModeConfig";
+import { HexVisualStyles } from "@/config/HexVisualStyles";
+
 /** 工具函数：把传入对象转成"已 reactive 的指定类实例" */
 function Rea(input, ClassCtor) {
   let inst = input instanceof ClassCtor ? input : new ClassCtor(input);
@@ -15,6 +18,7 @@ export const openGameStore = defineStore("gameStore", () => {
   /* ========================= 状态定义 ========================= */
   /* 1. 图层状态 */
   const layerIndex = ref(1);  // 当前图层: 1=默认, 2=地形, 3=隐藏
+  const highlightStyle = ref(HexVisualStyles.selected);  // 高亮样式
   
   /* 2. 游戏回合状态 */
   const currentRound = ref(RuleConfig.startRound);  // 当前回合数
@@ -42,10 +46,26 @@ export const openGameStore = defineStore("gameStore", () => {
   // 命令队列和历史记录的过滤器状态
   const commandQueueFilter = reactive({ API: true, FILE: true, MANUAL: true });
   const commandHistoryFilter = reactive({ UI: true, API: true, FILE: true, MANUAL: true });
+  
+  /* 6. 游戏模式相关状态 */
+  const gameMode = ref(GameMode.FREE);  // 当前游戏模式
+  
+  // UI控制
+  const disabledPanels = reactive(new Set());  // 禁用的面板ID集合
+  const disabledButtons = reactive(new Set()); // 禁用的按钮ID集合，特殊值'all'表示全部禁用
+  const modalPanel = ref(null);               // 当前显示的模态面板ID
+  
+  // 交互控制
+  const hexSelectMode = ref('single');      // 鼠标选择模式：'single', 'multi', 'none'
+  const forceSelectMode = ref('linked');      // 部队选择模式：'linked', 'independent'
+  const cameraControlEnabled = ref(true);      // 是否允许相机控制
 
   /* ========================= 方法定义 ========================= */
   // -------------------- 图层控制 --------------------
   const setLayerIndex = idx => layerIndex.value = idx;
+
+  // -------------------- 高亮样式控制 --------------------
+  const setHighlightStyle = style => highlightStyle.value = style;
 
   // -------------------- 回合控制 --------------------
   /** 切换到下一阵营，如果当前阵营完成回合操作，则切换到下一回合 */
@@ -164,23 +184,104 @@ export const openGameStore = defineStore("gameStore", () => {
   }
 
   // -------------------- 选中状态操作 --------------------
+  // 监听selectedHexIds的变化，自动同步selectedForceIds
+  watch(selectedHexIds, () => {
+    // 仅当选择模式需要强制保持部队在六角格内时同步
+    if (forceSelectMode.value === 'linked') {
+      syncSelectedForceWithHex();
+    }
+  });
+
+  /**
+   * 同步选中部队与选中六角格
+   * 
+   * 确保selectedForceIds中的部队都在selectedHexIds中
+   * 如果一个部队所在的六角格不在selectedHexIds中，将从selectedForceIds中移除该部队
+   */
+  function syncSelectedForceWithHex() {
+    // 获取当前选中的六角格ID集合
+    const hexIds = Array.from(selectedHexIds);
+    // 获取这些六角格中所有的部队ID
+    const validForceIds = new Set();
+    hexIds.forEach(hexId => {
+      const cell = hexCellMap.get(hexId);
+      if (cell && cell.forcesIds) {
+        cell.forcesIds.forEach(forceId => validForceIds.add(forceId));
+      }
+    });
+    // 移除不在选中六角格中的部队
+    const currentSelectedForceIds = Array.from(selectedForceIds);
+    currentSelectedForceIds.forEach(forceId => {
+      if (!validForceIds.has(forceId)) {
+        selectedForceIds.delete(forceId);
+      }
+    });
+  }
+
+  // ================== 选中六角格 ==================
   /** 添加选中六角格 */
-  const addSelectedHexId = id => selectedHexIds.add(id);
+  const addSelectedHexId = id => {
+    // 检查当前模式下是否允许多选，如果不允许则先清空
+    if (hexSelectMode.value === 'single' && selectedHexIds.size > 0) {
+      selectedHexIds.clear();
+    }
+    selectedHexIds.add(id);
+  };
+  
   /** 移除选中六角格 */
-  const removeSelectedHexId = id => selectedHexIds.delete(id);
+  const removeSelectedHexId = id => {
+    selectedHexIds.delete(id);
+  };
+  
   /** 清空选中六角格 */
-  const clearSelectedHexIds = () => selectedHexIds.clear();
+  const clearSelectedHexIds = () => {
+    selectedHexIds.clear();
+  };
+  
   /** 获取选中六角格 */
   const getSelectedHexIds = () => selectedHexIds;
+  
+  /** 设置选中六角格数组 */
+  const setSelectedHexIds = hexIds => {
+    selectedHexIds.clear();
+    if (Array.isArray(hexIds)) {
+      hexIds.forEach(id => selectedHexIds.add(id));
+    }
+  };
 
+  // ================== 选中部队 ==================
   /** 添加选中部队 */
-  const addSelectedForceId = id => selectedForceIds.add(id);
+  const addSelectedForceId = id => {
+    const force = getForceById(id);
+    if (!force) return;
+    // 在linked模式下，选择部队时会同时选中其所在六角格
+    if (forceSelectMode.value === 'linked') {
+      if (!selectedHexIds.has(force.hexId)) {
+        if (hexSelectMode.value === 'single') {
+          selectedHexIds.clear();
+        }
+        selectedHexIds.add(force.hexId);
+      }
+    }
+    selectedForceIds.add(id);
+  };
+  
   /** 移除选中部队 */
   const removeSelectedForceId = id => selectedForceIds.delete(id);
+  
   /** 清空选中部队 */
   const clearSelectedForceIds = () => selectedForceIds.clear();
+  
   /** 获取选中部队 */
   const getSelectedForceIds = () => selectedForceIds;
+  
+  /** 设置选中部队数组 */
+  const setSelectedForceIds = forceIds => {
+    selectedForceIds.clear();
+    if (Array.isArray(forceIds)) {
+      forceIds.forEach(id => selectedForceIds.add(id));
+    }
+  };
 
   // -------------------- 命令系统操作 --------------------
   /** 设置自动模式 */
@@ -283,9 +384,62 @@ export const openGameStore = defineStore("gameStore", () => {
     });
   }
 
+  // -------------------- 游戏模式操作 --------------------
+  /** 设置游戏模式 */
+  function setGameMode(mode) {
+    gameMode.value = mode;
+  }
+  
+  /** 设置禁用的面板 */
+  function setDisabledPanels(panels) {
+    disabledPanels.clear();
+    if (Array.isArray(panels)) {
+      panels.forEach(panel => disabledPanels.add(panel));
+    }
+  }
+  
+  /** 设置禁用的按钮 */
+  function setDisabledButtons(buttons) {
+    disabledButtons.clear();
+    if (Array.isArray(buttons)) {
+      buttons.forEach(button => disabledButtons.add(button));
+    }
+  }
+  
+  /** 设置模态面板 */
+  function setModalPanel(panel) {
+    modalPanel.value = panel;
+  }
+  
+  /** 设置六角格选择模式 */
+  function setHexSelectMode(mode) {
+    hexSelectMode.value = mode;
+  }
+
+  /** 设置部队选择模式 */
+  function setForceSelectMode(mode) {
+    forceSelectMode.value = mode;
+  }
+  
+  /** 设置相机控制启用状态 */
+  function setCameraControlEnabled(enabled) {
+    cameraControlEnabled.value = enabled;
+  }
+
+  /** 判断面板是否禁用 */
+  function isPanelDisabled(panelId) {
+    return disabledPanels.has(panelId);
+  }
+  
+  /** 判断按钮是否禁用 */
+  function isButtonDisabled(buttonId) {
+    return disabledButtons.has(buttonId);
+  }
+
   return {
     // 状态导出
     layerIndex,
+    highlightStyle,
     currentRound,
     currentFaction,
     factionFinished,
@@ -306,8 +460,18 @@ export const openGameStore = defineStore("gameStore", () => {
     commandQueueFilter,
     commandHistoryFilter,
 
+    // 游戏模式状态
+    gameMode,
+    disabledPanels,
+    disabledButtons,
+    modalPanel,
+    hexSelectMode,
+    forceSelectMode,
+    cameraControlEnabled,
+
     // 方法导出
     setLayerIndex,
+    setHighlightStyle,
     switchToNextFaction,
     getRoundInfo,
     
@@ -349,10 +513,12 @@ export const openGameStore = defineStore("gameStore", () => {
     removeSelectedHexId,
     clearSelectedHexIds,
     getSelectedHexIds,
+    setSelectedHexIds,
     addSelectedForceId,
     removeSelectedForceId,
     clearSelectedForceIds,
     getSelectedForceIds,
+    setSelectedForceIds,
     
     // 命令系统方法
     setAutoMode,
@@ -365,5 +531,16 @@ export const openGameStore = defineStore("gameStore", () => {
     setCurrentCommand,
     setCommandQueueFilter,
     setCommandHistoryFilter,
+    
+    // 游戏模式方法
+    setGameMode,
+    setDisabledPanels,
+    setDisabledButtons,
+    setModalPanel,
+    setHexSelectMode,
+    setForceSelectMode,
+    setCameraControlEnabled,
+    isPanelDisabled,
+    isButtonDisabled,
   };
 });
