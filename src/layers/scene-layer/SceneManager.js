@@ -64,20 +64,20 @@ export class SceneManager {
     try {
       // 初始化 Cesium Viewer
       this.viewer = new Cesium.Viewer(this.containerId, {
-        baseLayerPicker: true,
+        baseLayerPicker: false,
         geocoder: false,
-        homeButton: true,
-        sceneModePicker: true,
+        homeButton: false,
+        sceneModePicker: false,
         navigationHelpButton: false,
         animation: false,
         timeline: false,
-        fullscreenButton: true,
         vrButton: false,
         infoBox: false,
         selectionIndicator: false,
+        fullscreenButton: false,
         shadows: true,
-        scene3DOnly: true,  // 如果报错了看下这里
-        shouldAnimate: true
+        shouldAnimate: true,
+        scene3DOnly: true,
       });
       // 隐藏版权信息区域
       this.viewer._cesiumWidget._creditContainer.style.display = 'none';
@@ -85,6 +85,8 @@ export class SceneManager {
       this.viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(
         Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
       );
+
+      this.viewer.extend(Cesium.viewerCesiumInspectorMixin);
 
       // ---------------- 地形加载开始 ----------------
       await this._loadTerrain(this.viewer, CesiumConfig.terrainAssetId);
