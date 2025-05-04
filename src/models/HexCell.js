@@ -1,7 +1,7 @@
 // src\models\HexCell.js
 import { HexConfig } from '@/config/GameConfig';
 import { HexVisualStyles } from '@/config/HexVisualStyles';
-import { HexForceMapper } from '@/layers/interaction-layer/utils/HexForceMapper';
+import { HexForceMapper } from '@/utils/HexForceMapper';
 
 export class HexCell {
   /**
@@ -55,6 +55,10 @@ export class HexCell {
 
   // 六角格包含部队
   get forcesIds() { return HexForceMapper.getForcesByHexId(this.hexId); }
+
+  // 部队添加和移除
+  addForceById(id) { HexForceMapper.addForceById(id, this.hexId); }
+  removeForceById(id) { HexForceMapper.removeForceById(id); }
 
   /**
    * 获取中心点

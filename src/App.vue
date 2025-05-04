@@ -3,11 +3,10 @@
   <div class="app-container">
     <div id="cesiumContainer" class="cesium-container"></div>
 
-    <!-- Viewer 初始化完成后再渲染 Panel 等 UI -->
+    <!-- Viewer 初始化完成后再渲染 GeoPanel 等 UI -->
     <div v-if="gameReady">
-      <ScenePanel />
-      <MilitaryPanel />
-      <CommandPanel />
+      <GeoPanel :geoPanelManager="geoPanelManager" />
+      <!-- <MilitaryPanel :militaryPanelManager="militaryPanelManager" /> -->
       <router-view />
     </div>
 
@@ -18,63 +17,44 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted, onBeforeUnmount, onUnmounted } from 'vue';
-import { SceneManager } from '@/layers/scene-layer/SceneManager';
-import { ScenePanelManager } from '@/layers/interaction-layer/legacy/ScenePanelManager';
-import ScenePanel from '@/components/hud/ScenePanel.vue';
+import { ref, provide, onMounted, onUnmounted } from 'vue';
+import { SceneManager } from '@/layers/geo-layer/SceneManager';
+import { GeoPanelManager } from '@/layers/interaction-layer/GeoPanelManager';
+import GeoPanel from '@/components/hud/GeoPanel.vue';
 import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
-import MilitaryPanel from '@/components/hud/MilitaryPanel.vue';
-import { MilitaryPanelManager } from '@/layers/interaction-layer/legacy/MilitaryPanelManager';
-import CommandPanel from '@/components/hud/CommandPanel.vue';
-import { CommandDispatcher } from '@/layers/interaction-layer/CommandDispatcher';
+// import MilitaryPanel from '@/components/hud/MilitaryPanel.vue';
+// import { MilitaryPanelManager } from '@/layers/interaction-layer/MilitaryPanelManager';
 
 // 创建共享组件状态
 const viewerRef = ref(null);
 provide('cesiumViewer', viewerRef);
 
+// const geoPanelManager = ref(null);
+
 // 控制 UI 是否可加载
 const gameReady = ref(false);
 
-let sceneManager;
-let scenePanelManager;
-let militaryManager;
-let militaryPanelManager;
-let commandDispatcher;
+let geoPanelManager;
+// let militaryPanelManager;
 
 // 生命周期钩子
 onMounted(async () => {
   // 初始化场景管理器
-  sceneManager = SceneManager.getInstance('cesiumContainer');
+  const sceneManager = new SceneManager('cesiumContainer');
+
   const viewer = await sceneManager.init();
   viewerRef.value = viewer;
 
-  // 初始化场景控制面板管理器
-  scenePanelManager = ScenePanelManager.getInstance(viewer);
-  sceneManager.setPanelManager(scenePanelManager);
-  // 提供场景面板管理器给子组件
-  provide('scenePanelManager', scenePanelManager);
+  // 初始化信息面板管理器
+  geoPanelManager = new GeoPanelManager(viewer, sceneManager);
 
   // 初始化军事单位管理器
-  militaryManager = new MilitaryManager(viewer);
-  await militaryManager.init((done,total)=>console.log(`unit preload ${done}/${total}`));
+  const militaryManager = new MilitaryManager(viewer);
 
-  // 初始化军事单位控制面板管理器
-  militaryPanelManager = new MilitaryPanelManager(viewer);
-  militaryManager.setPanelManager(militaryPanelManager);
-  // 提供军事面板管理器给子组件
-  provide('militaryPanelManager', militaryPanelManager);
-  
-  // 初始化命令分发器
-  commandDispatcher = CommandDispatcher.getInstance(viewer);
+  // militaryPanelManager = new MilitaryPanelManager(viewer, geoPanelManager);
 
-  // 初始化完成
-  gameReady.value = true;
-});
+  gameReady.value = await militaryManager.init();
 
-onBeforeUnmount(() => {
-  // militaryManager?.dispose();
-  sceneManager?.destroy();
-  commandDispatcher?.destroy();
 });
 
 onUnmounted(() => {
