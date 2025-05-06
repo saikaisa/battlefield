@@ -4,7 +4,7 @@ import { openGameStore } from "@/store";
 import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
-import { TerrainHeightCache } from "@/layers/scene-layer/components/TerrainHeightCache";
+import { HexHeightCache } from "@/layers/scene-layer/components/HexHeightCache";
 import { ModelPoseCalculator } from "./ModelPoseCalculator";
 import { GeoMathUtils } from "@/utils/GeoMathUtils";
 import { MilitaryConfig } from "@/config/GameConfig";
@@ -43,7 +43,7 @@ export class MilitaryMovementController {
     this.store = openGameStore();
     
     // 获取地形高度缓存系统
-    this.terrainCache = TerrainHeightCache.getInstance(viewer);
+    this.terrainCache = HexHeightCache.getInstance(viewer);
 
     // 获取模型姿态计算器
     this.poseCalculator = ModelPoseCalculator.getInstance(viewer);

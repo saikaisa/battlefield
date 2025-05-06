@@ -5,6 +5,8 @@ import { HexVisualStyles } from '@/config/HexVisualStyles';
 // eslint-disable-next-line no-unused-vars
 import { HexCell } from '@/models/HexCell';
 import { computed, watch } from "vue";
+import { HexRendererConfig } from "@/config/GameConfig";
+import { HexHeightCache } from './HexHeightCache';
 
 // 缓存：每个六角格几何 (fillGeom, borderGeom)
 const geometryCache = new Map();
@@ -40,11 +42,12 @@ export class HexGridRenderer {
     }
     this.viewer = viewer;
     this.store = openGameStore();
+    this.heightCache = HexHeightCache.getInstance(viewer);
 
     this.layerIndex = computed(() => this.store.layerIndex);
-    // console.log(`layerIndex: ${this.layerIndex.value}`)
     this.interactGridPrimitives = null; // 交互层
-  
+    this.markGridPrimitives = null; // 标记层
+    
     // 监听 selectedHexIds 的变化，更新六角格高亮样式
     watch(
       () => this.store.getSelectedHexIds(),
@@ -53,13 +56,13 @@ export class HexGridRenderer {
       },
       { deep: true }
     );
+    
+    // 设置地形采样精度
+    this.viewer.scene.globe.maximumScreenSpaceError = HexRendererConfig.optimization.terrainSamplingError;
   }
 
   /**
    * 渲染六角格基础图层
-   * 
-   * 边框采用一个Primitive对应多个Geometry的方式渲染，
-   * 填充采用一个Primitive对应一个Geometry的方式渲染(灰块/高亮块同理)。
    * @param {number} refresh 是否强制刷新
    */
   renderBaseGrid(refresh = false) {
@@ -81,47 +84,15 @@ export class HexGridRenderer {
 
       // 构建 layer 1 & 2 两套 PrimitiveCollection
       [1, 2].forEach(idx => {
-        const borderInstances = [];
         const primCollection = new Cesium.PrimitiveCollection();
-        hexCells.forEach((hexCell) => {
-          // 选择对应样式
-          let visual = idx === 1
-            ? HexVisualStyles.default
-            : hexCell.getTopVisualStyle('base') || HexVisualStyles.default;
-          const { fillGeometry, borderGeometry } = HexGridRenderer.getOrCreateGeometry(hexCell);
-          
-          if (visual.showFill) {
-            const fillInstance = new Cesium.GeometryInstance({
-              geometry: fillGeometry,
-              attributes: {
-                color: Cesium.ColorGeometryInstanceAttribute.fromColor(visual.fillColor || Cesium.Color.WHITE.withAlpha(0.1))
-              },
-              id: hexCell.hexId + "_fill",
-            });
-            const fillPrimitive = new Cesium.GroundPrimitive({
-              geometryInstances: fillInstance,
-              asynchronous: false
-            });
-            primCollection.add(fillPrimitive);
-          }
-          if (visual.showBorder) {
-            const borderInstance = new Cesium.GeometryInstance({
-              geometry: borderGeometry,
-              attributes: {
-                color: Cesium.ColorGeometryInstanceAttribute.fromColor(visual.borderColor || Cesium.Color.RED.withAlpha(0.1))
-              },
-              id: hexCell.hexId + "_border",
-            });
-            console.log(`borderColor : ${visual.borderColor}`)
-            borderInstances.push(borderInstance);
-          }
+         
+        // 渲染挤压多边形
+        this._renderExtrudedLayer(hexCells, primCollection, {
+          layerIdx: idx,
+          styleType: 'base',
+          borderWidth: 2.0
         });
-
-        primCollection.add(new Cesium.GroundPolylinePrimitive({
-          geometryInstances: borderInstances,
-          appearance: new Cesium.PolylineColorAppearance(),
-          allowPicking: false
-        }));
+         
         // 显隐控制
         primCollection.show = (this.layerIndex.value === idx);
         // 加入场景 & 缓存
@@ -134,11 +105,40 @@ export class HexGridRenderer {
         collection.show = (this.layerIndex.value === idx);
       });
     }
+    
+    // 渲染标记层(mark) - 只在layerIndex = 1时显示
+    this.renderMarkGrid();
+  }
+
+  /**
+   * 渲染六角格标记图层 (阵营标记等)
+   * 只在layerIndex=1时渲染
+   */
+  renderMarkGrid() {
+    if (this.markGridPrimitives) {
+      this.viewer.scene.primitives.remove(this.markGridPrimitives);
+      this.markGridPrimitives = null;
+    }
+    
+    // 只有在layerIndex=1时才渲染标记层
+    if (this.layerIndex.value !== 1) return;
+
+    this.markGridPrimitives = new Cesium.PrimitiveCollection();
+    const hexCells = this.store.getHexCells();
+    
+    // 渲染标记层
+    this._renderExtrudedLayer(hexCells, this.markGridPrimitives, {
+      styleType: 'mark',
+      heightOffset: 1.0, // 略高于base层
+      borderWidth: 2.0
+    });
+
+    this.viewer.scene.primitives.add(this.markGridPrimitives);
   }
 
   /**
    * 渲染六角格交互图层
-   *  - 鼠标划过 / 选中 / 其他交互标记
+   *  - 选中 / 其他交互标记
    */
   renderInteractGrid() {
     if (this.interactGridPrimitives) {
@@ -149,32 +149,206 @@ export class HexGridRenderer {
 
     this.interactGridPrimitives = new Cesium.PrimitiveCollection();
     const hexCells = this.store.getHexCells();
-
-    hexCells.forEach((hexCell) => {
-      // 获取 interaction 层内 优先级最高的样式
-      const style = hexCell.getTopVisualStyle('interaction');
-      if (!style) {
-        return; // 该 hexCell 在交互层没有样式，不渲染
-      }
-      const { fillGeometry } = HexGridRenderer.getOrCreateGeometry(hexCell);
-
-      // 取 fillColor
-      const color = style.fillColor || Cesium.Color.WHITE.withAlpha(0.1);
-      const interactInstance = new Cesium.GeometryInstance({
-        geometry: fillGeometry,
-        attributes: {
-          color: Cesium.ColorGeometryInstanceAttribute.fromColor(color)
-        },
-        id: hexCell.hexId + "_fill",
-      });
-      const interactPrimitive = new Cesium.GroundPrimitive({
-        geometryInstances: interactInstance,
-        asynchronous: false,
-      });
-      this.interactGridPrimitives.add(interactPrimitive);
+    
+    // 渲染交互层 - 使用粗虚线边框
+    this._renderExtrudedLayer(hexCells, this.interactGridPrimitives, {
+      styleType: 'interaction',
+      heightOffset: 2.0, // 在mark层之上
+      borderWidth: 4.0,
+      borderPattern: true  // 使用虚线边框
     });
 
     this.viewer.scene.primitives.add(this.interactGridPrimitives);
+  }
+   
+  /**
+   * 通用渲染挤压多边形图层
+   * @param {Array<HexCell>} hexCells 六角格单元数组
+   * @param {Cesium.PrimitiveCollection} primCollection 要添加到的primitive集合
+   * @param {Object} options 渲染选项
+   * @param {number} [options.layerIdx] 图层索引，用于基础图层选择样式
+   * @param {string} options.styleType 样式类型，如'base', 'mark', 'interaction'
+   * @param {number} [options.heightOffset=0] 高度偏移，用于层叠效果
+   * @param {number} [options.borderWidth=2.0] 边框宽度
+   * @param {boolean} [options.borderPattern=false] 是否使用虚线边框
+   * @private
+   */
+  _renderExtrudedLayer(hexCells, primCollection, options = {}) {
+    const {
+      layerIdx,
+      styleType = 'base',
+      heightOffset = 0,
+      borderWidth = 2.0,
+      borderPattern = false
+    } = options;
+    
+    const borderInstances = [];
+    const fillInstances = [];
+        
+    hexCells.forEach((hexCell) => {
+      // 选择对应样式 - 根据不同条件获取样式
+      let visual;
+      
+      if (styleType === 'base' && layerIdx !== undefined) {
+        // 基础层根据layerIdx选择样式
+        visual = layerIdx === 1
+          ? HexVisualStyles.default
+          : hexCell.getTopVisualStyle('base') || HexVisualStyles.default;
+      } else {
+        // 其他层取对应layer的顶层样式
+        visual = hexCell.getTopVisualStyle(styleType);
+      }
+      
+      // 如果没有对应样式，跳过此六角格
+      if (!visual) return;
+      
+      if (visual.showFill) {
+        // 使用HexHeightCache获取3D位置
+        const positions = this.heightCache.getHex3DPositions(hexCell, false, heightOffset);
+        if (positions.length === 0) return; // 如果无法获取位置，跳过
+
+        // 获取六角格地形陡峭程度，用于动态调整挤压高度
+        const hexCache = this.heightCache.hexHeightCache.get(hexCell.hexId);
+        // 计算挤压高度 - 额外挤压高度 + 基础高度偏移
+        const extrusionHeight = -(hexCache.heightOffset + HexRendererConfig.extrusionHeight);
+
+        // 使用挤压多边形确保没有缝隙
+        const fillInstance = new Cesium.GeometryInstance({
+          geometry: new Cesium.PolygonGeometry({
+            polygonHierarchy: new Cesium.PolygonHierarchy(positions),
+            perPositionHeight: true,
+            vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+            extrudedHeight: extrusionHeight, // 动态计算挤压高度
+            closeTop: true,
+            closeBottom: true
+          }),
+          attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(visual.fillColor || Cesium.Color.WHITE.withAlpha(0.1))
+          },
+          id: hexCell.hexId + "_fill"
+        });
+        fillInstances.push(fillInstance);
+      }
+      
+      if (visual.showBorder) {
+        // 使用HexHeightCache获取边界线3D位置
+        const positions = this.heightCache.getHex3DPositions(hexCell, true, heightOffset);
+        if (positions.length === 0) return; // 如果无法获取位置，跳过
+        
+        // 闭合轮廓
+        positions.push(positions[0]);
+        
+        // 边框属性
+        const borderColor = visual.borderColor || Cesium.Color.RED.withAlpha(0.1);
+        
+        const borderGeometryOptions = {
+          positions: positions,
+          width: borderWidth,
+          vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT
+        };
+        
+        // 如果需要虚线边框，添加虚线样式
+        if (borderPattern) {
+          borderGeometryOptions.vertexFormat = Cesium.PolylineMaterialAppearance.VERTEX_FORMAT;
+        }
+        
+        const borderInstance = new Cesium.GeometryInstance({
+          geometry: new Cesium.PolylineGeometry(borderGeometryOptions),
+          attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(borderColor)
+          },
+          id: hexCell.hexId + "_border"
+        });
+        
+        borderInstances.push(borderInstance);
+      }
+    });
+
+    // 添加填充实例
+    if (fillInstances.length > 0) {
+      primCollection.add(new Cesium.Primitive({
+        geometryInstances: fillInstances,
+        appearance: new Cesium.PerInstanceColorAppearance({
+          flat: true,
+          translucent: true,
+          closed: true
+        }),
+        asynchronous: true,
+        allowPicking: true,
+        releaseGeometryInstances: true
+      }));
+    }
+
+    // 添加边界线实例
+    if (borderInstances.length > 0) {
+      // 如果是虚线边框，使用材质外观
+      let appearance;
+      if (borderPattern) {
+        appearance = new Cesium.PolylineMaterialAppearance({
+          material: Cesium.Material.fromType('PolylineDash', {
+            color: Cesium.Color.WHITE,
+            dashLength: 16.0,
+            dashPattern: 255 // 0b11111111
+          })
+        });
+      } else {
+        appearance = new Cesium.PolylineColorAppearance();
+      }
+      
+      primCollection.add(new Cesium.Primitive({
+        geometryInstances: borderInstances,
+        appearance: appearance,
+        asynchronous: true,
+        allowPicking: false,
+        releaseGeometryInstances: true
+      }));
+    }
+  }
+
+  /**
+   * 创建悬停Primitive
+   * @param {HexCell} cell 六角格单元
+   * @param {Cesium.Color} hoverColor 悬停颜色
+   * @returns {Cesium.Primitive} 悬停Primitive
+   */
+  createHoverPrimitive(cell, hoverColor) {
+    // 使用HexHeightCache获取3D位置，hover显示在所有层之上
+    const positions = this.heightCache.getHex3DPositions(cell, false, 3.0);
+    if (positions.length === 0) return null; // 无法获取位置
+    
+    // 获取六角格地形陡峭程度，用于动态调整挤压高度
+    const hexCache = this.heightCache.hexHeightCache.get(cell.hexId);
+    // 根据地形陡峭程度调整挤压深度
+    const dynamicExtrusionHeight = hexCache ? 
+      Math.min(HexRendererConfig.extrusionHeight, -hexCache.steepness * 1.5) : 
+      HexRendererConfig.extrusionHeight;
+    
+    // 使用挤压多边形确保没有缝隙
+    const inst = new Cesium.GeometryInstance({
+      geometry: new Cesium.PolygonGeometry({
+        polygonHierarchy: new Cesium.PolygonHierarchy(positions),
+        perPositionHeight: true,
+        vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+        extrudedHeight: dynamicExtrusionHeight, // 动态计算挤压高度
+        closeTop: true,
+        closeBottom: true
+      }),
+      attributes: {
+        color: Cesium.ColorGeometryInstanceAttribute.fromColor(hoverColor)
+      },
+      id: cell.hexId + "_fill",
+    });
+    
+    return new Cesium.Primitive({
+      geometryInstances: inst,
+      appearance: new Cesium.PerInstanceColorAppearance({
+        flat: true,
+        translucent: true,
+        closed: true
+      }),
+      asynchronous: true,
+      allowPicking: true
+    });
   }
 
   /**
@@ -234,9 +408,12 @@ export class HexGridRenderer {
     const vertices = hexCell.getVertices();
     const pos = vertices.concat(vertices[0]);
     const posArr = pos.flatMap((pt) => [pt.longitude, pt.latitude, pt.height]);
+    
+    // 创建几何体时使用较低精度
     return Cesium.PolygonGeometry.fromPositions({
       positions: Cesium.Cartesian3.fromDegreesArrayHeights(posArr),
       vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+      granularity: Cesium.Math.RADIANS_PER_DEGREE // 降低采样精度
     });
   }
 
@@ -249,10 +426,54 @@ export class HexGridRenderer {
   static _createHexCellBorderGeometry(hexCell) {
     const vertices = hexCell.getVertices();
     const posArr = vertices.map((pt) => [pt.longitude, pt.latitude]).flat();
+    
+    // 创建几何体时使用较低精度
     return new Cesium.GroundPolylineGeometry({
       positions: Cesium.Cartesian3.fromDegreesArray(posArr),
       loop: true,
       width: 4.0,
+      granularity: Cesium.Math.RADIANS_PER_DEGREE * 2 // 降低采样精度
     });
+  }
+  
+  /**
+   * 清理模块级别缓存
+   * @private
+   */
+  _clearModuleLevelCache() {
+    // 清理模块级别的缓存
+    geometryCache.clear();
+    
+    // 从场景移除并销毁所有图层集合
+    baseLayerCache.forEach(collection => {
+      if (this.viewer && this.viewer.scene) {
+        this.viewer.scene.primitives.remove(collection);
+      }
+    });
+    baseLayerCache.clear();
+  }
+  
+  /**
+   * 清理资源
+   * 释放所有Cesium资源和缓存
+   */
+  dispose() {
+    // 移除mark图层
+    if (this.markGridPrimitives) {
+      this.viewer.scene.primitives.remove(this.markGridPrimitives);
+      this.markGridPrimitives = null;
+    }
+    
+    // 移除交互图层
+    if (this.interactGridPrimitives) {
+      this.viewer.scene.primitives.remove(this.interactGridPrimitives);
+      this.interactGridPrimitives = null;
+    }
+    
+    // 清理模块级别的缓存
+    this._clearModuleLevelCache();
+    
+    // 清理单例引用
+    HexGridRenderer.#instance = null;
   }
 }

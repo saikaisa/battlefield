@@ -3,12 +3,9 @@ import * as Cesium from "cesium";
 
 /**
  * 各种视觉预设预定义
- * 
- * layer = 
- * base: renderBaseGrid() 渲染参考属性
- * interaction: renderInteractGrid() 渲染参考属性
  */ 
 export const HexVisualStyles = {
+  // =========================== 基础层 ===========================
   // 默认样式
   default: {
     layer: 'base',
@@ -59,30 +56,31 @@ export const HexVisualStyles = {
     showFill: true,
     showBorder: true
   },
-  // 蓝方阵营高亮标记
+  // =========================== 标记层 ===========================
+  // 蓝方阵营标记
   factionBlue: {
-    layer: 'interaction',
+    layer: 'mark',
     type: 'factionBlue',
     priority: 0,
     fillColor: Cesium.Color.BLUE.withAlpha(0.3),
     showFill: true,
   },
-  // 红方阵营高亮标记
+  // 红方阵营标记
   factionRed: {
-    layer: 'interaction',
+    layer: 'mark',
     type: 'factionRed',
     priority: 0,
     fillColor: Cesium.Color.RED.withAlpha(0.3),
     showFill: true,
   },
-  // 鼠标悬浮灰块
-  hovered: {
-    layer: 'immediately',
-    type: 'hovered',
+  // 不可见遮罩
+  invisible: {
+    layer: 'mark',
+    type: 'invisible',
     priority: 1,
-    fillColor: Cesium.Color.GRAY.withAlpha(0.5),
-    showFill: true,
+    fillColor: Cesium.Color.BLACK.withAlpha(0.2),
   },
+  // =========================== 交互层 ===========================
   // 选中高亮：默认黄色
   selected: {
     layer: 'interaction',
@@ -122,5 +120,13 @@ export const HexVisualStyles = {
     priority: 3,
     fillColor: Cesium.Color.RED.withAlpha(0.6),
     showFill: true,
-  }
+  },
+  // 鼠标悬浮灰块
+  hovered: {
+    layer: 'immediately',
+    type: 'hovered',
+    priority: 1,
+    fillColor: Cesium.Color.GRAY.withAlpha(0.5),
+    showFill: true,
+  },
 };

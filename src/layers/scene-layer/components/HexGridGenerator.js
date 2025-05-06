@@ -4,7 +4,7 @@ import { openGameStore } from '@/store';
 import { HexConfig } from "@/config/GameConfig";
 import { HexCell } from '@/models/HexCell';
 import { GeoMathUtils } from "@/utils/GeoMathUtils";
-import { TerrainHeightCache } from './TerrainHeightCache';
+import { HexHeightCache } from './HexHeightCache';
 
 /**
  * HexGridGenerator 类用于生成六角网格数据（平顶六角格方案）
@@ -50,7 +50,7 @@ export class HexGridGenerator {
     this.dy = GeoMathUtils.metersToDegreesLat(this.hexHeightMeters);
     
     // 初始化地形高度缓存系统
-    this.terrainCache = TerrainHeightCache.getInstance(viewer);
+    this.terrainCache = HexHeightCache.getInstance(viewer);
 
     console.log('[HexGridGenerator] 初始化：');
     console.log(`  hexRadius = ${this.hexRadius} m`);

@@ -155,22 +155,8 @@ export class SceneInteractor {
     const cell = this.store.getHexCellById(hexId);
     if (!cell) return;
   
-    const { fillGeometry } = HexGridRenderer.getOrCreateGeometry(cell);
-  
-    const inst = new Cesium.GeometryInstance({
-      geometry: fillGeometry,
-      attributes: {
-        color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-          HexVisualStyles.hovered.fillColor
-        )
-      },
-      id: cell.hexId + "_fill",
-    });
-  
-    this.hoverPrimitive = new Cesium.GroundPrimitive({
-      geometryInstances: inst,
-      asynchronous: false,
-    });
+    // 使用HexGridRenderer创建悬停效果
+    this.hoverPrimitive = this.hexGridRenderer.createHoverPrimitive(cell, HexVisualStyles.hovered.fillColor);
     this.viewer.scene.primitives.add(this.hoverPrimitive);
   }
 
@@ -195,7 +181,7 @@ export class SceneInteractor {
         // 如果已经选中，则移除
           this.store.removeSelectedHexId(hexId);
       } else {
-        // 没选中 => 先清空，再选它
+        // 没选中 => 先清空，再选中
         this.store.clearSelectedHexIds();
         this.store.addSelectedHexId(hexId);
       }

@@ -5,7 +5,7 @@ import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { openGameStore } from "@/store";
 import { GeoMathUtils } from "@/utils/GeoMathUtils";
-import { TerrainHeightCache } from "@/layers/scene-layer/components/TerrainHeightCache";
+import { HexHeightCache } from "@/layers/scene-layer/components/HexHeightCache";
 
 /**
  * 模型姿态计算器 - 工具类
@@ -40,7 +40,7 @@ export class ModelPoseCalculator {
     this.viewer = viewer;
     
     // 获取地形高度缓存系统实例
-    this.terrainCache = TerrainHeightCache.getInstance(viewer);
+    this.terrainCache = HexHeightCache.getInstance(viewer);
   }
 
   /**
@@ -61,12 +61,15 @@ export class ModelPoseCalculator {
     
     // 批量获取hex对象和计算位置
     const positions = [];
-    const heightQueryPoints = [];
     
     for (const hexId of hexIdArray) {
       // 获取hexCell对象
       const cell = this.store.getHexCellById(hexId);
-      if (!cell) return null; // 找不到某六角格，出错
+      if (!cell) {
+        console.warn(`[ModelPoseCalculator] 找不到六角格: ${hexId}`);
+        positions.push(null);
+        continue;
+      }
 
       const center = cell.getCenter();
       
@@ -82,33 +85,22 @@ export class ModelPoseCalculator {
       // 使用GeoMathUtils将米偏移转换为经纬度坐标
       const offsetPos = GeoMathUtils.metersToLatLon(center, { x: offsetX, y: offsetY });
       
-      // 添加到待查询高度的点列表
-      heightQueryPoints.push({
-        hexId: hexId,
-        longitude: offsetPos.longitude,
-        latitude: offsetPos.latitude
-      });
+      // 获取表面高度
+      const surfaceHeight = this.terrainCache.getSurfaceHeight(
+        hexId, 
+        offsetPos.longitude, 
+        offsetPos.latitude
+      );
       
-      // 添加到位置列表(高度待查询)
+      // 添加到位置列表
       positions.push({
         hexId: hexId,
         position: {
           longitude: offsetPos.longitude,
           latitude: offsetPos.latitude,
-          height: 0
+          height: surfaceHeight !== null ? surfaceHeight : center.height
         },
       });
-    }
-    
-    // 批量查询高度
-    if (heightQueryPoints.length > 0) {
-      const heights = await this.terrainCache.getPreciseHeight(heightQueryPoints);
-      // 更新高度
-      for (let i = 0; i < positions.length; i++) {
-        if (positions[i]) {
-          positions[i].position.height = heights[i];
-        }
-      }
     }
     
     // 根据输入类型返回对应格式
@@ -133,9 +125,7 @@ export class ModelPoseCalculator {
       return isArray ? [] : null;
     }
 
-    // 批量计算位置并准备高度查询
     const positions = [];
-    const heightQueryPoints = [];
     
     for (const param of paramsArray) {
       const {forcePose, localOffset, hexId} = param;
@@ -153,34 +143,25 @@ export class ModelPoseCalculator {
       const forcePos = forcePose.position;
       const unitPos = GeoMathUtils.metersToLatLon(forcePos, rotatedOffset);
       
-      // 添加到待查询高度的点列表
-      heightQueryPoints.push({
-        hexId: hexId,
-        longitude: unitPos.longitude,
-        latitude: unitPos.latitude
-      });
+      // 获取表面高度
+      const surfaceHeight = this.terrainCache.getSurfaceHeight(
+        hexId,
+        unitPos.longitude,
+        unitPos.latitude
+      );
       
-      // 添加到位置列表(高度待查询)
+      // 添加到位置列表
       positions.push({
         hexId: hexId,
         position: {
           longitude: unitPos.longitude,
           latitude: unitPos.latitude,
-          height: 0
+          // 如果获取失败则使用部队高度 + 默认偏移
+          height: (surfaceHeight !== null ? 
+            surfaceHeight : 
+            forcePos.height) + MilitaryConfig.layoutConfig.unitLayout.heightOffset
         }
       });
-    }
-    
-    // 批量查询高度
-    if (heightQueryPoints.length > 0) {
-      const heights = await this.terrainCache.getPreciseHeight(heightQueryPoints);
-      
-      // 更新高度
-      for (let i = 0; i < positions.length; i++) {
-        if (positions[i]) {
-          positions[i].position.height = heights[i] + MilitaryConfig.layoutConfig.unitLayout.heightOffset;
-        }
-      }
     }
     
     // 根据输入类型返回对应格式

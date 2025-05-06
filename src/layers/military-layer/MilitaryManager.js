@@ -51,7 +51,7 @@ export class MilitaryManager {
     this.loader = null;
     this.generator = null;
     this.renderer = null;
-    this.panelManager = null;
+    // this.panelManager = null;
     
     this._stopForceWatch = null;
     this._stopHexWatch = null;
@@ -145,18 +145,17 @@ export class MilitaryManager {
       }
     );
 
-    this._bindPanelCommands();
     return true;
   }
 
-  /**
-   * 将 MilitaryPanelManager 挂载进来，以后从 this.panelManager 调用
-   * @param {MilitaryPanelManager} pm
-   */
-  setPanelManager(pm) {
-    this.panelManager = pm;
-    this._bindPanelCommands();
-  }
+  // /**
+  //  * 将 MilitaryPanelManager 挂载进来，以后从 this.panelManager 调用
+  //  * @param {MilitaryPanelManager} pm
+  //  */
+  // setPanelManager(pm) {
+  //   this.panelManager = pm;
+  //   this._bindPanelCommands();
+  // }
 
   /**
    * 初始化 HexForceMapper
@@ -273,178 +272,178 @@ export class MilitaryManager {
     }
   }
 
-  /**
-   * 绑定面板命令
-   * @private
-   */
-  _bindPanelCommands() {
-    /**
-     * 移动命令
-     * @param {string} forceId 部队ID
-     * @param {string[]} path 路径（六角格ID数组）
-     */
-    this.panelManager.onMoveCommand = async ({ forceId, path }) => {
-      try {
-        // 1. 检查路径有效性
-        if (!path || path.length < 2) {
-          showWarning("路径过短，无法进行移动");
-          return;
-        }
+  // /**
+  //  * 绑定面板命令
+  //  * @private
+  //  */
+  // _bindPanelCommands() {
+  //   /**
+  //    * 移动命令
+  //    * @param {string} forceId 部队ID
+  //    * @param {string[]} path 路径（六角格ID数组）
+  //    */
+  //   this.panelManager.onMoveCommand = async ({ forceId, path }) => {
+  //     try {
+  //       // 1. 检查路径有效性
+  //       if (!path || path.length < 2) {
+  //         showWarning("路径过短，无法进行移动");
+  //         return;
+  //       }
         
-        // 2. 获取部队
-        const force = this.store.getForceById(forceId);
-        if (!force) {
-          showError(`未找到部队: ${forceId}`);
-          return;
-        }
+  //       // 2. 获取部队
+  //       const force = this.store.getForceById(forceId);
+  //       if (!force) {
+  //         showError(`未找到部队: ${forceId}`);
+  //         return;
+  //       }
         
-        // 3. 计算行动力消耗
-        const actionPointCost = force.computeActionPointsForPath(path);
+  //       // 3. 计算行动力消耗
+  //       const actionPointCost = force.computeActionPointsForPath(path);
         
-        // 4. 检查行动力是否足够
-        if (actionPointCost > force.actionPoints) {
-          showWarning(`行动力不足. 需要: ${actionPointCost}, 剩余: ${force.actionPoints}`);
-          return;
-        }
+  //       // 4. 检查行动力是否足够
+  //       if (actionPointCost > force.actionPoints) {
+  //         showWarning(`行动力不足. 需要: ${actionPointCost}, 剩余: ${force.actionPoints}`);
+  //         return;
+  //       }
         
-        // 6. 更新行动力
-        force.consumeActionPoints(actionPointCost);
+  //       // 6. 更新行动力
+  //       force.consumeActionPoints(actionPointCost);
         
-        // 7. 在渲染器中执行移动动画
-        const isMoving = await this.renderer.moveForceAlongPath(forceId, path);
+  //       // 7. 在渲染器中执行移动动画
+  //       const isMoving = await this.renderer.moveForceAlongPath(forceId, path);
 
-        // 8. 更新部队在六角格中的位置
-        if (isMoving) {
-          HexForceMapper.moveForceToHex(forceId, path[path.length - 1]);
-        }
+  //       // 8. 更新部队在六角格中的位置
+  //       if (isMoving) {
+  //         HexForceMapper.moveForceToHex(forceId, path[path.length - 1]);
+  //       }
         
-        showSuccess(`部队 ${forceId} 开始移动，消耗行动力 ${actionPointCost}`);
-      } catch (error) {
-        showError(`移动命令执行失败: ${error.message}`);
-      }
-    };
+  //       showSuccess(`部队 ${forceId} 开始移动，消耗行动力 ${actionPointCost}`);
+  //     } catch (error) {
+  //       showError(`移动命令执行失败: ${error.message}`);
+  //     }
+  //   };
 
-    /**
-     * 攻击命令
-     * @param {string} commandForceId 指挥部队ID
-     * @param {string} targetHex 目标六角格ID
-     * @param {string[]} supportForceIds 支援部队ID数组
-     */
-    this.panelManager.onAttackCommand = async ({ commandForceId, targetHex, supportForceIds }) => {
+  //   /**
+  //    * 攻击命令
+  //    * @param {string} commandForceId 指挥部队ID
+  //    * @param {string} targetHex 目标六角格ID
+  //    * @param {string[]} supportForceIds 支援部队ID数组
+  //    */
+  //   this.panelManager.onAttackCommand = async ({ commandForceId, targetHex, supportForceIds }) => {
       
-    };
+  //   };
 
-    /**
-     * 创建部队命令
-     * @param {Object} forceData 部队初始数据的PlainObject形式
-     * forceData: {
-     *   forceName: string,
-     *   faction: string,
-     *   service: string,
-     *   hexId: string,
-     *   composition: Array<Object>
-     * }
-     */
-    this.panelManager.onCreateForce = async ({ forceData }) => {
-      try {
-        // 创建部队
-        const force = new Force({
-          forceName: forceData.forceName,
-          faction: forceData.faction,
-          service: forceData.service,
-          hexId: forceData.hexId,
-          composition: forceData.composition
-        });
-        // 添加到Store
-        this.store.addForce(force);
+  //   /**
+  //    * 创建部队命令
+  //    * @param {Object} forceData 部队初始数据的PlainObject形式
+  //    * forceData: {
+  //    *   forceName: string,
+  //    *   faction: string,
+  //    *   service: string,
+  //    *   hexId: string,
+  //    *   composition: Array<Object>
+  //    * }
+  //    */
+  //   this.panelManager.onCreateForce = async ({ forceData }) => {
+  //     try {
+  //       // 创建部队
+  //       const force = new Force({
+  //         forceName: forceData.forceName,
+  //         faction: forceData.faction,
+  //         service: forceData.service,
+  //         hexId: forceData.hexId,
+  //         composition: forceData.composition
+  //       });
+  //       // 添加到Store
+  //       this.store.addForce(force);
         
-        showSuccess(`创建部队成功: ${force.forceId}`);
-      } catch (error) {
-        showError(`创建部队时发生错误: ${error.message}`);
-      }
-    };
+  //       showSuccess(`创建部队成功: ${force.forceId}`);
+  //     } catch (error) {
+  //       showError(`创建部队时发生错误: ${error.message}`);
+  //     }
+  //   };
 
-    /**
-     * 合并部队命令
-     * @param {string} hexId 六角格ID
-     * @param {string[]} forceIds 部队ID数组
-     */
-    this.panelManager.onMergeForces = async ({ hexId, forceIds }) => {
-      try {
-        // 从 Store 中移除原部队
-        forceIds.forEach(fid => {
-          this.store.forceMap.delete(fid);
-          HexForceMapper.removeForceById(fid);
-        });
+  //   /**
+  //    * 合并部队命令
+  //    * @param {string} hexId 六角格ID
+  //    * @param {string[]} forceIds 部队ID数组
+  //    */
+  //   this.panelManager.onMergeForces = async ({ hexId, forceIds }) => {
+  //     try {
+  //       // 从 Store 中移除原部队
+  //       forceIds.forEach(fid => {
+  //         this.store.forceMap.delete(fid);
+  //         HexForceMapper.removeForceById(fid);
+  //       });
 
-        // 添加新部队到 Store
-        const newForce = res.data.new_force;
-        this.store.addForce(newForce);
-        HexForceMapper.addForceById(newForce.force_id, hexId);
+  //       // 添加新部队到 Store
+  //       const newForce = res.data.new_force;
+  //       this.store.addForce(newForce);
+  //       HexForceMapper.addForceById(newForce.force_id, hexId);
         
-        // 添加到默认编队
-        this._addForceToFormation(newForce);
+  //       // 添加到默认编队
+  //       this._addForceToFormation(newForce);
         
-        showSuccess(`合并部队成功: ${forceIds.join(',')}`);
-      } catch (error) {
-        showError(`合并部队时发生错误: ${error.message}`);
-      }
-    };
+  //       showSuccess(`合并部队成功: ${forceIds.join(',')}`);
+  //     } catch (error) {
+  //       showError(`合并部队时发生错误: ${error.message}`);
+  //     }
+  //   };
 
-    /**
-     * 拆分部队命令
-     * @param {string} forceId 部队ID
-     * @param {string[]} splitDetails 拆分后的部队
-     */
-    this.panelManager.onSplitForce = async ({ forceId, splitDetails }) => {
-      try {
-        // 实现拆分部队逻辑
-        const res = await API.splitForce(forceId, splitDetails);
+  //   /**
+  //    * 拆分部队命令
+  //    * @param {string} forceId 部队ID
+  //    * @param {string[]} splitDetails 拆分后的部队
+  //    */
+  //   this.panelManager.onSplitForce = async ({ forceId, splitDetails }) => {
+  //     try {
+  //       // 实现拆分部队逻辑
+  //       const res = await API.splitForce(forceId, splitDetails);
         
-        if (res.status === "success") {
-          // 从 Store 中移除原部队
-          this.store.forceMap.delete(forceId);
-          HexForceMapper.removeForceById(forceId);
+  //       if (res.status === "success") {
+  //         // 从 Store 中移除原部队
+  //         this.store.forceMap.delete(forceId);
+  //         HexForceMapper.removeForceById(forceId);
   
-          // 添加新部队到 Store
-          const hexId = this.store.getForceById(forceId)?.hexId;
-          res.data.new_forces.forEach(newForce => {
-            this.store.addForce(newForce);
-            if (hexId) {
-              HexForceMapper.addForceById(newForce.force_id, hexId);
-            }
+  //         // 添加新部队到 Store
+  //         const hexId = this.store.getForceById(forceId)?.hexId;
+  //         res.data.new_forces.forEach(newForce => {
+  //           this.store.addForce(newForce);
+  //           if (hexId) {
+  //             HexForceMapper.addForceById(newForce.force_id, hexId);
+  //           }
             
-            // 添加到默认编队
-            this._addForceToFormation(newForce);
-          });
+  //           // 添加到默认编队
+  //           this._addForceToFormation(newForce);
+  //         });
           
-          showSuccess(`拆分部队成功: ${forceId}`);
-        } else {
-          showError(`拆分部队失败: ${res.message}`);
-        }
-      } catch (error) {
-        showError(`拆分部队时发生错误: ${error.message}`);
-      }
-    };
+  //         showSuccess(`拆分部队成功: ${forceId}`);
+  //       } else {
+  //         showError(`拆分部队失败: ${res.message}`);
+  //       }
+  //     } catch (error) {
+  //       showError(`拆分部队时发生错误: ${error.message}`);
+  //     }
+  //   };
 
-    /**
-     * 删除编队命令
-     * @param {string} formationId 编队ID
-     */
-    this.panelManager.onDeleteFormation = (formationId) => {
-      try {
-        const formation = this.store.formationMap.get(formationId);
-        if (formation && formation.forceIdList.length === 0) {
-          this.store.formationMap.delete(formationId);
-          showSuccess(`删除编队成功: ${formationId}`);
-        } else {
-          showWarning(`无法删除非空编队: ${formationId}`);
-        }
-      } catch (error) {
-        showError(`删除编队时发生错误: ${error.message}`);
-      }
-    };
-  }
+  //   /**
+  //    * 删除编队命令
+  //    * @param {string} formationId 编队ID
+  //    */
+  //   this.panelManager.onDeleteFormation = (formationId) => {
+  //     try {
+  //       const formation = this.store.formationMap.get(formationId);
+  //       if (formation && formation.forceIdList.length === 0) {
+  //         this.store.formationMap.delete(formationId);
+  //         showSuccess(`删除编队成功: ${formationId}`);
+  //       } else {
+  //         showWarning(`无法删除非空编队: ${formationId}`);
+  //       }
+  //     } catch (error) {
+  //       showError(`删除编队时发生错误: ${error.message}`);
+  //     }
+  //   };
+  // }
 
   /**
    * 销毁管理器及所有相关资源
