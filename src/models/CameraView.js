@@ -5,7 +5,10 @@ import { CameraConfig } from "@/config/GameConfig.js";
 export class CameraView {
   /**
    * 构造函数
-   * @param {Cesium.Viewer} viewer - Cesium 实例
+   * @param {Cesium.Cartographic} position - 聚焦中心位置
+   * @param {number} range - 相机距离
+   * @param {number} heading - 相机水平朝向角度
+   * @param {number} pitch - 相机垂直倾斜角度
    */
   constructor() {
     this.position = CameraConfig.defaultPosition;
@@ -16,6 +19,10 @@ export class CameraView {
 
   /**
    * 使用详细信息创建视角
+   * @param {Cesium.Cartographic} position - 聚焦中心位置
+   * @param {number} range - 相机距离
+   * @param {number} heading - 相机水平朝向角度
+   * @param {number} pitch - 相机垂直倾斜角度
    * @returns {CameraView|null}
    */
   static create(position, range, heading, pitch) {
@@ -29,6 +36,7 @@ export class CameraView {
 
   /**
    * 获取当前视角
+   * @param {Cesium.Viewer} viewer - Cesium 实例
    * @returns {CameraView|null}
    */
   static fromCurrentView(viewer) {
@@ -55,6 +63,8 @@ export class CameraView {
 
   /**
    * 视角凑近某一位置，用于特写
+   * @param {Cesium.Viewer} viewer - Cesium 实例
+   * @param {Cesium.Cartographic} position - 聚焦中心位置
    * @returns {CameraView|null}
    */
   static closeUpView(viewer, position) {
@@ -68,6 +78,8 @@ export class CameraView {
 
   /**
    * 视角拉远，用于总览
+   * @param {Cesium.Viewer} viewer - Cesium 实例
+   * @param {Cesium.Cartographic} position - 聚焦中心位置
    * @returns {CameraView|null}
    */
   static panoramicView(viewer, position) {

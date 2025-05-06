@@ -1,5 +1,9 @@
 // src\layers\interaction-layer\utils\HexForceMapper.js
 import { reactive } from 'vue';
+import { openGameStore } from '@/store';
+import { HexVisualStyles } from '@/config/HexVisualStyles';
+// eslint-disable-next-line no-unused-vars
+import { HexCell } from '@/models/HexCell';
 
 /**
  * 管理六角格与部队之间的双向映射关系
@@ -16,12 +20,20 @@ export const HexForceMapper = reactive({
   // 部队ID -> 六角格ID: Map<string, string>
   forceToHexMap: new Map(),
 
+  // 存储对store的引用
+  store: null,
+
   /** 
    * 初始化映射关系
    * @param {Array} hexCells 六角格数组
    * @param {Array} forces 部队数组
    */
   initMapping(hexCells = [], forces = []) {
+    // 获取store引用
+    if (!this.store) {
+      this.store = openGameStore();
+    }
+
     // 清理现有映射
     this.hexToForceMap.clear();
     this.forceToHexMap.clear();
@@ -39,6 +51,13 @@ export const HexForceMapper = reactive({
         this._addForceMapping(force.forceId, force.hexId);
       }
     });
+
+    // 初始化完成后，更新所有六角格的控制权
+    hexCells.forEach(hex => {
+      if (hex?.hexId) {
+        this._updateHexControlFaction(hex.hexId);
+      }
+    });
   },
 
   /** 
@@ -49,7 +68,7 @@ export const HexForceMapper = reactive({
    */
   moveForceToHex(forceId, newHexId) {
     if (!forceId || !newHexId) {
-      console.warn('HexForceMapper: Invalid forceId or newHexId');
+      console.warn('[HexForceMapper] 无效的部队ID或六角格ID');
       return false;
     }
 
@@ -59,11 +78,20 @@ export const HexForceMapper = reactive({
       const oldHexForces = this.hexToForceMap.get(oldHexId);
       if (oldHexForces) {
         oldHexForces.delete(forceId);
+        // 更新旧六角格的控制权
+        this._updateHexControlFaction(oldHexId);
       }
     }
 
     // 添加新映射
-    return this._addForceMapping(forceId, newHexId);
+    const result = this._addForceMapping(forceId, newHexId);
+    
+    // 更新新六角格的控制权
+    if (result) {
+      this._updateHexControlFaction(newHexId);
+    }
+    
+    return result;
   },
 
   /** 
@@ -94,10 +122,17 @@ export const HexForceMapper = reactive({
    */
   addForceById(forceId, hexId) {
     if (!forceId || !hexId) {
-      console.warn('HexForceMapper: Invalid forceId or hexId');
+      console.warn('[HexForceMapper] 无效的部队ID或六角格ID');
       return false;
     }
-    return this._addForceMapping(forceId, hexId);
+    const result = this._addForceMapping(forceId, hexId);
+    
+    // 更新六角格的控制权
+    if (result) {
+      this._updateHexControlFaction(hexId);
+    }
+    
+    return result;
   },
 
   /** 
@@ -107,7 +142,7 @@ export const HexForceMapper = reactive({
    */
   removeForceById(forceId) {
     if (!forceId) {
-      console.warn('HexForceMapper: Invalid forceId');
+      console.warn('[HexForceMapper] 无效的部队ID');
       return false;
     }
 
@@ -118,6 +153,10 @@ export const HexForceMapper = reactive({
         hexForces.delete(forceId);
       }
       this.forceToHexMap.delete(forceId);
+      
+      // 更新六角格的控制权
+      this._updateHexControlFaction(hexId);
+      
       return true;
     }
     return false;
@@ -165,5 +204,74 @@ export const HexForceMapper = reactive({
     this.hexToForceMap.get(hexId).add(forceId);
     this.forceToHexMap.set(forceId, hexId);
     return true;
+  },
+
+  /**
+   * 内部方法：更新六角格的控制权
+   * @param {string} hexId 六角格ID
+   * @private
+   */
+  _updateHexControlFaction(hexId) {
+    if (!this.store) {
+      this.store = openGameStore();
+    }
+    
+    const hexCell = this.store.getHexCellById(hexId);
+    if (!hexCell) {
+      console.warn(`[HexForceMapper] 未找到六角格: ${hexId}`);
+      return;
+    }
+    
+    const forceIds = this.getForcesByHexId(hexId);
+    
+    // 如果六角格内没有部队，则控制权为中立
+    if (forceIds.length === 0) {
+      this._setHexControlFaction(hexCell, 'neutral');
+      return;
+    } else {
+      // 更新六角格的控制阵营
+      let controlFaction = 'neutral';
+      
+      // 遍历所有部队，找到第一个有效的部队
+      for (const forceId of forceIds) {
+        const force = this.store.getForceById(forceId);
+        if (force && (force.faction === 'blue' || force.faction === 'red')) {
+          controlFaction = force.faction;
+          break;
+        }
+      }
+      
+      this._setHexControlFaction(hexCell, controlFaction);
+    }
+  },
+  
+  /**
+   * 设置六角格控制方并应用相应的视觉样式
+   * @param {HexCell} hexCell 六角格对象
+   * @param {string} faction 控制阵营
+   * @private
+   */
+  _setHexControlFaction(hexCell, faction) {
+    // 如果控制权未变，不做任何处理
+    if (hexCell.battlefieldState.controlFaction === faction) {
+      return;
+    }
+    
+    // 更新六角格的控制阵营
+    hexCell.battlefieldState.controlFaction = faction;
+    
+    // 移除所有已有的阵营标记样式
+    hexCell.removeVisualStyleByType('factionBlue');
+    hexCell.removeVisualStyleByType('factionRed');
+    
+    // 应用相应的视觉样式
+    switch (faction) {
+      case 'blue':
+        hexCell.addVisualStyle(HexVisualStyles.factionBlue);
+        break;
+      case 'red':
+        hexCell.addVisualStyle(HexVisualStyles.factionRed);
+        break;
+    }
   }
 });

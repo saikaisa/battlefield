@@ -73,6 +73,17 @@ export class HexCell {
   }
 
   /**
+   * 获取六角格的行和列
+   * @returns {Object} 行和列
+   */
+  getRowCol() {
+    return {
+      row: this.position.row,
+      col: this.position.col,
+    };
+  }
+
+  /**
    * 计算加权平均高度并更新
    * @returns {number} 新高度
    */

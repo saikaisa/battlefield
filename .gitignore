@@ -17,6 +17,7 @@ pnpm-debug.log*
 .idea
 .cursor
 .vscode
+.VSCodeCounter
 *.suo
 *.ntvs*
 *.njsproj

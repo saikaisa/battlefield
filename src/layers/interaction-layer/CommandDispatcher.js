@@ -247,7 +247,7 @@ export class CommandDispatcher {
       // 从队列中移除
       this.store.removeCommandFromQueue(commandId);
 
-      // 生成结果
+      // 生成执行失败的结果
       const result = {
         status: CommandStatus.FAILED,
         message: error instanceof CommandError ? error.message : `执行失败: ${error.message}`, 

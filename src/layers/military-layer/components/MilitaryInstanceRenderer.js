@@ -9,6 +9,7 @@ import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
 import { MilitaryMovementController } from "./MilitaryMovementController";
 import { ModelPoseCalculator } from "./ModelPoseCalculator";
 import { HexForceMapper } from "@/layers/interaction-layer/utils/HexForceMapper";
+import { HexVisualStyles } from "@/config/HexVisualStyles";
 
 /**
  * 军事单位实例渲染器
@@ -123,46 +124,12 @@ export class MilitaryInstanceRenderer {
   }
 
   /**
-   * 移动操作入口，控制部队沿着路径移动
-   * @param {string} forceId 部队ID
-   * @param {string[]} path 路径（六角格ID数组）
-   * @returns {Promise<boolean>} 准备移动步骤是否成功
-   */
-  async moveForceAlongPath(forceId, path) {
-    if (!path || path.length < 2) {
-      console.warn("路径过短，无法进行移动");
-      return false;
-    }
-    
-    const forceInstance = this.forceInstanceMap.get(forceId);
-    if (!forceInstance) {
-      console.error(`未找到部队实例: ${forceId}`);
-      return false;
-    }
-    
-    try {
-      // 向移动控制器发起开始移动的请求(异步操作)
-      const prepareResult = await this.movementController.prepareMove(forceId, path);
-      if (!prepareResult) {
-        console.error(`部队 ${forceId} 准备移动失败`);
-        return false;
-      }
-      
-      // 确保更新循环已启动
-      this.update();
-
-      return true;
-    } catch (error) {
-      console.error(`部队 ${forceId} 准备移动失败:`, error);
-      return false;
-    }
-  }
-
-  /**
    * 启动更新循环，每帧执行一次
    */
   update() {
     if (this._updateHandle) return;
+    
+    // TODO: 调用MilitaryBattleController进行战斗动画渲染
     
     this._updateHandle = this.viewer.scene.postUpdate.addEventListener(() => {
       // 更新所有部队
@@ -186,10 +153,10 @@ export class MilitaryInstanceRenderer {
   }
 
   /**
-   * 更新部队实例的可见性
-   * 根据当前阵营和六角格可见性设置更新部队模型的显示状态
+   * 更新部队实例和六角格的可见性
+   * 根据当前阵营和六角格可见性设置更新部队和六角格的显示状态
    */
-  updateForceInstanceVisibility() {
+  updateHexObjectVisibility() {
     const currentFaction = this.store.currentFaction;
     
     // 遍历所有部队实例，更新其可见性
@@ -206,7 +173,8 @@ export class MilitaryInstanceRenderer {
       if (!hexCell) return;
       
       // 检查六角格是否对当前阵营可见
-      const isVisible = hexCell.visibility?.visibleTo?.[currentFaction] || true;
+      const isVisible = hexCell.visibility?.visibleTo ? 
+        (hexCell.visibility.visibleTo[currentFaction] === true) : true;
       
       // 更新所有兵种实例的可见性
       forceInstance.unitInstanceMap.forEach(unitInstance => {
@@ -214,6 +182,24 @@ export class MilitaryInstanceRenderer {
           unitInstance.currentModel.show = isVisible;
         }
       });
+    });
+    
+    // 遍历所有六角格，更新不可见遮罩样式
+    this.store.getHexCells().forEach(hexCell => {
+      if (!hexCell) return;
+      
+      // 检查六角格是否对当前阵营可见
+      const isVisible = hexCell.visibility?.visibleTo ? 
+        (hexCell.visibility.visibleTo[currentFaction] === true) : true;
+      
+      // 根据可见性添加或删除不可见遮罩样式
+      if (!isVisible) {
+        // 添加不可见遮罩样式
+        hexCell.addVisualStyle(HexVisualStyles.invisible);
+      } else {
+        // 删除不可见遮罩样式
+        hexCell.removeVisualStyleByType('invisible');
+      }
     });
   }
 

@@ -56,7 +56,16 @@ export class HexGridRenderer {
       },
       { deep: true }
     );
-    
+
+    // 监听 layerIndex 的变化，更新六角格各层样式
+    watch(
+      () => this.layerIndex.value,
+      () => {
+        this.renderBaseGrid();  // 包含了mark层的渲染
+        this.renderInteractGrid();
+      }
+    );
+
     // 设置地形采样精度
     this.viewer.scene.globe.maximumScreenSpaceError = HexRendererConfig.optimization.terrainSamplingError;
   }

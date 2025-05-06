@@ -394,19 +394,17 @@ export class HexHeightCache {
   /**
    * 获取指定六角格周围的六角格ID列表
    * @private
-   * @param {string} hexId 六角格ID，格式为"H_row_col"
+   * @param {string} hexId 六角格ID
    * @returns {Array<string>} 周围六角格ID数组
    */
   _findNearbyHexIds(hexId) {
-    // 解析hexId提取行列信息
-    const parts = hexId.split('_');
-    if (parts.length !== 3 || parts[0] !== 'H') {
-      console.warn(`[HexHeightCache] 无效的六角格ID格式: ${hexId}`);
+    // 获取六角格的行和列
+    const cell = this.store.getHexCell(hexId);
+    if (!cell) {
+      console.warn(`[HexHeightCache] 无效的六角格: ${hexId}`);
       return [];
     }
-    
-    const row = parseInt(parts[1]);
-    const col = parseInt(parts[2]);
+    const { row, col } = cell.getRowCol();
     
     // 六角格行列偏移组合 (偶数行和奇数行的偏移不同)
     // 偶数行：左上、右上、左、右、左下、右下

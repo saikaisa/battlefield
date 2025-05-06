@@ -1,8 +1,10 @@
 // src\layers\geo-layer\components\CameraViewController.js
 import * as Cesium from "cesium";
 import { openGameStore } from "@/store";
-import { CameraConfig } from "@/config/GameConfig";
+import { CameraConfig, HexConfig } from "@/config/GameConfig";
 import { CameraView } from "@/models/CameraView";
+// eslint-disable-next-line no-unused-vars
+import { HexCell } from "@/models/HexCell";
 import { watch } from "vue";
 /**
  * 工具类：相机视角控制（单例模式）
@@ -63,10 +65,12 @@ export class CameraViewController {
         if (enabled) {
           // 恢复高度上限
           this.viewer.scene.screenSpaceCameraController.maximumZoomDistance = CameraConfig.maxZoomDistance;
+          // 恢复用户输入
           this._restoreUserInputs();
         } else {
           // 暂时解除高度上限
           this.viewer.scene.screenSpaceCameraController.maximumZoomDistance = Infinity;
+          // 禁用用户输入
           this._disableUserInputs();
         }
       }
@@ -81,12 +85,39 @@ export class CameraViewController {
   }
 
   /**
-   * 定点居中显示：以45度倾斜角观察一个指定经纬度的地表上的点并居中显示
-   * @param {Cesium.Cartesian3} cameraView 当前相机视角
+   * 聚焦到指定六角格
+   * @param {string} hexId 六角格ID
    * @param {number} duration 动画持续时间
-   * @param {boolean} keepRange true为保持当前相机距离，false为默认距离
+   */
+  focusOnHex(hexId, duration = 0.7) {
+    const hexCell = this.store.getHexCellById(hexId);
+    if (!hexCell) {
+      throw new Error(`无法找到六角格: ${hexId}`);
+    } 
+    const center = hexCell.getCenter();
+    const cameraView = CameraView.closeUpView(this.viewer,
+      Cesium.Cartographic.fromDegrees(center.longitude, center.latitude, center.height)
+    );
+    this.focusOnLocation(cameraView, duration);
+  }
+
+  /**
+   * 定点居中显示：以45度倾斜角观察一个指定经纬度的地表上的点并居中显示
+   * @param {CameraView} cameraView 当前相机视角对象
+   * @param {number} duration 动画持续时间
    */
   focusOnLocation(cameraView, duration = 0.7) {
+    // 如果没有传入cameraView，则恢复上一次的视角
+    if (!cameraView) {
+      const lastView = this._getLatestView();
+      if (lastView) {
+        cameraView = lastView;
+      } else {
+        // 如果没有历史视角，则使用默认视角
+        cameraView = new CameraView();
+      }
+    }
+
     this._addViewHistory(cameraView); // 移动视角前存储当前视角位置
     this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
     
@@ -110,6 +141,39 @@ export class CameraViewController {
         }
       }
     });
+  }
+
+  /**
+   * 设置顶视图俯瞰模式，可以看到整个战场区域
+   */
+  setTopDownView() {
+    // 在切换到俯瞰视角前保存当前视角，以便后续恢复
+    const currentView = CameraView.fromCurrentView(this.viewer);
+    this._addViewHistory(currentView);
+    
+    // 计算地图中心点和合适的距离
+    const bounds = HexConfig.bounds;
+    const centerLon = (bounds.maxLon + bounds.minLon) / 2;
+    const centerLat = (bounds.maxLat + bounds.minLat) / 2;
+    
+    // 计算地图对角线长度，以确定合适的相机高度
+    const diagonalDistance = Cesium.Cartesian3.distance(
+      Cesium.Cartographic.toCartesian(Cesium.Cartographic.fromDegrees(bounds.minLon, bounds.minLat)),
+      Cesium.Cartographic.toCartesian(Cesium.Cartographic.fromDegrees(bounds.maxLon, bounds.maxLat))
+    );
+    
+    // 设置适当的高度，确保可以看到整个区域，增加20%边距
+    const range = diagonalDistance * 1.2;
+    
+    // 创建俯瞰视角
+    const panoramaView = new CameraView();
+    panoramaView.position = Cesium.Cartographic.fromDegrees(centerLon, centerLat, 0);
+    panoramaView.range = range;
+    panoramaView.heading = 0; // 正北方向
+    panoramaView.pitch = Cesium.Math.toRadians(-90); // 垂直向下俯瞰
+    
+    // 飞行到俯瞰位置
+    this.focusOnLocation(panoramaView, 2.0);
   }
 
   /**
