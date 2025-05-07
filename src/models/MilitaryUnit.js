@@ -21,11 +21,25 @@ import { MilitaryConfig }   from '@/config/GameConfig';
 export class Unit {
   static #autoId = 1; // 自动递增 id
   
-  /** 新建或复用 Store 中已有的同 ID 实例 */
+  /** 创建或修改兵种 */
   static create(data) {
     const store = openGameStore();
     const existing = store.getUnitById(data.unitId);
-    if (existing) return existing;
+    if (existing) {
+      // 更新现有兵种的属性
+      if (data.unitName !== undefined) existing.unitName = data.unitName;
+      if (data.service !== undefined) existing.service = data.service;
+      if (data.category !== undefined) existing.category = data.category;
+      if (data.factionAvailability !== undefined) existing.factionAvailability = { ...data.factionAvailability };
+      if (data.attackPowerComposition !== undefined) existing.attackPowerComposition = { ...data.attackPowerComposition };
+      if (data.defensePowerComposition !== undefined) existing.defensePowerComposition = { ...data.defensePowerComposition };
+      if (data.visibilityRadius !== undefined) existing.visibilityRadius = data.visibilityRadius;
+      if (data.actionPointCostComposition !== undefined) existing.actionPointCostComposition = { ...data.actionPointCostComposition };
+      if (data.recoveryRate !== undefined) existing.recoveryRate = data.recoveryRate;
+      if (data.commandCapability !== undefined) existing.commandCapability = data.commandCapability;
+      if (data.commandRange !== undefined) existing.commandRange = data.commandRange;
+      return existing;
+    }
     const u = new Unit(data);
     store.addUnit(u);
     return u;
@@ -48,19 +62,19 @@ export class Unit {
     // ===== Rendering Attributes =====
     renderingKey = ""
   }) {
-    this.unitId = unitId ?? `U_${Unit.#autoId++}`;
-    this.unitName = unitName;
-    this.service = service;
-    this.category = category;
-    this.factionAvailability = factionAvailability;
-    this.attackPowerComposition = attackPowerComposition;
-    this.defensePowerComposition = defensePowerComposition;
-    this.visibilityRadius = visibilityRadius;
-    this.actionPointCostComposition = actionPointCostComposition;
-    this.recoveryRate = recoveryRate;
-    this.commandCapability = commandCapability;
-    this.commandRange = commandRange;
-    this.renderingKey = renderingKey;
+    this.unitId = unitId ?? `U_${Unit.#autoId++}`; // 兵种id
+    this.unitName = unitName; // 兵种名称
+    this.service = service; // 军种，这是一个数组，一个兵种可能属于多个军种 - sea, land, air
+    this.category = category; // 兵种类型
+    this.factionAvailability = factionAvailability; // 可参战阵营，是一个数组
+    this.attackPowerComposition = attackPowerComposition; // 攻击力
+    this.defensePowerComposition = defensePowerComposition; // 防御力
+    this.visibilityRadius = visibilityRadius; // 可视范围
+    this.actionPointCostComposition = actionPointCostComposition; // 行动力消耗
+    this.recoveryRate = recoveryRate; // 恢复速率
+    this.commandCapability = commandCapability; // 指挥能力
+    this.commandRange = commandRange; // 指挥范围
+    this.renderingKey = renderingKey; // 渲染关键字
   }
 
   /* ==================== 作战/行动相关属性动态计算 ===================== */
@@ -127,8 +141,8 @@ export class Force {
   }) {
     this.forceId   = forceId ?? `F_${Force.#autoId++}`;
     this.forceName = forceName;
-    this.faction   = faction;
-    this.service   = service;
+    this.faction   = faction; // 阵营，是一个字符串，一个部队只能属于一个阵营
+    this.service   = service; // 军种，是一个字符串，一个部队只能属于一个军种 - sea, land, air
     this.hexId = hexId; // updated from HexForceMapper
 
     // 兵种组成：[{ unitId, unitCount }]

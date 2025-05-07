@@ -90,13 +90,13 @@ export class MilitaryManager {
         // 计算新增和删除的部队ID
         const addedForceIds = newForceIds.filter(id => !oldForceIds.includes(id));
         const removedForceIds = oldForceIds.filter(id => !newForceIds.includes(id));
-        // 更新部队实例
-        this.renderer.updateForceInstance(newForceIds, removedForceIds);
         // 更新新增和删除部队与六角格的位置映射
         this._syncHexForceMapper(addedForceIds, removedForceIds);
         // 更新编队中的部队
         this._syncFormationSystem(addedForceIds, removedForceIds);
-        // 更新现存部队的可见性
+        // 更新部队实例
+        this.renderer.updateForceInstance(newForceIds, removedForceIds);
+        // 更新现存部队实例的可见性
         this.renderer.updateHexObjectVisibility();
       }
     );
@@ -250,12 +250,21 @@ export class MilitaryManager {
       });
     }
     
-    // 将新增的部队加入到对应阵营的默认编队中
+    // 如果新增部队没有编队，将新增的部队加入到对应阵营的默认编队中
     if (addedForceIds && addedForceIds.length > 0) {
       addedForceIds.forEach(forceId => {
-        const force = this.store.getForceById(forceId);
-        if (force) {
-          this.store.addForceToFormation(forceId, `FM_${force.faction}_default`);
+        let isInFormation = false;
+        for (const formation of this.store.formationMap.values()) {
+          if (formation.forceIdList.includes(forceId)) {
+            isInFormation = true;
+            break;
+          }
+        }
+        if (!isInFormation) {
+          const force = this.store.getForceById(forceId);
+          if (force) {
+            this.store.addForceToFormation(forceId, `FM_${force.faction}_default`);
+          }
         }
       });
     }

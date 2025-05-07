@@ -119,6 +119,8 @@ export const openGameStore = defineStore("gameStore", () => {
   const getUnits = () => Array.from(unitMap.values());
   /** 获取当前阵营可用兵种 */
   const getUnitsByFaction = faction => getUnits().filter(unit => unit.factionAvailability.includes(faction));
+  /** 移除兵种 */
+  const removeUnitById = id => unitMap.delete(id);
 
   // -------------------- 部队操作 --------------------
   /** 添加部队 */
@@ -126,6 +128,8 @@ export const openGameStore = defineStore("gameStore", () => {
     const force = Rea(data, Force); 
     forceMap.set(force.forceId, force); 
   }
+  /** 删除部队 */
+  const removeForceById = id => forceMap.delete(id);
   /** 根据 id 获取部队 */
   const getForceById = id => forceMap.get(id) || null;
   /** 获取所有部队 */
@@ -139,6 +143,8 @@ export const openGameStore = defineStore("gameStore", () => {
     const bg = Rea(data, Battlegroup); 
     battlegroupMap.set(bg.battlegroupId, bg); 
   }
+  /** 删除战斗群 */
+  const removeBattlegroupById = id => battlegroupMap.delete(id);
   /** 根据 id 获取战斗群 */
   const getBattlegroupById = id => battlegroupMap.get(id) || null;
   /** 获取所有战斗群 */
@@ -152,6 +158,8 @@ export const openGameStore = defineStore("gameStore", () => {
     const formation = Rea(data, Formation); 
     formationMap.set(formation.formationId, formation); 
   }
+  /** 删除编队 */
+  const removeFormationById = id => formationMap.delete(id);
   /** 根据 id 获取编队 */
   const getFormationById = id => formationMap.get(id) || null;
   /** 获取所有编队 */
@@ -484,23 +492,28 @@ export const openGameStore = defineStore("gameStore", () => {
     
     // 兵种方法
     addUnit,
+    removeUnitById,
     getUnitById,
     getUnits,
     getUnitsByFaction,
 
     // 部队方法
     addForce,
+    removeForceById,
     getForceById,
     getForces,
     getForcesByFaction,
-    
+
     // 战斗群方法
     addBattlegroup,
+    removeBattlegroupById,
     getBattlegroupById,
     getBattlegroups,
     getBattlegroupsByFaction,
+
     // 编队方法
     addFormation,
+    removeFormationById,
     getFormationById,
     getFormations,
     getFormationsByFaction,

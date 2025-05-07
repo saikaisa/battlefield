@@ -66,7 +66,6 @@ export class CommandDispatcher {
   constructor(viewer) {
     this.viewer = viewer;
     this.processor = CommandProcessor.getInstance(viewer);
-    this.processor.initMilitaryManager();
     this.autoModeTimer = null;
     this.store = openGameStore();
     this.gameModeManager = GameModeManager.getInstance();
@@ -350,7 +349,7 @@ export class CommandDispatcher {
     // 根据命令类型进行特定校验
     switch (command.type) {
       case CommandType.PANORAMA_MODE:
-        return true;
+        return typeof command.params.enabled === 'boolean';
       case CommandType.ORBIT_MODE:
         return typeof command.params.enabled === 'boolean';
       case CommandType.CHANGE_LAYER:
@@ -362,23 +361,23 @@ export class CommandDispatcher {
       case CommandType.ATTACK_PREPARE:
         return !!command.params.forceId;
       case CommandType.MOVE:
-        return !!command.params.forceId && Array.isArray(command.params.path);
+        return !!command.params.forceId && Array.isArray(command.params.path) && command.params.path.length > 1;
       case CommandType.ATTACK:
         return !!command.params.commandForceId && Array.isArray(command.params.supportForceIds) && !!command.params.targetHex;
       case CommandType.EDIT_UNIT:
-        return !!command.params;
+        return !!command.params.unitData;
       case CommandType.DELETE_UNIT:
         return !!command.params.unitId;
       case CommandType.CREATE_FORCE:
-        return !!command.params.hexId && !!command.params.faction && Array.isArray(command.params.composition);
+        return !!command.params.forceData;
       case CommandType.MERGE_FORCES:
-        return !!command.params.hexId && Array.isArray(command.params.forceIds) && command.params.forceIds.length > 1;
+        return !!command.params.newForceName && Array.isArray(command.params.forceIds) && command.params.forceIds.length > 1;
       case CommandType.SPLIT_FORCE:
-        return !!command.params.forceId && !!command.params.splitDetails;
+        return !!command.params.forceId && Array.isArray(command.params.splitDetails) && command.params.splitDetails.length > 1;
       case CommandType.CREATE_FORMATION:
         return !!command.params.name && !!command.params.faction;
       case CommandType.ADD_FORCE_TO_FORMATION:
-        return !!command.params.formationId && !!command.params.forceId;
+        return !!command.params.forceId && !!command.params.formationId;
       case CommandType.DELETE_FORMATION:
         return !!command.params.formationId;
       case CommandType.RESET_CAMERA:
@@ -444,72 +443,42 @@ export class CommandDispatcher {
         break;
 
       case CommandType.MOVE:
-        if (!this.processor.move) {
-          throw new CommandError('移动命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.move(params.forceId, params.path);
         break;
 
       case CommandType.ATTACK:
-        if (!this.processor.attack) {
-          throw new CommandError('攻击命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.attack(params.commandForceId, params.targetHex, params.supportForceIds);
         break;
 
       case CommandType.EDIT_UNIT:
-        if (!this.processor.editUnit) {
-          throw new CommandError('编辑兵种命令尚未实现', 'notImplemented');
-        }
-        result = await this.processor.editUnit(params);
+        result = await this.processor.editUnit(params.unitData);
         break;
 
       case CommandType.DELETE_UNIT:
-        if (!this.processor.deleteUnit) {
-          throw new CommandError('删除兵种命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.deleteUnit(params.unitId);
         break;
 
       case CommandType.CREATE_FORCE:
-        if (!this.processor.createForce) {
-          throw new CommandError('创建部队命令尚未实现', 'notImplemented');
-        }
-        result = await this.processor.createForce(params);
+        result = await this.processor.createForce(params.forceData, params.formationId || null);
         break;
       
       case CommandType.MERGE_FORCES:
-        if (!this.processor.mergeForces) {
-          throw new CommandError('合并部队命令尚未实现', 'notImplemented');
-        }
-        result = await this.processor.mergeForces(params.hexId, params.forceIds);
+        result = await this.processor.mergeForces(params.newForceName, params.forceIds, params.formationId || null);
         break;
       
       case CommandType.SPLIT_FORCE:
-        if (!this.processor.splitForce) {
-          throw new CommandError('拆分部队命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.splitForce(params.forceId, params.splitDetails);
         break;
 
       case CommandType.CREATE_FORMATION:
-        if (!this.processor.createFormation) {
-          throw new CommandError('创建编队命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.createFormation(params.name, params.faction);
         break;
         
       case CommandType.ADD_FORCE_TO_FORMATION:
-        if (!this.processor.addForceToFormation) {
-          throw new CommandError('添加部队到编队命令尚未实现', 'notImplemented');
-        }
-        result = await this.processor.addForceToFormation(params.formationId, params.forceId);
+        result = await this.processor.addForceToFormation(params.forceId, params.formationId);
         break;
         
       case CommandType.DELETE_FORMATION:
-        if (!this.processor.deleteFormation) {
-          throw new CommandError('删除编队命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.deleteFormation(params.formationId);
         break;
 
@@ -526,23 +495,14 @@ export class CommandDispatcher {
         break;
 
       case CommandType.STATISTIC:
-        if (!this.processor.toggleStatMode) {
-          throw new CommandError('统计模式命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.toggleStatMode(params.enabled);
         break;
 
       case CommandType.MOVE_PREPARE:
-        if (!this.processor.movePrepare) {
-          throw new CommandError('移动准备命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.movePrepare(params.forceId);
         break;
         
       case CommandType.ATTACK_PREPARE:
-        if (!this.processor.attackPrepare) {
-          throw new CommandError('攻击准备命令尚未实现', 'notImplemented');
-        }
         result = await this.processor.attackPrepare(params.forceId);
         break;
       
