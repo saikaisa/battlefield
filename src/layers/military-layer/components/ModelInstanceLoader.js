@@ -62,11 +62,9 @@ export class ModelInstanceLoader {
       animationList: modelConfig.animationList || []
     };
 
-    // 逐一加载所有LOD级别模型，不使用Promise.all并行加载
-    for (const lod of sortedLevels) {
+    // 并行加载所有LOD级别模型
+    const loadPromises = sortedLevels.map(async (lod) => {
       try {
-        console.log(`开始加载模型: ${renderingKey}, LOD ${lod.level}, 路径: ${lod.path}`);
-        
         // 准备模型变换矩阵
         const modelMatrix = Cesium.Matrix4.IDENTITY.clone();
         
@@ -84,26 +82,20 @@ export class ModelInstanceLoader {
         });
         
         // 添加到LOD数组
-        modelInstance.lodModels.push({
+        return {
           level: lod.level,
           distance: lod.distance,
           model: model
-        });
-        
-        console.log(`成功加载模型: ${renderingKey}, LOD ${lod.level}`);
+        };
       } catch (error) {
         console.error(`加载模型失败: ${lod.path}`, error);
-        // 记录错误但继续加载其他LOD级别
+        throw error;
       }
-    }
+    });
     
-    // 检查是否至少加载了一个LOD级别
-    if (modelInstance.lodModels.length === 0) {
-      throw new Error(`所有LOD级别加载失败: ${renderingKey}`);
-    }
-    
-    // 确保LOD级别按level排序
-    modelInstance.lodModels.sort((a, b) => a.level - b.level);
+    // 等待所有LOD模型加载完成
+    const lodResults = await Promise.all(loadPromises);
+    modelInstance.lodModels = lodResults;
     
     return modelInstance;
   }

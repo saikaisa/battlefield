@@ -92,7 +92,7 @@ export class MilitaryMovementController {
     // =========== 批量预先计算所有位置信息 ===========
     // 1. 批量计算所有路径点上的部队位置
     // 注意：第一个点直接使用当前位置，不需要计算
-    const forcePositionsResult = await this.poseCalculator.computeForcePosition(force, hexPath.slice(1));
+    const forcePositionsResult = this.poseCalculator.computeForcePosition(force, hexPath.slice(1));
     
     // 构建兵种位置查询索引，便于根据hexId快速查找
     const forcePositionsMap = {};
@@ -140,7 +140,7 @@ export class MilitaryMovementController {
     }
     
     // 3. 批量计算所有兵种单位在各路径点的位置 (包括第一个点)
-    const unitPositionsResult = await this.poseCalculator.computeUnitPosition(unitPositionParams);
+    const unitPositionsResult = this.poseCalculator.computeUnitPosition(unitPositionParams);
     
     // 构建兵种位置查询索引
     const unitPositionsMap = {};
@@ -172,7 +172,7 @@ export class MilitaryMovementController {
       startUnitPaths.set(unitInstanceId, {
         position: unitPos,
         heading: heading,
-        matrix: unitInstance.currentModel.modelMatrix.clone()
+        matrix: unitInstance.activeModel.modelMatrix.clone()
       });
     });
     
@@ -324,7 +324,7 @@ export class MilitaryMovementController {
       // 使用存储的 matrix 检查点,修正位置
       target.unitPaths.forEach((targetUnitPath, unitInstanceId) => {
         const unitInstance = forceInstance.unitInstanceMap.get(unitInstanceId);
-        unitInstance.currentModel.modelMatrix = targetUnitPath.matrix;
+        unitInstance.activeModel.modelMatrix = targetUnitPath.matrix;
       });
       // 更新状态和计时器
       movementState.isMoving = false;
@@ -351,7 +351,7 @@ export class MilitaryMovementController {
               start.heading,
               unitInstance.offset
             );
-            unitInstance.currentModel.modelMatrix = newMatrix;
+            unitInstance.activeModel.modelMatrix = newMatrix;
           }
         });
 
@@ -383,7 +383,7 @@ export class MilitaryMovementController {
             unitInstance.offset
           );
           // 更新模型矩阵
-          unitInstance.currentModel.modelMatrix = newMatrix;
+          unitInstance.activeModel.modelMatrix = newMatrix;
         }
       });
 
@@ -418,7 +418,7 @@ export class MilitaryMovementController {
             unitInstance.offset
           );
           // 更新模型矩阵
-          unitInstance.currentModel.modelMatrix = newMatrix;
+          unitInstance.activeModel.modelMatrix = newMatrix;
         }
       });
       
@@ -454,7 +454,7 @@ export class MilitaryMovementController {
           unitInstance.offset
         );
         // 更新模型矩阵
-        unitInstance.currentModel.modelMatrix = newMatrix;
+        unitInstance.activeModel.modelMatrix = newMatrix;
       }
     });
     
@@ -486,11 +486,10 @@ export class MilitaryMovementController {
             height: 0
           };
           // 计算高度插值
-          position.height = this.terrainCache.getApproxiHeight(
+          position.height = this.terrainCache.getSurfaceHeight(
             start.hexId,
             position.longitude,
             position.latitude,
-            target.hexId
           ) + MilitaryConfig.layoutConfig.unitLayout.heightOffset;
           
           // 计算矩阵
@@ -500,7 +499,7 @@ export class MilitaryMovementController {
             unitInstance.offset
           );
           // 更新模型矩阵
-          unitInstance.currentModel.modelMatrix = newMatrix;
+          unitInstance.activeModel.modelMatrix = newMatrix;
         }
       });
     return true;

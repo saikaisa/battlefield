@@ -26,7 +26,7 @@ import OverviewPanel from '@/components/hud/OverviewPanel.vue';
 import DetailInfoPanel from '@/components/hud/DetailInfoPanel.vue';
 import FormationPanel from '@/components/hud/FormationPanel.vue';
 import CommandPanel from '@/components/hud/CommandPanel.vue';
-import { MilitaryInstanceRenderer } from '@/layers/military-layer/components/MilitaryInstanceRenderer';
+
 // viewer 引用
 const viewerRef = ref(null);
 
@@ -218,7 +218,7 @@ function startDebug() {
         forceName: '红方测试部队',
         faction: 'red',
         service: 'land',
-        hexId: centerHexId,
+        hexId: 'H_0_0',
         composition: [
           { unitId: infantryId, unitCount: 100 },
           { unitId: tankId, unitCount: 50 }
@@ -265,6 +265,23 @@ function startDebug() {
       // 等待5秒聚焦到红方部队
       await new Promise(resolve => setTimeout(resolve, 5000));
       const result = await commandDispatcher.executeCommandFromUI(CommandType.FOCUS_FORCE, { forceId: redForceResult.result.data.forceId });
+
+      // 等待10秒后移动红方部队
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      const moveResult = await commandDispatcher.executeCommandFromUI(CommandType.MOVE, { 
+        forceId: redForceResult.result.data.forceId, 
+        path: [
+          'H_0_0', 
+          'H_0_1',
+          'H_1_1',
+          'H_1_2',
+          'H_1_3',
+          'H_0_3',
+          'H_1_4',
+        ] 
+      });
+      console.log(`[Debug] 移动红方部队，结果: ${moveResult.result.message}`);
+
       console.log(`[Debug] 聚焦到红方部队，结果: ${result.result.message}`);
     } catch (error) {
       console.error('[Debug] 创建测试用例失败:', error);

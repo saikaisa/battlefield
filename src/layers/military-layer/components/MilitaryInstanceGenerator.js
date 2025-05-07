@@ -63,7 +63,6 @@ export class MilitaryInstanceGenerator {
     //   force: Force, —— 部队
     //   unitInstanceMap: Map<unitInstanceId, unitInstance>, —— 兵种实例集合
     //   pose: { position: { longitude, latitude, height }, heading: number } —— 部队位置和朝向
-    //   isReady: boolean —— 标记部队实例是否准备就绪
     // }
     // unitInstanceId: `${forceId}_${renderingKey}_${index}`
     // unitInstance: {
@@ -90,111 +89,27 @@ export class MilitaryInstanceGenerator {
       }
       
       // 计算部队位置
-      const posInfo = await this.poseCalculator.computeForcePosition(force);
+      const posInfo = this.poseCalculator.computeForcePosition(force);
 
-      if (!posInfo) {
-        console.error(`无法创建部队实例: ${force.forceId}，位置计算失败`);
+      if (!posInfo || !posInfo.position || !posInfo.position.longitude) {
+        console.error(`无法创建部队实例: ${force.forceId}，位置计算失败`, posInfo);
         return null;
       }
       
-      // 创建一个包含基本数据的部队实例
       const forceInstance = {
         force: force,
-        unitInstanceMap: new Map(),
+        unitInstanceMap: await this.createUnitInstances(force),
         pose: {
           position: posInfo.position,
           heading: 0, // 初始朝向为0
         },
-        isReady: false // 初始状态为未就绪
       };
-      
-      // 先将实例添加到Map中
+      console.log(`创建部队实例: ${force.forceId}`, forceInstance);
       this.forceInstanceMap.set(force.forceId, forceInstance);
-      
-      // 计算渲染组并创建兵种实例
-      const renderingGroups = this._calculateRenderingGroups(force);
-      
-      // 获取兵种实例总数
-      let totalUnits = 0;
-      for (const count of renderingGroups.values()) {
-        totalUnits += count;
-      }
-      
-      // 如果没有需要渲染的兵种
-      if (totalUnits === 0) {
-        console.log(`部队 ${force.forceId} 没有需要渲染的兵种`);
-        forceInstance.isReady = true; // 标记为就绪
-        return forceInstance;
-      }
-      
-      let unitIndex = 0;
-      let loadedCount = 0;
-      
-      // 逐个处理渲染组
-      for (const [renderingKey, renderCount] of renderingGroups.entries()) {
-        console.log(`处理渲染组: ${renderingKey}, 数量: ${renderCount}`);
-        
-        // 为每个渲染组创建实例
-        for (let i = 0; i < renderCount; i++) {
-          // 计算环形布局位置
-          const angle = (2 * Math.PI * unitIndex) / totalUnits;
-          const radius = MilitaryConfig.layoutConfig.unitLayout.radius;
-          const localOffset = {
-            x: radius * Math.cos(angle),
-            y: radius * Math.sin(angle),
-          };
-          
-          // 创建兵种实例ID
-          const unitInstanceId = `${force.forceId}_${renderingKey}_${i}`;
-          
-          try {
-            // 加载模型实例 - 一次只加载一个，减少并行
-            console.log(`加载模型: ${unitInstanceId}`);
-            const modelInstance = await this.loader.loadModelInstance(renderingKey);
-            
-            if (!modelInstance || !modelInstance.lodModels || modelInstance.lodModels.length === 0) {
-              console.error(`加载模型实例失败: ${renderingKey}`);
-              continue;
-            }
-            
-            // 创建兵种实例
-            const unitInstance = {
-              activeLOD: -1,                          // 当前激活的LOD级别，-1表示未激活
-              activeModel: null,                      // 当前在场景中显示的模型
-              lodModels: modelInstance.lodModels,     // 所有LOD级别的模型及切换距离
-              animationList: modelInstance.animationList, // 动画列表
-              offset: modelInstance.offset,           // 模型偏移
-              localOffset: localOffset                // 兵种在部队内的相对偏移
-            };
-            
-            // 添加到兵种实例映射
-            forceInstance.unitInstanceMap.set(unitInstanceId, unitInstance);
-            unitIndex++;
-            loadedCount++;
-            
-          } catch (error) {
-            console.error(`创建兵种实例失败: ${unitInstanceId}`, error);
-            // 继续处理下一个，不中断整个流程
-          }
-        }
-      }
-      
-      // 只有当所有模型都加载完成时，才标记部队实例为就绪状态
-      if (loadedCount > 0) {
-        forceInstance.isReady = true;
-        console.log(`部队实例创建完成: ${force.forceId}, 兵种数量: ${forceInstance.unitInstanceMap.size}`);
-      } else {
-        console.error(`部队实例创建失败: ${force.forceId}，未能成功加载任何兵种模型`);
-        // 如果所有模型加载失败，则从Map中移除
-        this.forceInstanceMap.delete(force.forceId);
-        return null;
-      }
-      
+
       return forceInstance;
     } catch (error) {
       console.error(`创建部队实例失败: ${force.forceId}`, error);
-      // 如果失败，从Map中移除
-      this.forceInstanceMap.delete(force.forceId);
       return null;
     }
   }
@@ -213,6 +128,85 @@ export class MilitaryInstanceGenerator {
       });
       this.forceInstanceMap.delete(forceId);
     }
+  }
+
+  /**
+   * 创建兵种实例
+   * @param {Force} force 部队对象
+   * @returns {Promise<Map<string, Object>>} 兵种实例集合
+   */
+  async createUnitInstances(force) {
+    // 计算渲染组
+    const renderingGroups = this._calculateRenderingGroups(force);
+    const unitInstanceMap = new Map();
+
+    // 兵种实例总数
+    let maxUnitInstCount = 0;
+    renderingGroups.forEach((renderCount) => {
+      maxUnitInstCount += renderCount;
+    });
+
+    // 兵种实例索引
+    let unitInstIndex = 0;
+
+    // 并行加载兵种实例
+    const loadPromises = [];
+    
+    for (const [renderingKey, renderCount] of renderingGroups.entries()) {
+      console.log(`[DEBUG] 准备创建兵种实例: renderingKey=${renderingKey}, renderCount=${renderCount}`);
+      
+      // 为渲染组中每个兵种单位创建实例
+      for (let i = 0; i < renderCount; i++) {
+        // 计算环形布局位置
+        const angle = (2 * Math.PI * unitInstIndex) / maxUnitInstCount;
+        const radius = MilitaryConfig.layoutConfig.unitLayout.radius;
+        const localOffset = {
+          x: radius * Math.cos(angle),
+          y: radius * Math.sin(angle),
+        };
+        
+        // 创建一个兵种实例加载Promise
+        const loadPromise = (async () => {
+          try {
+            // 加载模型实例
+            const modelInstance = await this.loader.loadModelInstance(renderingKey);
+            
+            if (!modelInstance || !modelInstance.lodModels || modelInstance.lodModels.length === 0) {
+              console.error(`[MilitaryInstanceGenerator] 加载模型实例失败: ${renderingKey}`);
+              return null;
+            }
+            
+            // 创建兵种实例
+            const unitInstance = {
+              renderingKey: renderingKey,            // 渲染键
+              activeLOD: -1,                          // 当前激活的LOD级别，-1表示未激活
+              activeModel: null,                      // 当前在场景中显示的模型
+              lodModels: modelInstance.lodModels,       // 所有LOD级别的模型及切换距离
+              animationList: modelInstance.animationList, // 动画列表
+              offset: modelInstance.offset,             // 模型偏移
+              localOffset: localOffset                 // 兵种在部队内的相对偏移
+            };
+            
+            // 使用 forceId_renderingKey_index 作为 key
+            const unitInstanceId = `${force.forceId}_${renderingKey}_${i}`;
+            unitInstanceMap.set(unitInstanceId, unitInstance);
+            
+            return { id: unitInstanceId, instance: unitInstance };
+          } catch (error) {
+            console.error(`[MilitaryInstanceGenerator] 创建兵种实例失败: ${renderingKey}_${i}`, error);
+            return null;
+          }
+        })();
+        
+        loadPromises.push(loadPromise);
+        unitInstIndex++;
+      }
+    }
+    
+    // 等待所有兵种实例加载完成
+    await Promise.all(loadPromises);
+    
+    return unitInstanceMap;
   }
 
   /**

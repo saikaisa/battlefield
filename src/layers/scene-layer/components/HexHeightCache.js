@@ -576,26 +576,27 @@ export class HexHeightCache {
     }
     
     // 使用向量叉积的方法判断点是否在三角形内
-    // 更稳定的向量叉积实现
-    function sign(p1, p2, p3) {
-      return (p1.longitude - p3.longitude) * (p2.latitude - p3.latitude) - 
-             (p2.longitude - p3.longitude) * (p1.latitude - p3.latitude);
+    function crossProduct(p1, p2, p3) {
+      return (p2.longitude - p1.longitude) * (p3.latitude - p1.latitude) - 
+             (p3.longitude - p1.longitude) * (p2.latitude - p1.latitude);
     }
     
-    // 计算点p相对于三角形三个边的位置
-    const d1 = sign(p, a, b);
-    const d2 = sign(p, b, c);
-    const d3 = sign(p, c, a);
+    // 计算三次叉积
+    const cp1 = crossProduct(p, a, b);
+    const cp2 = crossProduct(p, b, c);
+    const cp3 = crossProduct(p, c, a);
     
-    // 添加浮点数容错处理
-    const TOLERANCE = 1e-9;
+    // 添加容错处理，使用相对误差
+    const tolerance = 1e-9;
+    function isSameSign(v1, v2) {
+      // 如果其中一个值接近0，认为在边界上，返回true
+      if (Math.abs(v1) < tolerance || Math.abs(v2) < tolerance) return true;
+      // 否则检查符号是否相同
+      return (v1 * v2 > 0);
+    }
     
-    // 判断点是否在边上
-    const hasNeg = (d1 < -TOLERANCE) || (d2 < -TOLERANCE) || (d3 < -TOLERANCE);
-    const hasPos = (d1 > TOLERANCE) || (d2 > TOLERANCE) || (d3 > TOLERANCE);
-    
-    // 如果所有符号相同，或某个值接近0(在边上)，则点在三角形内
-    return !(hasNeg && hasPos);
+    // 所有叉积必须同号或者有一个在边界上
+    return (isSameSign(cp1, cp2) && isSameSign(cp2, cp3) && isSameSign(cp3, cp1));
   }
 
   /**

@@ -49,7 +49,7 @@ export class ModelPoseCalculator {
    * @param {string|string[]} hexIds 六角格ID或ID数组，如不提供则使用force.hexId
    * @returns {Promise<Object|Array<Object>>} 计算后的位置 { hexId, position: {longitude, latitude, height} }
    */
-  async computeForcePosition(force, hexIds) {
+  computeForcePosition(force, hexIds) {
     // 标准化为数组形式
     const isArray = Array.isArray(hexIds);
     const hexIdArray = isArray ? hexIds : [hexIds || (force && force.hexId)];
@@ -115,7 +115,7 @@ export class ModelPoseCalculator {
    * @param {string} [params.hexId] 六角格ID
    * @returns {Object|Array<Object>} 经纬度坐标 {longitude, latitude, height} 或其数组
    */
-  async computeUnitPosition(params) {
+  computeUnitPosition(params) {
     // 标准化为数组形式
     const isArray = Array.isArray(params);
     const paramsArray = isArray ? params : [params];
@@ -136,61 +136,32 @@ export class ModelPoseCalculator {
         continue;
       }
       
-      // 验证force位置的有效性
-      if (typeof forcePose.position.longitude !== 'number' || 
-          typeof forcePose.position.latitude !== 'number') {
-        console.error('无效的部队位置坐标:', forcePose.position);
-        positions.push(null);
-        continue;
-      }
+      // 首先将兵种实例偏移根据部队朝向进行旋转
+      const rotatedOffset = GeoMathUtils.rotateOffset(localOffset, forcePose.heading || 0);
       
-      try {
-        // 首先将兵种实例偏移根据部队朝向进行旋转
-        const rotatedOffset = GeoMathUtils.rotateOffset(localOffset || {x: 0, y: 0}, forcePose.heading || 0);
-        
-        // 将旋转后的兵种实例偏移转换为经纬度偏移
-        const forcePos = forcePose.position;
-        const unitPos = GeoMathUtils.metersToLatLon(forcePos, rotatedOffset);
-        
-        // 确保计算出的经纬度是有效的
-        if (typeof unitPos.longitude !== 'number' || typeof unitPos.latitude !== 'number') {
-          console.error('计算偏移后的经纬度无效:', unitPos);
-          // 回退到部队位置
-          unitPos.longitude = forcePos.longitude;
-          unitPos.latitude = forcePos.latitude;
-        }
-        
-        // 获取表面高度
-        let surfaceHeight = null;
-        try {
-          surfaceHeight = this.terrainCache.getSurfaceHeight(
-            hexId,
-            unitPos.longitude,
-            unitPos.latitude
-          );
-        } catch (error) {
-          console.error('获取地形高度失败:', error);
-          // surfaceHeight将保持为null
-        }
-        
-        // 添加到位置列表
-        positions.push({
+      // 将旋转后的兵种实例偏移转换为经纬度偏移
+      const forcePos = forcePose.position;
+      const unitPos = GeoMathUtils.metersToLatLon(forcePos, rotatedOffset);
+      
+      // 获取表面高度
+      const surfaceHeight = this.terrainCache.getSurfaceHeight(
+        hexId,
+        unitPos.longitude,
+        unitPos.latitude
+      );
+      
+      // 添加到位置列表
+      positions.push({
+        hexId: hexId,
+        position: {
           longitude: unitPos.longitude,
           latitude: unitPos.latitude,
           // 如果获取失败则使用部队高度 + 默认偏移
           height: (surfaceHeight !== null ? 
             surfaceHeight : 
             forcePos.height) + MilitaryConfig.layoutConfig.unitLayout.heightOffset
-        });
-      } catch (error) {
-        console.error('计算兵种位置时发生错误:', error);
-        // 在失败的情况下，仍返回部队位置作为回退
-        positions.push({
-          longitude: forcePose.position.longitude,
-          latitude: forcePose.position.latitude,
-          height: forcePose.position.height + MilitaryConfig.layoutConfig.unitLayout.heightOffset
-        });
-      }
+        }
+      });
     }
     
     // 根据输入类型返回对应格式

@@ -221,7 +221,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/missiletank_lod2.glb" }
       ],
       transform: {
-        scale: 50.0,
+        scale: 1.0,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
@@ -247,7 +247,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/soldier_lod2.glb" }
       ],
       transform: {
-        scale: 100,
+        scale: 1.0,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [ 
