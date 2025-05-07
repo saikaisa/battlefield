@@ -184,12 +184,35 @@ export class HexHeightCache {
       console.warn(`[HexHeightCache] 六角格 ${hexId} 没有高度缓存，返回0`);
       return 0;
     }
+
+    // ========= DEBUG 级别1：六角格基本信息 =========
+    console.log(`[DEBUG] 六角格 ${hexId} 中心点: (${hexCache.center.longitude}, ${hexCache.center.latitude})`);
+    console.log(`[DEBUG] 查询点: (${longitude}, ${latitude})`);
+    
+    // 如果是六角格中心，直接返回中心高度 + 高度偏移
+    const EPSILON = 1e-6;
+    if (Math.abs(longitude - hexCache.center.longitude) < EPSILON && 
+        Math.abs(latitude - hexCache.center.latitude) < EPSILON) {
+      console.log(`[DEBUG] 精确中心点，直接返回中心高度: ${hexCache.center.height + hexCache.heightOffset}`);
+      return hexCache.center.height + hexCache.heightOffset;
+    }
+    
+    // ========= DEBUG 级别2：详细坐标 =========
+    hexCache.vertices.forEach((v, i) => {
+      console.log(`[DEBUG] 顶点${i}: (${v.longitude}, ${v.latitude})`);
+    });
+    
+    // 检查目标点到中心点的距离（经纬度差值）
+    const dLon = Math.abs(longitude - hexCache.center.longitude);
+    const dLat = Math.abs(latitude - hexCache.center.latitude);
+    console.log(`[DEBUG] 点到中心距离: dLon=${dLon}, dLat=${dLat}`);
     
     // 查找点是否在当前六角格的三角形内
     const triangle = this._findContainingTriangle(hexCache, longitude, latitude);
     
     // 如果点在当前六角格内
     if (triangle) {
+      console.log(`[DEBUG] 找到包含三角形，索引: ${triangle.index}`);
       // 计算该点在地形上的高度
       const terrainHeight = this._calcInterpolatedHeight(
         {longitude, latitude},
@@ -199,33 +222,72 @@ export class HexHeightCache {
       );
       
       // 计算表面高度 = 地形高度 + 高度偏移
-      return terrainHeight + hexCache.heightOffset;
+      const finalHeight = terrainHeight + hexCache.heightOffset;
+      console.log(`[DEBUG] 插值高度: ${terrainHeight}, 最终高度: ${finalHeight}`);
+      return finalHeight;
     } 
     
     // 如果点不在当前六角格内，尝试查找是否在周围六角格内
+    console.log(`[DEBUG] 当前六角格中未找到三角形，尝试检查周围六角格`);
     const nearbyHexIds = this._findNearbyHexIds(hexId);
+    console.log(`[DEBUG] 周围六角格ID: ${nearbyHexIds}`);
+    
     for (const neighborId of nearbyHexIds) {
       const neighborCache = this.hexHeightCache.get(neighborId);
       if (!neighborCache) continue;
       
+      console.log(`[DEBUG] 检查周围六角格: ${neighborId}`);
+      
       // 检查点是否在邻居六角格的三角形内
       const neighborTriangle = this._findContainingTriangle(neighborCache, longitude, latitude);
       if (neighborTriangle) {
+        console.log(`[DEBUG] 在周围六角格 ${neighborId} 中找到三角形，索引: ${neighborTriangle.index}`);
         // 插值计算该点的高度
         const terrainHeight = this._calcInterpolatedHeight(
-            {longitude, latitude},
+          {longitude, latitude},
           neighborTriangle.points[0],
           neighborTriangle.points[1],
           neighborTriangle.points[2]
         );
         
         // 计算表面高度 = 地形高度 + 高度偏移
-        return terrainHeight + neighborCache.heightOffset;
+        const finalHeight = terrainHeight + neighborCache.heightOffset;
+        console.log(`[DEBUG] 邻居六角格插值高度: ${terrainHeight}, 最终高度: ${finalHeight}`);
+        return finalHeight;
       }
     }
 
-    console.warn(`[HexHeightCache] 无法为位置 (${longitude.toFixed(6)}, ${latitude.toFixed(6)}) 找到表面高度`);
-    return 0;
+    // 如果所有六角格中都找不到，使用最近的顶点或中心点高度
+    console.warn(`[HexHeightCache] 无法为位置 (${longitude.toFixed(6)}, ${latitude.toFixed(6)}) 找到表面高度，使用最近顶点高度代替`);
+    
+    // 找到最近的顶点或中心点
+    let minDist = Number.MAX_VALUE;
+    let closestHeight = hexCache.center.height;
+    
+    // 检查中心点
+    const distToCenter = Math.sqrt(
+      Math.pow(longitude - hexCache.center.longitude, 2) + 
+      Math.pow(latitude - hexCache.center.latitude, 2)
+    );
+    if (distToCenter < minDist) {
+      minDist = distToCenter;
+      closestHeight = hexCache.center.height;
+    }
+    
+    // 检查六个顶点
+    hexCache.vertices.forEach(vertex => {
+      const dist = Math.sqrt(
+        Math.pow(longitude - vertex.longitude, 2) + 
+        Math.pow(latitude - vertex.latitude, 2)
+      );
+      if (dist < minDist) {
+        minDist = dist;
+        closestHeight = vertex.height;
+      }
+    });
+    
+    console.log(`[DEBUG] 使用最近点高度: ${closestHeight}, 最终高度: ${closestHeight + hexCache.heightOffset}`);
+    return closestHeight + hexCache.heightOffset;
   }
 
   /**
@@ -399,7 +461,7 @@ export class HexHeightCache {
    */
   _findNearbyHexIds(hexId) {
     // 获取六角格的行和列
-    const cell = this.store.getHexCell(hexId);
+    const cell = this.store.getHexCellById(hexId);
     if (!cell) {
       console.warn(`[HexHeightCache] 无效的六角格: ${hexId}`);
       return [];
@@ -505,33 +567,35 @@ export class HexHeightCache {
    * @returns {boolean} 是否在三角形内
    */
   _isPointInTriangle(p, a, b, c) {
-    // 计算重心坐标
-    const v0x = c.longitude - a.longitude;
-    const v0y = c.latitude - a.latitude;
-    const v1x = b.longitude - a.longitude;
-    const v1y = b.latitude - a.latitude;
-    const v2x = p.longitude - a.longitude;
-    const v2y = p.latitude - a.latitude;
-
-    const d00 = v0x * v0x + v0y * v0y;
-    const d01 = v0x * v1x + v0y * v1y;
-    const d11 = v1x * v1x + v1y * v1y;
-    const d20 = v2x * v0x + v2y * v0y;
-    const d21 = v2x * v1x + v2y * v1y;
-
-    const denom = d00 * d11 - d01 * d01;
-    
-    // 确保分母不为0
-    if (Math.abs(denom) < 1e-9) {
-      return false;
+    // 特殊情况：如果是中心点则直接返回true
+    // 使用一个很小的阈值进行判断，以应对可能的浮点数精度问题
+    const EPSILON = 1e-6;
+    if (Math.abs(p.longitude - a.longitude) < EPSILON && 
+        Math.abs(p.latitude - a.latitude) < EPSILON) {
+      return true;
     }
     
-    const v = (d11 * d20 - d01 * d21) / denom;
-    const w = (d00 * d21 - d01 * d20) / denom;
-    const u = 1.0 - v - w;
+    // 使用向量叉积的方法判断点是否在三角形内
+    // 更稳定的向量叉积实现
+    function sign(p1, p2, p3) {
+      return (p1.longitude - p3.longitude) * (p2.latitude - p3.latitude) - 
+             (p2.longitude - p3.longitude) * (p1.latitude - p3.latitude);
+    }
     
-    // 如果u,v,w都大于等于0，且和接近1，则点在三角形内
-    return u >= 0 && v >= 0 && w >= 0 && Math.abs(u + v + w - 1.0) < 1e-6;
+    // 计算点p相对于三角形三个边的位置
+    const d1 = sign(p, a, b);
+    const d2 = sign(p, b, c);
+    const d3 = sign(p, c, a);
+    
+    // 添加浮点数容错处理
+    const TOLERANCE = 1e-9;
+    
+    // 判断点是否在边上
+    const hasNeg = (d1 < -TOLERANCE) || (d2 < -TOLERANCE) || (d3 < -TOLERANCE);
+    const hasPos = (d1 > TOLERANCE) || (d2 > TOLERANCE) || (d3 > TOLERANCE);
+    
+    // 如果所有符号相同，或某个值接近0(在边上)，则点在三角形内
+    return !(hasNeg && hasPos);
   }
 
   /**

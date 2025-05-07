@@ -4,7 +4,7 @@ import { watch } from 'vue';
 import { openGameStore } from '@/store';
 // eslint-disable-next-line no-unused-vars
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
-import { ModelTemplateLoader } from './components/ModelTemplateLoader';
+import { ModelInstanceLoader } from './components/ModelInstanceLoader';
 import { MilitaryInstanceRenderer } from './components/MilitaryInstanceRenderer';
 import { HexForceMapper } from '@/layers/interaction-layer/utils/HexForceMapper';
 // import { showWarning, showError, showSuccess } from '@/layers/interaction-layer/utils/MessageBox';
@@ -49,7 +49,6 @@ export class MilitaryManager {
     this.loader = null;
     this.generator = null;
     this.renderer = null;
-    // this.panelManager = null;
     
     this._stopForceWatch = null;
     this._stopHexWatch = null;
@@ -59,10 +58,9 @@ export class MilitaryManager {
 
   /**
    * 初始化管理器及其组件
-   * @param {Function} onProgress 加载进度回调 (当前进度, 总数)
    * @returns {Promise<boolean>} 初始化是否成功
    */
-  async init(onProgress) {
+  async init() {
     // 初始化 HexForceMapper
     this._initHexForceMapper();
 
@@ -70,8 +68,7 @@ export class MilitaryManager {
     this._initFormationSystem();
 
     // 初始化模型加载器
-    this.loader = ModelTemplateLoader.getInstance(this.viewer);
-    await this.loader.preloadModelTemplates(onProgress);
+    this.loader = ModelInstanceLoader.getInstance(this.viewer);
 
     // 初始化军事单位实例生成器
     this.generator = MilitaryInstanceGenerator.getInstance(this.viewer);
@@ -90,6 +87,7 @@ export class MilitaryManager {
         // 计算新增和删除的部队ID
         const addedForceIds = newForceIds.filter(id => !oldForceIds.includes(id));
         const removedForceIds = oldForceIds.filter(id => !newForceIds.includes(id));
+        console.log(`[MilitaryManager] 部队变化: 新增${addedForceIds}, 删除${removedForceIds}`);
         // 更新新增和删除部队与六角格的位置映射
         this._syncHexForceMapper(addedForceIds, removedForceIds);
         // 更新编队中的部队
@@ -142,7 +140,7 @@ export class MilitaryManager {
         this.renderer.updateHexObjectVisibility();
       }
     );
-
+    
     return true;
   }
 
@@ -291,8 +289,9 @@ export class MilitaryManager {
       this._stopHexVisibilityWatch = null;
     }
     
-    this.renderer?.dispose();
     this.loader?.dispose();
+    this.generator?.dispose();
+    this.renderer?.dispose();
     
     // 清理单例
     MilitaryManager.#instance = null;

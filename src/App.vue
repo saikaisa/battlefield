@@ -3,12 +3,12 @@
   <div class="app-container">
     <div id="cesiumContainer" class="cesium-container"></div>
 
-    <!-- Viewer 初始化完成后再渲染 Panel 等 UI -->
+    <!-- Viewer 初始化完成后再渲染面板 -->
     <div v-if="gameReady">
-      <!-- <ScenePanel />
-      <MilitaryPanel />
-      <CommandPanel />
-      <router-view /> -->
+      <OverviewPanel /> <!-- 概览面板 -->
+      <DetailInfoPanel /> <!-- 详情信息面板 -->
+      <FormationPanel /> <!-- 编队列表 -->
+      <CommandPanel /> <!-- 命令管理面板 -->
     </div>
 
     <div v-else class="loading">
@@ -18,63 +18,49 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted, onBeforeUnmount, onUnmounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount, onUnmounted } from 'vue';
 import { SceneManager } from '@/layers/scene-layer/SceneManager';
-// import { ScenePanelManager } from '@/layers/interaction-layer/legacy/ScenePanelManager';
-// import ScenePanel from '@/components/hud/ScenePanel.vue';
-// import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
-// import MilitaryPanel from '@/components/hud/MilitaryPanel.vue';
-// import { MilitaryPanelManager } from '@/layers/interaction-layer/legacy/MilitaryPanelManager';
-// import CommandPanel from '@/components/hud/CommandPanel.vue';
-// import { CommandDispatcher } from '@/layers/interaction-layer/CommandDispatcher';
-
-// 创建共享组件状态
+import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
+import { CommandDispatcher } from '@/layers/interaction-layer/CommandDispatcher';
+import OverviewPanel from '@/components/hud/OverviewPanel.vue';
+import DetailInfoPanel from '@/components/hud/DetailInfoPanel.vue';
+import FormationPanel from '@/components/hud/FormationPanel.vue';
+import CommandPanel from '@/components/hud/CommandPanel.vue';
+import { MilitaryInstanceRenderer } from '@/layers/military-layer/components/MilitaryInstanceRenderer';
+// viewer 引用
 const viewerRef = ref(null);
-provide('cesiumViewer', viewerRef);
 
 // 控制 UI 是否可加载
 const gameReady = ref(false);
 
 let sceneManager;
-// let scenePanelManager;
-// let militaryManager;
-// let militaryPanelManager;
-// let commandDispatcher;
+let militaryManager;
+let commandDispatcher;
 
-// 生命周期钩子
 onMounted(async () => {
   // 初始化场景管理器
   sceneManager = SceneManager.getInstance('cesiumContainer');
-  const viewer = await sceneManager.init();
-  viewerRef.value = viewer;
-
-  // 初始化场景控制面板管理器
-  // scenePanelManager = ScenePanelManager.getInstance(viewer);
-  // sceneManager.setPanelManager(scenePanelManager);
-  // 提供场景面板管理器给子组件
-  // provide('scenePanelManager', scenePanelManager);
+  viewerRef.value = await sceneManager.init();
 
   // 初始化军事单位管理器
-  // militaryManager = new MilitaryManager(viewer);
-  // await militaryManager.init((done,total)=>console.log(`unit preload ${done}/${total}`));
+  militaryManager = MilitaryManager.getInstance(viewerRef.value);
+  await militaryManager.init();
 
-  // 初始化军事单位控制面板管理器
-  // militaryPanelManager = new MilitaryPanelManager(viewer);
-  // militaryManager.setPanelManager(militaryPanelManager);
-  // 提供军事面板管理器给子组件
-  // provide('militaryPanelManager', militaryPanelManager);
-  
   // 初始化命令分发器
-  // commandDispatcher = CommandDispatcher.getInstance(viewer);
+  commandDispatcher = CommandDispatcher.getInstance(viewerRef.value);
+  commandDispatcher.init(); // 初始化命令处理器和游戏模式管理器
 
   // 初始化完成
   gameReady.value = true;
+
+  // 初始化调试信息
+  startDebug();
 });
 
 onBeforeUnmount(() => {
-  // militaryManager?.dispose();
-  sceneManager?.destroy();
-  // commandDispatcher?.destroy();
+  // sceneManager?.destroy();
+  militaryManager?.destroy();
+  commandDispatcher?.destroy();
 });
 
 onUnmounted(() => {
@@ -83,6 +69,208 @@ onUnmounted(() => {
     viewerRef.value = null;
   }
 });
+
+// 创建一些测试用例
+function startDebug() {
+  // 导入需要的模块
+  const { CommandType } = require('@/config/CommandConfig');
+  const { openGameStore } = require('@/store');
+  const store = openGameStore();
+  
+  console.log('[Debug] 开始创建测试用例...');
+  
+  // 创建两个测试兵种
+  const infantry = {
+    unitId: null,  // 自动生成ID
+    unitName: '普通步兵',
+    service: ['land'],
+    category: '步兵',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 20,
+      domainFactor: { land: 1.0, sea: 0.2, air: 0.5 },
+      terrainFactor: { plain: 1.0, hill: 0.8, mountain: 0.6, water: 0.1 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 15,
+      domainFactor: { land: 1.0, sea: 0.2, air: 0.3 },
+      terrainFactor: { plain: 1.0, hill: 1.2, mountain: 1.5, water: 0.1 }
+    },
+    visibilityRadius: 2,
+    actionPointCostComposition: {
+      baseActionPointCost: 10,
+      terrainFactor: { plain: 1.0, hill: 1.5, mountain: 2.0, water: 5.0 }
+    },
+    recoveryRate: 10,
+    commandCapability: 1.2,
+    commandRange: 1,
+    renderingKey: "soldier"
+  };
+  
+  const tank = {
+    unitId: null,
+    unitName: '坦克',
+    service: ['land'],
+    category: '装甲',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 40,
+      domainFactor: { land: 1.0, sea: 0.1, air: 0.7 },
+      terrainFactor: { plain: 1.0, hill: 0.8, mountain: 0.4, water: 0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 30,
+      domainFactor: { land: 1.0, sea: 0.1, air: 0.5 },
+      terrainFactor: { plain: 1.0, hill: 0.9, mountain: 0.7, water: 0 }
+    },
+    visibilityRadius: 3,
+    actionPointCostComposition: {
+      baseActionPointCost: 15,
+      terrainFactor: { plain: 1.0, hill: 1.8, mountain: 3.0, water: 10.0 }
+    },
+    recoveryRate: 5,
+    commandCapability: 1.5,
+    commandRange: 3,
+    renderingKey: "missiletank"
+  };
+  
+  // 查找六角格网中心位置
+  const hexCells = store.getHexCells();
+  if (hexCells.length === 0) {
+    console.error('[Debug] 没有找到六角格');
+    return;
+  }
+  
+  // 计算六角格网的中心（大致计算，找出行列中间的六角格）
+  const rows = new Set();
+  const cols = new Set();
+  hexCells.forEach(cell => {
+    const { row, col } = cell.getRowCol();
+    rows.add(row);
+    cols.add(col);
+  });
+  
+  const rowArray = Array.from(rows).sort((a, b) => a - b);
+  const colArray = Array.from(cols).sort((a, b) => a - b);
+  
+  const centerRow = rowArray[Math.floor(rowArray.length / 2)];
+  const centerCol = colArray[Math.floor(colArray.length / 2)];
+  
+  // 查找中心六角格和邻近六角格
+  const centerHexId = `H_${centerRow}_${centerCol}`;
+  const centerHex = store.getHexCellById(centerHexId);
+  
+  if (!centerHex) {
+    console.error(`[Debug] 没有找到中心六角格 ${centerHexId}`);
+    return;
+  }
+
+  console.log(`[Debug] 找到中心六角格: ${centerHexId}`);
+  
+  // 查找相邻六角格
+  let neighborHex = null;
+  const { row, col } = centerHex.getRowCol();
+  
+  // 根据行号奇偶尝试获取相邻六角格
+  const offsets = row % 2 === 0 
+    ? [[-1,-1], [-1,0], [0,-1], [0,1], [1,-1], [1,0]] // 偶数行
+    : [[-1,0], [-1,1], [0,-1], [0,1], [1,0], [1,1]];  // 奇数行
+  
+  for (const [rowOffset, colOffset] of offsets) {
+    const neighborRow = row + rowOffset;
+    const neighborCol = col + colOffset;
+    const neighborId = `H_${neighborRow}_${neighborCol}`;
+    const hex = store.getHexCellById(neighborId);
+    
+    if (hex) {
+      neighborHex = hex;
+      console.log(`[Debug] 找到邻近六角格: ${neighborId}`);
+      break;
+    }
+  }
+  
+  if (!neighborHex) {
+    console.error('[Debug] 没有找到邻近六角格');
+    return;
+  }
+  
+  // 依次创建两个兵种
+  createUnitAndForces();
+  
+  // 异步创建兵种和部队（确保按顺序执行）
+  async function createUnitAndForces() {
+    try {
+      // 1. 创建步兵兵种
+      console.log('[Debug] 开始创建步兵兵种...');
+      const infantryResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: infantry });
+      const infantryId = infantryResult.result.data.unitId;
+      console.log(`[Debug] 步兵兵种创建成功，ID: ${infantryId}`);
+      
+      // 2. 创建坦克兵种
+      console.log('[Debug] 开始创建坦克兵种...');
+      const tankResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: tank });
+      const tankId = tankResult.result.data.unitId;
+      console.log(`[Debug] 坦克兵种创建成功，ID: ${tankId}`);
+      
+      // 3. 创建红方部队（在中心六角格）
+      console.log('[Debug] 开始创建红方部队...');
+      const redForceData = {
+        forceName: '红方测试部队',
+        faction: 'red',
+        service: 'land',
+        hexId: centerHexId,
+        composition: [
+          { unitId: infantryId, unitCount: 100 },
+          { unitId: tankId, unitCount: 50 }
+        ],
+        troopStrength: 100,
+        combatChance: 1,
+        actionPoints: 100
+      };
+      
+      const redForceResult = await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
+        forceData: redForceData,
+        formationId: 'FM_red_default'
+      });
+      const store = openGameStore();
+      console.log(`[Debug] 红方部队创建成功，ID: ${store.getForceById(redForceResult.result.data.forceId).forceId}`);
+      
+      // 4. 创建蓝方部队（在邻近六角格）
+      console.log('[Debug] 开始创建蓝方部队...');
+      const blueForceData = {
+        forceName: '蓝方测试部队',
+        faction: 'blue',
+        service: 'land',
+        hexId: neighborHex.hexId,
+        composition: [
+          { unitId: infantryId, unitCount: 80 },
+          { unitId: tankId, unitCount: 40 }
+        ],
+        troopStrength: 100,
+        combatChance: 1,
+        actionPoints: 100
+      };
+      
+      const blueForceResult = await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
+        forceData: blueForceData,
+        formationId: 'FM_blue_default'
+      });
+      console.log(`[Debug] 蓝方部队创建成功，ID: ${store.getForceById(blueForceResult.result.data.forceId).forceId}`);
+      
+      console.log('[Debug] 测试用例创建完成');
+
+      // const mr = MilitaryInstanceRenderer.getInstance(viewerRef.value);
+      // mr.updateForceInstance();
+
+      // 等待5秒聚焦到红方部队
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      const result = await commandDispatcher.executeCommandFromUI(CommandType.FOCUS_FORCE, { forceId: redForceResult.result.data.forceId });
+      console.log(`[Debug] 聚焦到红方部队，结果: ${result.result.message}`);
+    } catch (error) {
+      console.error('[Debug] 创建测试用例失败:', error);
+    }
+  }
+}
 </script>
 
 <style>

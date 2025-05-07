@@ -209,7 +209,11 @@ export class MilitaryMovementController {
         unitPaths.set(unitInstanceId, {
           position: unitPos,
           heading: unitHeading,
-          matrix: this.poseCalculator.computeUnitModelMatrix(unitPos, unitHeading)
+          matrix: this.poseCalculator.computeModelMatrix(
+            unitPos, 
+            unitHeading,
+            unitInstance.offset
+          )
         });
       });
 
@@ -342,9 +346,10 @@ export class MilitaryMovementController {
           const unitInstance = forceInstance.unitInstanceMap.get(unitInstanceId);
           if (startUnitPath && unitInstance) {              
             // 更新模型矩阵
-            const newMatrix = this.poseCalculator.computeUnitModelMatrix(
+            const newMatrix = this.poseCalculator.computeModelMatrix(
               startUnitPath.position,
-              start.heading
+              start.heading,
+              unitInstance.offset
             );
             unitInstance.currentModel.modelMatrix = newMatrix;
           }
@@ -372,9 +377,10 @@ export class MilitaryMovementController {
           const newHeading = GeoMathUtils.lerpAngle(startHeading, targetHeading, turnProgress);
 
           // 计算矩阵
-          const newMatrix = this.poseCalculator.computeUnitModelMatrix(
+          const newMatrix = this.poseCalculator.computeModelMatrix(
             startUnitPath.position,
-            newHeading
+            newHeading,
+            unitInstance.offset
           );
           // 更新模型矩阵
           unitInstance.currentModel.modelMatrix = newMatrix;
@@ -406,9 +412,10 @@ export class MilitaryMovementController {
         const unitInstance = forceInstance.unitInstanceMap.get(unitInstanceId);
         if (targetUnitPath && unitInstance) {              
           // 计算矩阵
-          const newMatrix = this.poseCalculator.computeUnitModelMatrix(
+          const newMatrix = this.poseCalculator.computeModelMatrix(
             startUnitPath.position,
-            targetUnitPath.heading  // 让每个兵种模型朝向各自的目标点
+            targetUnitPath.heading,  // 让每个兵种模型朝向各自的目标点
+            unitInstance.offset
           );
           // 更新模型矩阵
           unitInstance.currentModel.modelMatrix = newMatrix;
@@ -441,9 +448,10 @@ export class MilitaryMovementController {
         const newHeading = GeoMathUtils.lerpAngle(startHeading, targetHeading, turnProgress);
 
         // 计算矩阵
-        const newMatrix = this.poseCalculator.computeUnitModelMatrix(
+        const newMatrix = this.poseCalculator.computeModelMatrix(
           startUnitPath.position,
-          newHeading
+          newHeading,
+          unitInstance.offset
         );
         // 更新模型矩阵
         unitInstance.currentModel.modelMatrix = newMatrix;
@@ -486,9 +494,10 @@ export class MilitaryMovementController {
           ) + MilitaryConfig.layoutConfig.unitLayout.heightOffset;
           
           // 计算矩阵
-          const newMatrix = this.poseCalculator.computeUnitModelMatrix(
+          const newMatrix = this.poseCalculator.computeModelMatrix(
             position,
-            targetUnitPath.heading
+            targetUnitPath.heading,
+            unitInstance.offset
           );
           // 更新模型矩阵
           unitInstance.currentModel.modelMatrix = newMatrix;

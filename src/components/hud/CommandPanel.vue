@@ -74,20 +74,20 @@
               <div class="column handle-column"></div>
             </div>
           
-          <!-- 可拖拽的命令列表 -->
-          <draggable
-            v-model="draggedQueueCommands"
-            item-key="id"
-            handle=".drag-handle"
-            ghost-class="ghost"
-            :disabled="autoMode || isExecuting"
-            @end="handleDragEnd"
+            <!-- 可拖拽的命令列表 -->
+            <draggable
+              v-model="draggedQueueCommands"
+              item-key="id"
+              handle=".drag-handle"
+              ghost-class="ghost"
+              :disabled="autoMode || isExecuting"
+              @end="handleDragEnd"
               class="command-table-body"
-          >
-            <!-- 单个命令项模板 -->
-            <template #item="{ element }">
+            >
+              <!-- 单个命令项模板 -->
+              <template #item="{ element }">
                 <!-- 命令项的status颜色样式及高亮样式 -->
-              <div 
+                <div 
                   class="command-table-row"
                   :class="[
                     commandStatusClass(element.status),
@@ -117,11 +117,11 @@
                   <div class="column handle-column">
                     <div class="drag-handle" v-if="!autoMode && !isExecuting">
                       <i class="el-icon-menu"></i>
+                    </div>
+                  </div>
                 </div>
-                </div>
-              </div>
-            </template>
-          </draggable>
+              </template>
+            </draggable>
           </div>
         </el-tab-pane>
         
@@ -330,7 +330,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { showSuccess, showError, showWarning } from '@/layers/interaction-layer/utils/MessageBox';
-import draggable from 'vuedraggable';
+import { VueDraggableNext as draggable } from 'vue-draggable-next';
 import { CommandLimit, CommandType, CommandName, CommandSource, CommandStatus, ApiConfig } from '@/config/CommandConfig';
 import { GameMode, GameModeNames } from '@/config/GameModeConfig';
 

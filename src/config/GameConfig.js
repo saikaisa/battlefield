@@ -159,25 +159,8 @@ export const MilitaryConfig = {
     },
   },
 
-  // 模型资源路径与LOD配置
+  // 兵种模型资源路径与LOD配置
   models: {
-    // 子弹模型
-    bullet: {
-      missile: {
-        path: "/assets/models/missile.glb",
-        transform: {
-          scale: 1.0,
-          offset: { x: 0, y: 0, z: 0 }
-        }
-      },
-      shell: {
-        path: "/assets/models/shell.glb",
-        transform: {
-          scale: 1.0,
-          offset: { x: 0, y: 0, z: 0 }
-        }
-      }
-    },
     // 兵种模型
     ambulance: {
       lod: [
@@ -189,7 +172,8 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 0 }
       },
-      animationList: []
+      animationList: [],
+      priority: 2
     },
     helicopter1: {
       lod: [
@@ -201,7 +185,8 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 100 }
       },
-      animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ]
+      animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
+      priority: 2
     },
     helicopter2: {
       lod: [
@@ -213,7 +198,8 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 100 }
       },
-      animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ]
+      animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
+      priority: 2
     },
     jet: {
       lod: [
@@ -225,7 +211,8 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 80 }
       },
-      animationList: []
+      animationList: [],
+      priority: 2
     },
     missiletank: {
       lod: [
@@ -234,10 +221,11 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/missiletank_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 50.0,
         offset: { x: 0, y: 0, z: 0 }
       },
-      animationList: []
+      animationList: [],
+      priority: 2
     },
     sailboat: {
       lod: [
@@ -249,7 +237,8 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 0 }
       },
-      animationList: []
+      animationList: [],
+      priority: 1
     },
     soldier: {
       lod: [
@@ -258,13 +247,14 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/soldier_lod2.glb" }
       ],
       transform: {
-        scale: 0.5,
+        scale: 100,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [ 
         { name: 'Idle', loop: Cesium.ModelAnimationLoop.REPEAT },
         { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT }
-       ]
+       ],
+       priority: 1
     },
     spydrone: {
       lod: [
@@ -276,7 +266,8 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 100 }
       },
-      animationList: []
+      animationList: [],
+      priority: 2
     },
     tank: {
       lod: [
@@ -288,7 +279,8 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 0 }
       },
-      animationList: []
+      animationList: [],
+      priority: 2
     },
     vehicle: {
       lod: [
@@ -300,7 +292,8 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 0 }
       },
-      animationList: []
+      animationList: [],
+      priority: 2
     },
     warship: {
       lod: [
@@ -312,7 +305,26 @@ export const MilitaryConfig = {
         scale: 2.0,
         offset: { x: 0, y: 0, z: 0 }
       },
-      animationList: []
+      animationList: [],
+      priority: 3
     },
   },
+  // 子弹模型资源路径与LOD配置
+  bullets: {
+    // 子弹模型
+    missile: {
+      path: "/assets/models/missile.glb",
+      transform: {
+        scale: 1.0,
+        offset: { x: 0, y: 0, z: 0 }
+      }
+    },
+    shell: {
+      path: "/assets/models/shell.glb",
+      transform: {
+        scale: 1.0,
+        offset: { x: 0, y: 0, z: 0 }
+      }
+    }
+  }
 };

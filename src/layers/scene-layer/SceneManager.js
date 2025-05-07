@@ -52,7 +52,6 @@ export class SceneManager {
     this.hexGridRenderer = null;
     this.cameraViewController = null;
     this.screenInteractor = null;
-    // this.panelManager = null;
   }
 
   /**
@@ -129,79 +128,20 @@ export class SceneManager {
     }
   }
 
-  // /**
-  //  * 将 ScenePanelManager 挂载进来，以后从 this.panelManager 调用
-  //  * @param {ScenePanelManager} pm
-  //  */
-  // setPanelManager(pm) {
-  //   this.panelManager = pm;
-  //   this._bindPanelManager();
-  // }
-
-  // /**
-  //  * 绑定 ScenePanelManager 上的回调到 Cesium 控制器
-  //  * （必须先通过 setPanelManager() 挂载）
-  //  */
-  // _bindPanelManager() {
-  //   const pm = this.panelManager;
-  //   if (!pm) {
-  //     console.warn("SceneManager: no panelManager set, skipping bindPanelManager()");
-  //     return;
-  //   }
-
-  //   // 视角控制：切换 Orbit 模式
-  //   pm.onOrbitModeChange = (enabled) => {
-  //     this.cameraViewController.setOrbitMode(enabled);
-  //   };
-
-  //   // 重置到默认视角
-  //   pm.onResetCamera = () => {
-  //     this.cameraViewController.resetToDefaultView();
-  //   };
-
-  //   // 聚焦到选中的部队
-  //   pm.onFocusForce = () => {
-  //     const selectedForceIds = this.store.getSelectedForceIds();
-  //     if (selectedForceIds.size === 0) {
-  //       console.warn("没有选中任何单位");
-  //       return;
-  //     }
-
-  //     const selectedForce = this.store.getForceById(selectedForceIds.values().next().value);
-  //     const hexCells = this.store.getHexCells();
-  //     const targetHex = hexCells.find(hex => hex.hexId === selectedForce.hexId);
-  //     if (targetHex) {
-  //       const center = targetHex.position.points[0];
-  //       this.cameraViewController.focusOnLocation(center.longitude, center.latitude);
-  //     } else {
-  //       console.warn("未找到目标六角格");
-  //     }
-  //   };
-
-  //   // 切换图层
-  //   pm.onLayerChange = () => {
-  //     this.hexGridRenderer.renderBaseGrid();
-  //     this.hexGridRenderer.renderInteractGrid();
-  //   };
-
-  //   // 切换多选模式
-  //   pm.onSelectionModeChange = (isMultiSelect) => {
-  //     this.screenInteractor.multiSelect = isMultiSelect;
-  //   };
-  // }
-
   /**
    * 为指定 viewer 加载底图数据。
    * 如果传入的 terrainInput 是数字，则视为 Cesium Ion 的 asset ID；
    * 如果是字符串，则视为底图数据 URL。
    * @param {Cesium.Viewer} viewer - Cesium Viewer 实例
    * @param {number|string} terrainInput - 底图数据的 Ion asset ID 或 URL
+   * @param {number|string} imageryInput - 影像数据的 Ion asset ID 或 URL
    */
   async loadAssets(viewer, terrainInput, imageryInput) {
     try {
-      // 异步加载地形数据
+      // 加载地形数据
       let terrainProvider = null;
       if (typeof terrainInput === 'number') {
+        console.log(`正在加载地形数据，Asset ID: ${terrainInput}`);
         terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(terrainInput);
       } else if (typeof terrainInput === 'string') {
         terrainProvider = new Cesium.CesiumTerrainProvider({
@@ -211,30 +151,18 @@ export class SceneManager {
       viewer.terrainProvider = terrainProvider;
       console.log("地形数据加载成功");
 
-      // 异步加载影像数据
+      // 加载影像数据
       try {
-        console.log(`正在加载影像数据，资产ID: ${imageryInput}`);
+        console.log(`正在加载影像数据，Asset ID: ${imageryInput}`);
         const imageryProvider = await Cesium.IonImageryProvider.fromAssetId(imageryInput);
-        console.log("影像提供器创建成功");
         const layer = new Cesium.ImageryLayer(imageryProvider);
         viewer.imageryLayers.add(layer);
-        console.log("影像图层已添加到查看器");
       } catch (imgError) {
         console.error("加载影像数据失败：", imgError);
-        
-        // 尝试加载Sentinel-2影像作为备选
-        try {
-          console.log("尝试加载Sentinel-2影像作为备选");
-          const sentinelProvider = await Cesium.IonImageryProvider.fromAssetId(3954);
-          const sentinelLayer = new Cesium.ImageryLayer(sentinelProvider);
-          viewer.imageryLayers.add(sentinelLayer);
-          console.log("Sentinel-2影像图层已添加");
-        } catch (sentinelError) {
-          console.error("加载Sentinel-2影像也失败：", sentinelError);
-        }
       }
+      console.log("影像数据加载成功");
 
-      // 异步加载 OSM Buildings（加载失败不阻塞地图显示）
+      // 加载 OSM Buildings
       if (CesiumConfig.genOsmBuildings) {
         try {
           const tileset = await Cesium.createOsmBuildingsAsync();
@@ -243,8 +171,9 @@ export class SceneManager {
           console.error("加载 OSM Buildings 失败：", err);
         }
       }
+      console.log("OSM Buildings 加载成功");
     } catch (error) {
-      console.error("加载地形失败：", error);
+      console.error("加载底图数据失败：", error);
     }
   }
 }

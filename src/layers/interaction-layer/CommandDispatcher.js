@@ -4,7 +4,7 @@ import { CommandProcessor, CommandError } from './CommandProcessor';
 import { CommandType, CommandSource, CommandStatus } from '@/config/CommandConfig';
 import { GameMode, getGameModeForCommand } from '@/config/GameModeConfig';
 import { GameModeManager } from './GameModeManager';
-import { showSuccess } from './utils/MessageBox';
+import { showSuccess, showError } from './utils/MessageBox';
 
 /**
  * CommandDispatcher类 - 负责命令的接收、分发与执行
@@ -65,10 +65,15 @@ export class CommandDispatcher {
    */
   constructor(viewer) {
     this.viewer = viewer;
-    this.processor = CommandProcessor.getInstance(viewer);
     this.autoModeTimer = null;
     this.store = openGameStore();
+    this.processor = null;
+    this.gameModeManager = null;
+  }
+
+  init() {
     this.gameModeManager = GameModeManager.getInstance();
+    this.processor = CommandProcessor.getInstance(this.viewer);
   }
   
   /**
@@ -567,8 +572,9 @@ export class CommandDispatcher {
       try {
         await this.executeQueuedCommand(nextCommand.id);
       } catch (error) {
-        // 自动模式下的错误不中断执行，只记录日志
-        console.error('自动执行命令失败:', error);
+        // 出错时，停止自动模式
+        this.toggleAutoMode(false);
+        showError('命令执行失败，自动模式已关闭');
       }
     } else {
       // 队列中没有可执行的命令，停止自动模式
@@ -600,6 +606,8 @@ export class CommandDispatcher {
       clearTimeout(this.autoModeTimer);
       this.autoModeTimer = null;
     }
+    this.gameModeManager = null;
+    this.processor = null;
     CommandDispatcher.#instance = null;
   }
 }

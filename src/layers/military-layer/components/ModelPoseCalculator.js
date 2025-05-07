@@ -108,10 +108,10 @@ export class ModelPoseCalculator {
   }
 
   /**
-   * 计算兵种模型的位置
+   * 计算兵种实例的位置，包括兵种实例相对于部队实例位置的偏移
    * @param {Array<Object>|Object} params 单个参数对象或参数对象数组，每个对象包含 {forcePose, localOffset, hexId}
    * @param {Object} [params.forcePose] 部队位置和朝向 {position: {longitude, latitude, height}, heading}
-   * @param {Object} [params.localOffset] 兵种局部偏移 {x, y}
+   * @param {Object} [params.localOffset] 兵种实例相对于部队位置的偏移 {x, y}
    * @param {string} [params.hexId] 六角格ID
    * @returns {Object|Array<Object>} 经纬度坐标 {longitude, latitude, height} 或其数组
    */
@@ -136,32 +136,61 @@ export class ModelPoseCalculator {
         continue;
       }
       
-      // 首先将局部偏移根据部队朝向进行旋转
-      const rotatedOffset = GeoMathUtils.rotateOffset(localOffset, forcePose.heading || 0);
+      // 验证force位置的有效性
+      if (typeof forcePose.position.longitude !== 'number' || 
+          typeof forcePose.position.latitude !== 'number') {
+        console.error('无效的部队位置坐标:', forcePose.position);
+        positions.push(null);
+        continue;
+      }
       
-      // 将旋转后的局部偏移转换为经纬度偏移
-      const forcePos = forcePose.position;
-      const unitPos = GeoMathUtils.metersToLatLon(forcePos, rotatedOffset);
-      
-      // 获取表面高度
-      const surfaceHeight = this.terrainCache.getSurfaceHeight(
-        hexId,
-        unitPos.longitude,
-        unitPos.latitude
-      );
-      
-      // 添加到位置列表
-      positions.push({
-        hexId: hexId,
-        position: {
+      try {
+        // 首先将兵种实例偏移根据部队朝向进行旋转
+        const rotatedOffset = GeoMathUtils.rotateOffset(localOffset || {x: 0, y: 0}, forcePose.heading || 0);
+        
+        // 将旋转后的兵种实例偏移转换为经纬度偏移
+        const forcePos = forcePose.position;
+        const unitPos = GeoMathUtils.metersToLatLon(forcePos, rotatedOffset);
+        
+        // 确保计算出的经纬度是有效的
+        if (typeof unitPos.longitude !== 'number' || typeof unitPos.latitude !== 'number') {
+          console.error('计算偏移后的经纬度无效:', unitPos);
+          // 回退到部队位置
+          unitPos.longitude = forcePos.longitude;
+          unitPos.latitude = forcePos.latitude;
+        }
+        
+        // 获取表面高度
+        let surfaceHeight = null;
+        try {
+          surfaceHeight = this.terrainCache.getSurfaceHeight(
+            hexId,
+            unitPos.longitude,
+            unitPos.latitude
+          );
+        } catch (error) {
+          console.error('获取地形高度失败:', error);
+          // surfaceHeight将保持为null
+        }
+        
+        // 添加到位置列表
+        positions.push({
           longitude: unitPos.longitude,
           latitude: unitPos.latitude,
           // 如果获取失败则使用部队高度 + 默认偏移
           height: (surfaceHeight !== null ? 
             surfaceHeight : 
             forcePos.height) + MilitaryConfig.layoutConfig.unitLayout.heightOffset
-        }
-      });
+        });
+      } catch (error) {
+        console.error('计算兵种位置时发生错误:', error);
+        // 在失败的情况下，仍返回部队位置作为回退
+        positions.push({
+          longitude: forcePose.position.longitude,
+          latitude: forcePose.position.latitude,
+          height: forcePose.position.height + MilitaryConfig.layoutConfig.unitLayout.heightOffset
+        });
+      }
     }
     
     // 根据输入类型返回对应格式
@@ -169,17 +198,18 @@ export class ModelPoseCalculator {
   }
 
   /**
-   * 计算兵种模型的变换矩阵，即除了位置还有姿态信息（朝向和站立角度）
-   * @param {Object} position 位置坐标对象 {longitude, latitude, height}
-   * @param {number} heading 朝向角度（弧度）
+   * 计算模型实例的变换矩阵，包括姿态信息和模型相对于兵种实例位置的偏移
+   * @param {Object} unitPos 兵种实例位置 {longitude, latitude, height}
+   * @param {number} unitHeading 朝向角度（弧度）
+   * @param {Object} [offset] 模型偏移 { x, y, z }
    * @returns {Cesium.Matrix4} 最终变换矩阵
    */
-  computeUnitModelMatrix(position, heading) {
+  computeModelMatrix(unitPos, unitHeading, offset) {
     // 将经纬度坐标转化为笛卡尔坐标
     const pos = Cesium.Cartesian3.fromDegrees(
-      position.longitude,
-      position.latitude,
-      position.height || 0
+      unitPos.longitude,
+      unitPos.latitude,
+      unitPos.height || 0
     );
 
     // 创建基础的东北天(ENU)坐标系矩阵（确保模型垂直站在地面上）
@@ -187,12 +217,27 @@ export class ModelPoseCalculator {
     
     // 创建绕Z轴旋转的矩阵，使模型朝向正确（Z轴是垂直于地面的轴）
     const rotationMatrix = Cesium.Matrix4.fromRotationTranslation(
-      Cesium.Matrix3.fromRotationZ(heading || 0),
+      Cesium.Matrix3.fromRotationZ(unitHeading || 0),
       Cesium.Cartesian3.ZERO
     );
 
     // 将旋转应用到ENU矩阵
-    return Cesium.Matrix4.multiply(enuMatrix, rotationMatrix, new Cesium.Matrix4());
+    const positionMatrix = Cesium.Matrix4.multiply(enuMatrix, rotationMatrix, new Cesium.Matrix4());
+    
+    // 如果有模型偏移信息，应用到最终矩阵
+    if (offset) {
+      // 创建仅表示相对于兵种实例的偏移的本地变换矩阵
+      const localOffsetMatrix = Cesium.Matrix4.fromTranslation(
+        new Cesium.Cartesian3(offset.x, offset.y, offset.z),
+        new Cesium.Matrix4()
+      );
+      
+      // 将模型相对于兵种实例的本地偏移应用到位置矩阵
+      return Cesium.Matrix4.multiply(positionMatrix, localOffsetMatrix, new Cesium.Matrix4());
+    }
+    
+    // 如果没有模型变换信息，直接返回位置矩阵
+    return positionMatrix;
   }
 
   /**

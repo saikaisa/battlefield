@@ -196,22 +196,6 @@ export class SceneInteractor {
     }
   }
 
-  /**
-   * 清空所有交互层样式 + 清空 store
-   */
-  clearInteractionStyles() {
-    this.store.clearSelectedHexIds();
-    // 移除所有 interaction 样式
-    const hexCells = this.store.getHexCells();
-    hexCells.forEach((hexCell) => {
-      if (hexCell.visibility.visualStyles) {
-        hexCell.visibility.visualStyles = hexCell.visibility.visualStyles.filter(s => s.layer !== 'interaction');
-      }
-    });
-    // 取消悬浮
-    this.hoveredHexId = null;
-  }
-
   destroy() {
     if (this.handler) {
       this.handler.destroy();
