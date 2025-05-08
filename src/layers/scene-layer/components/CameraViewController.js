@@ -186,6 +186,11 @@ export class CameraViewController {
     if (enable) {
       console.log(`-----------------Orbit Enable--------------`);
       const cameraView = CameraView.fromCurrentView(this.viewer);
+      if (!cameraView) {
+        console.error("无法获取当前视角，无法进入环绕模式");
+        return;
+      }
+      
       this._addViewHistory(cameraView);
 
       // 使用当前摄像机 heading，不强制改变朝向，只固定 pivot
@@ -202,6 +207,11 @@ export class CameraViewController {
       console.log(`-----------------Orbit Disable--------------`);
       this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
       const oldCameraView = this._getLatestView();
+      
+      if (!oldCameraView) {
+        console.error("无法获取历史视角，无法退出环绕模式");
+        return;
+      }
 
       const pivot = oldCameraView.getCartesianPos();
       const range = Math.max(Cesium.Cartesian3.distance(this.viewer.camera.position, pivot), CameraConfig.minZoomDistance * 1.5);

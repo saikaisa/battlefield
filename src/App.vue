@@ -6,9 +6,9 @@
     <!-- Viewer 初始化完成后再渲染面板 -->
     <div v-if="gameReady">
       <OverviewPanel /> <!-- 概览面板 -->
-      <DetailInfoPanel /> <!-- 详情信息面板 -->
+      <!-- <DetailInfoPanel /> 详情信息面板 -->
       <FormationPanel /> <!-- 编队列表 -->
-      <CommandPanel /> <!-- 命令管理面板 -->
+      <!-- <CommandPanel /> 命令管理面板 -->
     </div>
 
     <div v-else class="loading">
@@ -23,9 +23,9 @@ import { SceneManager } from '@/layers/scene-layer/SceneManager';
 import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
 import { CommandDispatcher } from '@/layers/interaction-layer/CommandDispatcher';
 import OverviewPanel from '@/components/hud/OverviewPanel.vue';
-import DetailInfoPanel from '@/components/hud/DetailInfoPanel.vue';
+// import DetailInfoPanel from '@/components/hud/DetailInfoPanel.vue';
 import FormationPanel from '@/components/hud/FormationPanel.vue';
-import CommandPanel from '@/components/hud/CommandPanel.vue';
+// import CommandPanel from '@/components/hud/CommandPanel.vue';
 
 // viewer 引用
 const viewerRef = ref(null);
@@ -218,7 +218,7 @@ function startDebug() {
         forceName: '红方测试部队',
         faction: 'red',
         service: 'land',
-        hexId: 'H_0_0',
+        hexId: centerHex.hexId,
         composition: [
           { unitId: infantryId, unitCount: 100 },
           { unitId: tankId, unitCount: 50 }
@@ -262,26 +262,25 @@ function startDebug() {
       // const mr = MilitaryInstanceRenderer.getInstance(viewerRef.value);
       // mr.updateForceInstance();
 
-      // 等待5秒聚焦到红方部队
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      const result = await commandDispatcher.executeCommandFromUI(CommandType.FOCUS_FORCE, { forceId: redForceResult.result.data.forceId });
-      console.log(`[Debug] 聚焦到红方部队，结果: ${result.result.message}`);
+      // // 等待5秒聚焦到红方部队
+      // await new Promise(resolve => setTimeout(resolve, 5000));
+      // const result = await commandDispatcher.executeCommandFromUI(CommandType.FOCUS_FORCE, { forceId: redForceResult.result.data.forceId });
+      // console.log(`[Debug] 聚焦到红方部队，结果: ${result.result.message}`);
       
-      // 等待10秒后移动红方部队
-      await new Promise(resolve => setTimeout(resolve, 10000));
-      const moveResult = await commandDispatcher.executeCommandFromUI(CommandType.MOVE, { 
-        forceId: redForceResult.result.data.forceId, 
-        path: [
-          'H_0_0', 
-          'H_0_1',
-          'H_1_1',
-          'H_1_2',
-          'H_1_3',
-          'H_0_3',
-          'H_1_4',
-        ] 
-      });
-      console.log(`[Debug] 移动红方部队，结果: ${moveResult.result.message}`);
+      // // 等待10秒后移动红方部队
+      // await new Promise(resolve => setTimeout(resolve, 10000));
+      // const moveResult = await commandDispatcher.executeCommandFromUI(CommandType.MOVE, { 
+      //   forceId: redForceResult.result.data.forceId, 
+      //   path: [
+      //     `H_${centerRow}_${centerCol}`, 
+      //     `H_${centerRow}_${centerCol + 1}`,
+      //     `H_${centerRow + 1}_${centerCol + 1}`,
+      //     `H_${centerRow + 1}_${centerCol}`,
+      //     `H_${centerRow + 1}_${centerCol - 1}`,
+      //     `H_${centerRow}_${centerCol - 1}`,
+      //   ] 
+      // });
+      // console.log(`[Debug] 移动红方部队，结果: ${moveResult.result.message}`);
 
       // // 等待5秒后设置H_0_0六角格对双方不可见
       // await new Promise(resolve => setTimeout(resolve, 5000));

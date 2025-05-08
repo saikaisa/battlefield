@@ -188,7 +188,7 @@ export class ModelPoseCalculator {
     
     // 创建绕Z轴旋转的矩阵，使模型朝向正确（Z轴是垂直于地面的轴）
     const rotationMatrix = Cesium.Matrix4.fromRotationTranslation(
-      Cesium.Matrix3.fromRotationZ(unitHeading || 0),
+      Cesium.Matrix3.fromRotationZ((unitHeading || 0) + Math.PI / 2),
       Cesium.Cartesian3.ZERO
     );
 

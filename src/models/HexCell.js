@@ -84,9 +84,6 @@ export class HexCell {
   }
 
   /** 设置六角格对双方可见性 */
-  setVisibleTo(visibleTo) {
-    this.visibility.visibleTo = visibleTo;
-  }
 
   /**
    * 计算加权平均高度并更新

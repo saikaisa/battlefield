@@ -62,7 +62,7 @@ export const HexVisualStyles = {
     layer: 'mark',
     type: 'factionBlue',
     priority: 0,
-    fillColor: Cesium.Color.BLUE.withAlpha(0.3),
+    fillColor: Cesium.Color.BLUE.withAlpha(0.1),
     showFill: true,
   },
   // 红方阵营标记
@@ -70,7 +70,7 @@ export const HexVisualStyles = {
     layer: 'mark',
     type: 'factionRed',
     priority: 0,
-    fillColor: Cesium.Color.RED.withAlpha(0.3),
+    fillColor: Cesium.Color.RED.withAlpha(0.1),
     showFill: true,
   },
   // 不可见遮罩

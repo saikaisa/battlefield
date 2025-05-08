@@ -14,6 +14,8 @@ import { MilitaryMovementController } from '@/layers/military-layer/components/M
 import { MilitaryBattleController } from '@/layers/military-layer/components/MilitaryBattleController';
 import { MilitaryInstanceGenerator } from '@/layers/military-layer/components/MilitaryInstanceGenerator';
 import { MilitaryConfig } from '@/config/GameConfig';
+import { HexVisualStyles } from '@/config/HexVisualStyles';
+import { showInfo } from './utils/MessageBox';
 
 /**
  * 命令错误类 - 用于统一处理命令执行过程中的错误
@@ -88,6 +90,7 @@ export class CommandProcessor {
         message: `俯瞰模式已${enabled ? "启用" : "禁用"}`,
       };
     } catch (error) {
+      gameModeService.setMode(GameMode.FREE);
       throw new CommandError(`切换俯瞰模式失败: ${error.message}`, "panorama");
     }
   }
@@ -110,6 +113,9 @@ export class CommandProcessor {
         message: `环绕模式已${enabled ? "启用" : "禁用"}`,
       };
     } catch (error) {
+      // 发生错误时恢复状态
+      gameModeService.setMode(GameMode.FREE);
+      this.cameraController.resetToDefaultView();
       throw new CommandError(`切换环绕模式失败: ${error.message}`, "orbit");
     }
   }
@@ -172,7 +178,6 @@ export class CommandProcessor {
   async changeLayer(layerIndex) {
     try {
       this.store.setLayerIndex(layerIndex);
-      // TODO：按理来说 watch 会自动触发更新图层渲染，如果不触发再回来看看
       return {
         status: CommandStatus.FINISHED,
         message: `已切换到图层 ${layerIndex}`,
@@ -255,12 +260,16 @@ export class CommandProcessor {
         message: `统计模式已${enabled ? "启用" : "禁用"}`,
       };
     } catch (error) {
+      // 发生错误时恢复状态
+      gameModeService.setMode(GameMode.FREE);
+      gameModeService.restoreSelectedHexIds();
       throw new CommandError(`切换统计模式失败: ${error.message}`, "statistics");
     }
   }
 
   // ================ 移动命令 ================
-
+  // GameMode为FREE时，点击移动按钮调用movePrepare
+  // GameMode为MOVE_PREPARE时，点击移动按钮调用move
   /**
    * 移动准备
    * @param {string} forceId 部队ID
@@ -281,16 +290,16 @@ export class CommandProcessor {
       }
 
       // 切换到移动准备模式
-      gameModeService.setMode(GameMode.MOVE_PREPARE);
-
-      // TODO: 接下来进入选择六角格路径的模式
-      // 点击操作和反馈处理交给HexSelectValidator._validateMovePath接管      
+      gameModeService.setMode(GameMode.MOVE_PREPARE);      
 
       return {
         status: CommandStatus.FINISHED,
         message: "已进入移动准备模式",
       };
     } catch (error) {
+      // 发生错误时恢复状态
+      gameModeService.setMode(GameMode.FREE);
+      gameModeService.restoreSelectedHexIds();
       throw new CommandError(`进入移动准备模式失败: ${error.message}`, "move");
     }
   }
@@ -308,10 +317,33 @@ export class CommandProcessor {
       throw new CommandError(`未找到部队实例: ${forceId}`, "validation");
     }
 
+    const force = this.store.getForceById(forceId);
+    if (!force) {
+      throw new CommandError(`无法获取部队: ${forceId}`, "validation");
+    }
+
+    // 保存进入时的模式
+    const lastMode = gameModeService.getCurrentMode();
+    // 保存进入时的选中的六角格和部队id
+    gameModeService.saveSelectedHexIds();
+
     // 切换到移动执行模式
     gameModeService.setMode(GameMode.MOVE_EXECUTE);
 
     try {
+      // 设置高亮样式为部队颜色
+      const highlightStyle = this.store.getFactionByForceId(forceId) === 'blue' ?
+                             HexVisualStyles.selectedBlue : HexVisualStyles.selectedRed;
+      this.store.setHighlightStyle(highlightStyle);
+      this.store.setSelectedHexIds(path);
+      this.store.setSelectedForceIds([forceId]);
+      
+      // 等待2秒
+      await new Promise(resolve => setTimeout(() => {
+        showInfo('开始移动', 2000);
+        resolve();
+      }, 2000));
+      
       // 向移动控制器发起开始移动的请求
       const prepareResult = await this.movementController.prepareMove(forceId, path);
       if (!prepareResult) {
@@ -322,9 +354,51 @@ export class CommandProcessor {
       // 确保更新循环已启动
       this.militaryRenderer.update();
 
-      // 等待移动结束，目前是打算通过监听movingForces的size来判断移动是否结束
-      // 执行结束前不会恢复自由模式
-      // TODO: ...
+      // 播放移动动画
+      if (forceInstance && forceInstance.unitInstanceMap) {
+        forceInstance.unitInstanceMap.forEach(unitInstance => {
+            this.militaryRenderer.addAnimation(unitInstance, 'moving');
+        });
+      }
+
+      // 等待移动结束，通过监听movingForces的状态来判断移动是否结束
+      // 创建一个Promise来等待移动完成
+      await new Promise((resolve, reject) => {
+        // 设置检查定时器
+        const checkInterval = setInterval(() => {
+          // 获取移动状态
+          const movementState = this.movementController.movingForces.get(forceId);
+          
+          // 检查是否完成
+          if (!movementState || movementState.isComplete) {
+            clearInterval(checkInterval);
+            // 结束移动动画
+            if (forceInstance && forceInstance.unitInstanceMap) {
+              forceInstance.unitInstanceMap.forEach(unitInstance => {
+                  this.militaryRenderer.addAnimation(unitInstance, 'idle');
+              });
+            }
+
+            // 恢复高亮样式
+            this.store.clearSelectedHexIds();
+            this.store.clearSelectedForceIds();
+            this.store.setHighlightStyle(HexVisualStyles.selected);
+            
+            // 更新部队状态
+            force.hexId = path[path.length - 1]; // 更新部队所在六角格
+            
+            // 清理已完成的移动记录
+            this.movementController.cleanupFinishedMovements();
+            resolve();
+          }
+        }, 100); // 每100毫秒检查一次
+        
+        // 设置超时保护，防止无限等待
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          reject(new Error('移动操作超时'));
+        }, 60000); // 最多等待60秒
+      });
 
       // 完成后恢复自由模式
       gameModeService.setMode(GameMode.FREE);
@@ -334,14 +408,17 @@ export class CommandProcessor {
         message: "移动完成",
       };
     } catch (error) {
-      // 发生错误时恢复自由模式
-      gameModeService.setMode(GameMode.FREE);
+      // 发生错误时恢复状态
+      this.store.setHighlightStyle(HexVisualStyles.selected);
+      gameModeService.setMode(lastMode);
+      gameModeService.restoreSelectedHexIds();
       throw new CommandError(`移动失败: ${error.message}`, "move");
     }
   }
 
   // ================ 攻击命令 ================
-
+  // GameMode为FREE时，点击攻击按钮调用attackPrepare
+  // GameMode为ATTACK_PREPARE时，点击攻击按钮调用attack
   /**
    * 攻击准备
    * @param {string} forceId 部队ID
@@ -372,6 +449,9 @@ export class CommandProcessor {
         message: "已进入攻击准备模式",
       };
     } catch (error) {
+      // 发生错误时恢复状态
+      gameModeService.setMode(GameMode.FREE);
+      gameModeService.restoreSelectedHexIds();
       throw new CommandError(`进入攻击准备模式失败: ${error.message}`, "attack");
     }
   }
@@ -384,6 +464,11 @@ export class CommandProcessor {
    * @returns {Object} 命令执行结果
    */
   async attack(commandForceId, targetHex, supportForceIds = []) {
+    // 保存进入时的模式
+    const lastMode = gameModeService.getCurrentMode();
+    // 保存进入时的选中的六角格和部队id
+    gameModeService.saveSelectedHexIds();
+
     try {
       // 切换到攻击执行模式
       gameModeService.setMode(GameMode.ATTACK_EXECUTE);
@@ -408,8 +493,9 @@ export class CommandProcessor {
         message: "攻击完成",
       };
     } catch (error) {
-      // 发生错误时恢复自由模式
-      gameModeService.setMode(GameMode.FREE);
+      // 发生错误时恢复状态
+      gameModeService.setMode(lastMode);
+      gameModeService.restoreSelectedHexIds();
       throw new CommandError(`攻击失败: ${error.message}`, "attack");
     }
   }

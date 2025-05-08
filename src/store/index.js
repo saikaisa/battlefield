@@ -136,6 +136,11 @@ export const openGameStore = defineStore("gameStore", () => {
   const getForces = () => Array.from(forceMap.values());
   /** 根据阵营获取部队 */
   const getForcesByFaction = faction => getForces().filter(f => f.faction === faction);
+  /** 获取部队所在阵营 */
+  const getFactionByForceId = id => {
+    const force = getForceById(id);
+    return force ? force.faction : null;
+  };
 
   // -------------------- 战斗群操作 --------------------
   /** 添加战斗群 */
@@ -503,6 +508,7 @@ export const openGameStore = defineStore("gameStore", () => {
     getForceById,
     getForces,
     getForcesByFaction,
+    getFactionByForceId,
 
     // 战斗群方法
     addBattlegroup,

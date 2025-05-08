@@ -88,19 +88,34 @@ export class GeoMathUtils {
    * @returns {number} 航向角（弧度）
    */
   static calculateHeading(from, to) {
-    // 转换为Cesium坐标点
-    const fromCartographic = Cesium.Cartographic.fromDegrees(from.longitude, from.latitude);
-    const toCartographic = Cesium.Cartographic.fromDegrees(to.longitude, to.latitude);
+    if (!from || !to) {
+      console.error("计算航向角失败：无效的起点或终点");
+      return 0;
+    }
     
-    // 转换为笛卡尔坐标
-    const fromCartesian = Cesium.Cartographic.toCartesian(fromCartographic);
-    const toCartesian = Cesium.Cartographic.toCartesian(toCartographic);
-    
-    // 计算航向角
-    const direction = Cesium.Cartesian3.subtract(toCartesian, fromCartesian, new Cesium.Cartesian3());
-    Cesium.Cartesian3.normalize(direction, direction);
-    
-    return Cesium.Math.PI_OVER_TWO - Math.atan2(direction.y, direction.x);
+    try {
+      // 将经纬度转换为弧度
+      const fromRadians = Cesium.Cartographic.fromDegrees(from.longitude, from.latitude);
+      const toRadians = Cesium.Cartographic.fromDegrees(to.longitude, to.latitude);
+      
+      // 使用Cesium的geodesic计算方法获取准确的航向角
+      // 这会考虑地球曲率影响，返回更准确的结果
+      const geodesic = new Cesium.EllipsoidGeodesic(fromRadians, toRadians);
+      
+      // 返回相反的航向角，修复角度方向问题
+      return -geodesic.startHeading;
+    } catch (error) {
+      console.error("计算航向角失败:", error);
+      // 如果Cesium方法失败，回退到简化的计算
+      const dLon = Cesium.Math.toRadians(to.longitude - from.longitude);
+      const lat1 = Cesium.Math.toRadians(from.latitude);
+      const lat2 = Cesium.Math.toRadians(to.latitude);
+      
+      const y = Math.sin(dLon) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      // 返回相反的角度
+      return -Math.atan2(y, x);
+    }
   }
 
   /**

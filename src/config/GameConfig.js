@@ -112,7 +112,7 @@ export const CameraConfig = {
   defaultRange: 12000,
   defaultHeading: Cesium.Math.toRadians(45),
   defaultPitch: Cesium.Math.toRadians(-45),
-  closeUpRange: 8000,
+  closeUpRange: 3000,
   minZoomDistance: 0,
   maxZoomDistance: 15000,
   enableTilt: false

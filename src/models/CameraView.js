@@ -43,18 +43,31 @@ export class CameraView {
     const cam = new CameraView();
     const canvas = viewer.canvas;
     const centerScreen = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2);
-    const pivot = viewer.camera.pickEllipsoid(centerScreen, viewer.scene.globe.ellipsoid);
+    
+    // 使用ray picking获取包含地形高度的点，而不是pickEllipsoid
+    const ray = viewer.camera.getPickRay(centerScreen);
+    const pivot = viewer.scene.globe.pick(ray, viewer.scene);
+    
+    // 如果没有找到地形表面的交点，则回退到椭球表面
+    let ellipsoidPivot;
     if (!Cesium.defined(pivot)) {
-      console.error("无法获取 pivot");
-      return null;
+      ellipsoidPivot = viewer.camera.pickEllipsoid(centerScreen, viewer.scene.globe.ellipsoid);
+      if (!Cesium.defined(ellipsoidPivot)) {
+        console.error("无法获取 pivot");
+        return null;
+      }
+      cam.position = Cesium.Cartographic.fromCartesian(ellipsoidPivot);
+    } else {
+      cam.position = Cesium.Cartographic.fromCartesian(pivot);
     }
+    
     // 若旋转视角时，将视角放大到垂直地表往下看，那么此时 range = 最小限高（想象出一个等腰直角三角形就知道了）
     // 恢复到45度倾斜角时相当于围绕定点往地面方向旋转了45度，此时相机高度一定会小于最小限高，
     // 导致视角强制复位带来卡顿，视觉效果不流畅，所以这里判断 range < 最小限高的 tan45度（约等于1.5）时，
     // 将 range 设为1.5倍避免强制视角复位带来的卡顿
-    const range = Cesium.Cartesian3.distance(viewer.camera.position, pivot);
+    const pivotPoint = Cesium.defined(pivot) ? pivot : ellipsoidPivot;
+    const range = Cesium.Cartesian3.distance(viewer.camera.position, pivotPoint);
     const fixedRange = Math.max(range, CameraConfig.minZoomDistance * 1.5);
-    cam.position = Cesium.Cartographic.fromCartesian(pivot);
     cam.range = fixedRange;
     cam.heading = viewer.camera.heading;
     cam.pitch = viewer.camera.pitch;

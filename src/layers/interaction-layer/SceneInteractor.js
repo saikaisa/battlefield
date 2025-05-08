@@ -76,6 +76,7 @@ export class SceneInteractor {
       (mode) => {
         if (mode === 'none') {
           this.enabled = false;
+          this._hideHover();
         } else {
           this.enabled = true;
           this.multiSelect = mode === 'multi';
@@ -184,6 +185,8 @@ export class SceneInteractor {
         // 没选中 => 先清空，再选中
         this.store.clearSelectedHexIds();
         this.store.addSelectedHexId(hexId);
+        // 打印选中六角格的最后一个
+        console.log(`单选模式: 选中 ${this.store.getSelectedHexIds().values().next().value}`);
       }
     } else {
       // ================== 多选模式 ==================
