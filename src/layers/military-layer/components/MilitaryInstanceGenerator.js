@@ -66,9 +66,12 @@ export class MilitaryInstanceGenerator {
     // }
     // unitInstanceId: `${forceId}_${renderingKey}_${index}`
     // unitInstance: {
+    //   renderingKey: string, // 渲染键
     //   activeLOD: number, // 当前激活的LOD级别
     //   activeModel: Cesium.Model | null, // 当前在场景中显示的模型
+    //   activeAnimation: Cesium.runtimeAnimation | null, // 当前正在播放的动画
     //   lodModels: Array<{ level, distance, model }>, // 所有LOD级别的模型
+    //   animationList: Array<{ name, loop }>, // 动画列表
     //   offset: { x, y, z }, // 模型相对于兵种实例的偏移
     //   localOffset: { x, y } // 兵种实例在部队内的相对偏移
     // }
@@ -78,7 +81,7 @@ export class MilitaryInstanceGenerator {
   /**
    * 创建部队实例，但此时不会渲染到地图上
    * @param {Force} force 部队对象
-   * @returns {Promise<Object|null>} 部队实例对象或null（如果创建失败）
+   * @returns {Promise<Object|null>} 已ready的部队实例对象
    */
   async createForceInstance(force) {
     try {
@@ -120,13 +123,38 @@ export class MilitaryInstanceGenerator {
   removeForceInstanceById(forceId) {
     const forceInstance = this.forceInstanceMap.get(forceId);
     if (forceInstance) {
+      // 确保所有兵种实例中的所有LOD模型都被从场景中移除
       forceInstance.unitInstanceMap.forEach((unitInstance) => {
-        if (unitInstance.activeModel) {
-          this.viewer.scene.primitives.remove(unitInstance.activeModel);
-          unitInstance.activeModel = null;
+        // 停止任何正在播放的动画
+        if (unitInstance.activeAnimation) {
+          try {
+            unitInstance.activeModel.activeAnimations.remove(unitInstance.activeAnimation);
+            unitInstance.activeAnimation = null;
+          } catch (e) {
+            console.warn(`移除动画失败: ${e.message}`);
+          }
         }
+        
+        // 清理所有LOD级别的模型
+        if (unitInstance.lodModels) {
+          unitInstance.lodModels.forEach(lodModel => {
+            if (lodModel && lodModel.model && !lodModel.model.isDestroyed()) {
+              try {
+                this.viewer.scene.primitives.remove(lodModel.model);
+              } catch (e) {
+                console.warn(`移除模型失败: ${e.message}`);
+              }
+            }
+          });
+        }
+        
+        // 清空活跃模型引用
+        unitInstance.activeModel = null;
       });
+      
+      // 从映射表中移除该部队实例
       this.forceInstanceMap.delete(forceId);
+      console.log(`已清理部队实例: ${forceId}`);
     }
   }
 
@@ -181,11 +209,29 @@ export class MilitaryInstanceGenerator {
               renderingKey: renderingKey,            // 渲染键
               activeLOD: -1,                          // 当前激活的LOD级别，-1表示未激活
               activeModel: null,                      // 当前在场景中显示的模型
-              lodModels: modelInstance.lodModels,       // 所有LOD级别的模型及切换距离
+              activeAnimation: null,                  // 当前正在播放的动画
+              lodModels: modelInstance.lodModels,     // 所有LOD级别的模型及切换距离
               animationList: modelInstance.animationList, // 动画列表
-              offset: modelInstance.offset,             // 模型偏移
-              localOffset: localOffset                 // 兵种在部队内的相对偏移
+              offset: modelInstance.offset,           // 模型偏移
+              localOffset: localOffset                // 兵种在部队内的相对偏移
             };
+            
+            // 将所有LOD级别的模型添加到场景，但初始设置为隐藏状态
+            for (const lodModel of unitInstance.lodModels) {
+              if (lodModel && lodModel.model) {
+                // 添加到场景但先设置为隐藏
+                lodModel.model.show = false;
+                this.viewer.scene.primitives.add(lodModel.model);
+                // 等待模型准备完成后继续
+                if (!lodModel.model.ready) {
+                  await new Promise(resolve => {
+                    lodModel.model.readyEvent.addEventListener(() => {
+                      resolve();
+                    });
+                  });
+                }
+              }
+            }
             
             // 使用 forceId_renderingKey_index 作为 key
             const unitInstanceId = `${force.forceId}_${renderingKey}_${i}`;

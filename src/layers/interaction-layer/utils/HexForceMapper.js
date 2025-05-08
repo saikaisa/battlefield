@@ -4,6 +4,7 @@ import { openGameStore } from '@/store';
 import { HexVisualStyles } from '@/config/HexVisualStyles';
 // eslint-disable-next-line no-unused-vars
 import { HexCell } from '@/models/HexCell';
+import { HexRenderer } from '@/layers/scene-layer/components/HexGridRenderer';
 
 /**
  * 管理六角格与部队之间的双向映射关系
@@ -273,5 +274,7 @@ export const HexForceMapper = reactive({
         hexCell.addVisualStyle(HexVisualStyles.factionRed);
         break;
     }
+    // 重新渲染 mark 层
+    HexRenderer.renderMarkGrid();
   }
 });

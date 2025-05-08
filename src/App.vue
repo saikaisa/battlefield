@@ -265,7 +265,8 @@ function startDebug() {
       // 等待5秒聚焦到红方部队
       await new Promise(resolve => setTimeout(resolve, 5000));
       const result = await commandDispatcher.executeCommandFromUI(CommandType.FOCUS_FORCE, { forceId: redForceResult.result.data.forceId });
-
+      console.log(`[Debug] 聚焦到红方部队，结果: ${result.result.message}`);
+      
       // 等待10秒后移动红方部队
       await new Promise(resolve => setTimeout(resolve, 10000));
       const moveResult = await commandDispatcher.executeCommandFromUI(CommandType.MOVE, { 
@@ -282,7 +283,24 @@ function startDebug() {
       });
       console.log(`[Debug] 移动红方部队，结果: ${moveResult.result.message}`);
 
-      console.log(`[Debug] 聚焦到红方部队，结果: ${result.result.message}`);
+      // // 等待5秒后设置H_0_0六角格对双方不可见
+      // await new Promise(resolve => setTimeout(resolve, 5000));
+      // const hex = store.getHexCellById('H_0_0');
+      // hex.setVisibleTo({ blue: false, red: false });
+      // console.log(`[Debug] 设置H_0_0六角格对双方不可见`);
+      // // 等待5秒后设置所有六角格对双方不可见
+      // await new Promise(resolve => setTimeout(resolve, 5000));
+      // hexCells.forEach(cell => {
+      //   cell.setVisibleTo({ blue: false, red: false });
+      // });
+      // console.log(`[Debug] 设置所有六角格对双方不可见`);
+      // //等待5秒后设置所有六角格对双方可见
+      // await new Promise(resolve => setTimeout(resolve, 5000));
+      // hexCells.forEach(cell => {
+      //   cell.setVisibleTo({ blue: true, red: true });
+      // });
+      // console.log(`[Debug] 设置所有六角格对双方可见`);
+
     } catch (error) {
       console.error('[Debug] 创建测试用例失败:', error);
     }

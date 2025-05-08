@@ -61,8 +61,9 @@ export class HexGridRenderer {
     watch(
       () => this.layerIndex.value,
       () => {
-        this.renderBaseGrid();  // 包含了mark层的渲染
-        this.renderInteractGrid();
+        this.renderBaseGrid();
+        this.renderMarkGrid(true);
+        this.renderInteractGrid(true);
       }
     );
 
@@ -114,23 +115,23 @@ export class HexGridRenderer {
         collection.show = (this.layerIndex.value === idx);
       });
     }
-    
-    // 渲染标记层(mark) - 只在layerIndex = 1时显示
-    this.renderMarkGrid();
   }
 
   /**
    * 渲染六角格标记图层 (阵营标记等)
    * 只在layerIndex=1时渲染
    */
-  renderMarkGrid() {
+  renderMarkGrid(indexChange = false) {
     if (this.markGridPrimitives) {
+      // 如果是通过切换图层调用的该方法，则只进行显隐控制
+      if (indexChange) {
+        this.markGridPrimitives.show = (this.layerIndex.value === 1);
+        return;
+      }
+      
       this.viewer.scene.primitives.remove(this.markGridPrimitives);
       this.markGridPrimitives = null;
     }
-    
-    // 只有在layerIndex=1时才渲染标记层
-    if (this.layerIndex.value !== 1) return;
 
     this.markGridPrimitives = new Cesium.PrimitiveCollection();
     const hexCells = this.store.getHexCells();
@@ -149,12 +150,18 @@ export class HexGridRenderer {
    * 渲染六角格交互图层
    *  - 选中 / 其他交互标记
    */
-  renderInteractGrid() {
+  renderInteractGrid(indexChange = false) {
     if (this.interactGridPrimitives) {
+      // 如果是通过切换图层调用的该方法，则只进行显隐控制
+      if (indexChange) {
+        this.interactGridPrimitives.show = (this.layerIndex.value !== 3);
+        return;
+      }
+      
+      // 否则重新渲染，先移除旧的
       this.viewer.scene.primitives.remove(this.interactGridPrimitives);
       this.interactGridPrimitives = null;
     }
-    if (this.layerIndex.value === 3) return; // layerIndex=3时，不渲染
 
     this.interactGridPrimitives = new Cesium.PrimitiveCollection();
     const hexCells = this.store.getHexCells();
@@ -210,6 +217,7 @@ export class HexGridRenderer {
       
       // 如果没有对应样式，跳过此六角格
       if (!visual) return;
+      console.log(`[Debug] 渲染六角格: ${hexCell.hexId}, 样式: ${JSON.stringify(visual)}`);
       
       if (visual.showFill) {
         // 使用HexHeightCache获取3D位置
@@ -388,7 +396,7 @@ export class HexGridRenderer {
       }
     }
     // 重新渲染交互层
-    this.renderInteractGrid();
+    this.renderInteractGrid(false);
   }
   
   /**
@@ -485,4 +493,40 @@ export class HexGridRenderer {
     // 清理单例引用
     HexGridRenderer.#instance = null;
   }
+}
+
+// 导出渲染服务
+export const HexRenderer = {
+  /**
+   * 获取渲染器实例
+   * @returns {HexGridRenderer} 六角格渲染器实例
+   */
+  getRenderer() {
+    return HexGridRenderer.getInstance();
+  },
+  
+  /**
+   * 渲染基础六角格网格
+   * @param {boolean} [refresh=false] 是否强制刷新
+   */
+  renderBaseGrid(refresh = false) {
+    const renderer = this.getRenderer();
+    renderer.renderBaseGrid(refresh);
+  },
+  
+  /**
+   * 渲染标记图层
+   */
+  renderMarkGrid() {
+    const renderer = this.getRenderer();
+    renderer.renderMarkGrid(false); // 从外部调用时都是因为要刷新了，而不是因为图层切换
+  },
+  
+  /**
+   * 渲染交互图层
+   */
+  renderInteractGrid() {
+    const renderer = this.getRenderer();
+    renderer.renderInteractGrid(false); // 从外部调用时都是因为要刷新了，而不是因为图层切换
+  },
 }

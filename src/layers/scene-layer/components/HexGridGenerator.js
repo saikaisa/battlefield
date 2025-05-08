@@ -52,11 +52,11 @@ export class HexGridGenerator {
     // 初始化地形高度缓存系统
     this.terrainCache = HexHeightCache.getInstance(viewer);
 
-    console.log('[HexGridGenerator] 初始化：');
-    console.log(`  hexRadius = ${this.hexRadius} m`);
-    console.log(`  hexWidthMeters = ${this.hexWidthMeters} m, hexHeightMeters = ${this.hexHeightMeters.toFixed(2)} m`);
-    console.log(`  midLat = ${this.midLat}`);
-    console.log(`  dx (经度差) = ${this.dx.toFixed(6)}°, dy (纬度差) = ${this.dy.toFixed(6)}°`);
+    // console.log('[HexGridGenerator] 初始化：');
+    // console.log(`  hexRadius = ${this.hexRadius} m`);
+    // console.log(`  hexWidthMeters = ${this.hexWidthMeters} m, hexHeightMeters = ${this.hexHeightMeters.toFixed(2)} m`);
+    // console.log(`  midLat = ${this.midLat}`);
+    // console.log(`  dx (经度差) = ${this.dx.toFixed(6)}°, dy (纬度差) = ${this.dy.toFixed(6)}°`);
   }
 
   /**
@@ -71,12 +71,12 @@ export class HexGridGenerator {
     for (let lat = minLat; lat <= maxLat; lat += this.dy * 0.5) {
       // 根据行号决定水平偏移
       const offset = (row % 2 === 0) ? 0 : this.dx; // 相邻行的六角格在水平方向上因为错开排列，间隔为 1.5倍的六角格半径
-      console.log(`[HexGridGenerator] Row ${row}: lat=${lat.toFixed(6)} offset=${offset.toFixed(6)} (经度差)`);
+      // console.log(`[HexGridGenerator] Row ${row}: lat=${lat.toFixed(6)} offset=${offset.toFixed(6)} (经度差)`);
       let col = 0;
       // 同一行的六角格相隔 3倍六角格半径的距离
       for (let lon = minLon + offset; lon <= maxLon; lon += this.dx * 2) {
         const centerPoint = { longitude: lon, latitude: lat, height: 0 };
-        console.log(`    [HexGridGenerator] Row ${row}, Col ${col}: center=${lon.toFixed(6)}, ${lat.toFixed(6)}`);
+        // console.log(`    [HexGridGenerator] Row ${row}, Col ${col}: center=${lon.toFixed(6)}, ${lat.toFixed(6)}`);
         // 计算六个顶点（平顶六角格：0°、60°、120°、180°、240°、300°）
         const vertices = [];
         for (let i = 0; i < 6; i++) {
@@ -124,7 +124,7 @@ export class HexGridGenerator {
         };
         const hexCell = HexCell.fromPlainObject(hexCellData);
         hexCells.push(hexCell);
-        console.log(`[HexGridGenerator] Row ${row}, Col ${col}: center=${lon.toFixed(6)}, ${lat.toFixed(6)}`);
+        // console.log(`[HexGridGenerator] Row ${row}, Col ${col}: center=${lon.toFixed(6)}, ${lat.toFixed(6)}`);
         col++;
       }
       row++;

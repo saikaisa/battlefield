@@ -78,7 +78,8 @@ export const HexVisualStyles = {
     layer: 'mark',
     type: 'invisible',
     priority: 1,
-    fillColor: Cesium.Color.BLACK.withAlpha(0.2),
+    fillColor: Cesium.Color.BLACK.withAlpha(0.5),
+    showFill: true,
   },
   // =========================== 交互层 ===========================
   // 选中高亮：默认黄色

@@ -155,7 +155,7 @@ export class HexHeightCache {
         
         // 更新地形类型和视觉样式
         cell.addVisualStyleByElevation();
-        console.log(`[HexHeightCache] Cell ${cell.hexId} 更新高度：center=${centerHeight.toFixed(2)}, elevation=${cell.terrainAttributes.elevation.toFixed(2)}`);
+        // console.log(`[HexHeightCache] Cell ${cell.hexId} 更新高度：center=${centerHeight.toFixed(2)}, elevation=${cell.terrainAttributes.elevation.toFixed(2)}`);
         
         // 计算并缓存上表面高度
         this._calculateSurfaceHeight(cell);
@@ -229,9 +229,12 @@ export class HexHeightCache {
     
     // 如果点不在当前六角格内，尝试查找是否在周围六角格内
     console.log(`[DEBUG] 当前六角格中未找到三角形，尝试检查周围六角格`);
+    
+    // 获取直接相邻的六角格
     const nearbyHexIds = this._findNearbyHexIds(hexId);
     console.log(`[DEBUG] 周围六角格ID: ${nearbyHexIds}`);
     
+    // 搜索直接相邻的六角格
     for (const neighborId of nearbyHexIds) {
       const neighborCache = this.hexHeightCache.get(neighborId);
       if (!neighborCache) continue;
@@ -257,25 +260,98 @@ export class HexHeightCache {
       }
     }
 
+    // 如果仍未找到，尝试获取第二层相邻的六角格（相邻六角格的相邻六角格）
+    console.log(`[DEBUG] 直接相邻六角格中未找到三角形，扩展搜索范围`);
+    
+    // 避免重复检查的六角格
+    const checkedHexIds = new Set([hexId, ...nearbyHexIds]);
+    
+    // 获取第二层相邻的六角格
+    const secondLayerHexIds = [];
+    for (const neighborId of nearbyHexIds) {
+      const secondLayerNeighbors = this._findNearbyHexIds(neighborId);
+      for (const secondLayerId of secondLayerNeighbors) {
+        if (!checkedHexIds.has(secondLayerId)) {
+          secondLayerHexIds.push(secondLayerId);
+          checkedHexIds.add(secondLayerId);
+        }
+      }
+    }
+    
+    console.log(`[DEBUG] 扩展搜索的六角格: ${secondLayerHexIds.join(', ')}`);
+    
+    // 搜索第二层相邻的六角格
+    for (const secondLayerId of secondLayerHexIds) {
+      const secondLayerCache = this.hexHeightCache.get(secondLayerId);
+      if (!secondLayerCache) continue;
+      
+      console.log(`[DEBUG] 检查扩展六角格: ${secondLayerId}`);
+      
+      // 用放宽的标准检查点是否在六角格的三角形内
+      const secondLayerTriangle = this._findContainingTriangleRelaxed(
+        secondLayerCache, longitude, latitude, 0.0001 // 放宽容差
+      );
+      
+      if (secondLayerTriangle) {
+        console.log(`[DEBUG] 在扩展六角格 ${secondLayerId} 中找到三角形，索引: ${secondLayerTriangle.index}`);
+        // 插值计算该点的高度
+        const terrainHeight = this._calcInterpolatedHeight(
+          {longitude, latitude},
+          secondLayerTriangle.points[0],
+          secondLayerTriangle.points[1],
+          secondLayerTriangle.points[2]
+        );
+        
+        // 计算表面高度 = 地形高度 + 高度偏移
+        const finalHeight = terrainHeight + secondLayerCache.heightOffset;
+        console.log(`[DEBUG] 扩展六角格插值高度: ${terrainHeight}, 最终高度: ${finalHeight}`);
+        return finalHeight;
+      }
+    }
+
     // 如果所有六角格中都找不到，使用最近的顶点或中心点高度
     console.warn(`[HexHeightCache] 无法为位置 (${longitude.toFixed(6)}, ${latitude.toFixed(6)}) 找到表面高度，使用最近顶点高度代替`);
     
+    // 找到该点距离最近的所有六角格（直接相邻 + 第二层）
+    const allHexIds = [hexId, ...nearbyHexIds, ...secondLayerHexIds];
+    let closestHexId = hexId;
+    let minHexDistance = Number.MAX_VALUE;
+    
+    // 找到距离该点最近的六角格
+    for (const id of allHexIds) {
+      const cache = this.hexHeightCache.get(id);
+      if (!cache) continue;
+      
+      const distToCenter = Math.sqrt(
+        Math.pow(longitude - cache.center.longitude, 2) + 
+        Math.pow(latitude - cache.center.latitude, 2)
+      );
+      
+      if (distToCenter < minHexDistance) {
+        minHexDistance = distToCenter;
+        closestHexId = id;
+      }
+    }
+    
+    // 使用距离最近的六角格进行高度计算
+    const closestHexCache = this.hexHeightCache.get(closestHexId);
+    
     // 找到最近的顶点或中心点
     let minDist = Number.MAX_VALUE;
-    let closestHeight = hexCache.center.height;
+    let closestHeight = closestHexCache.center.height;
     
     // 检查中心点
     const distToCenter = Math.sqrt(
-      Math.pow(longitude - hexCache.center.longitude, 2) + 
-      Math.pow(latitude - hexCache.center.latitude, 2)
+      Math.pow(longitude - closestHexCache.center.longitude, 2) + 
+      Math.pow(latitude - closestHexCache.center.latitude, 2)
     );
     if (distToCenter < minDist) {
       minDist = distToCenter;
-      closestHeight = hexCache.center.height;
+      closestHeight = closestHexCache.center.height;
     }
     
     // 检查六个顶点
-    hexCache.vertices.forEach(vertex => {
+    closestHexCache.vertices.forEach(vertex => {
       const dist = Math.sqrt(
         Math.pow(longitude - vertex.longitude, 2) + 
         Math.pow(latitude - vertex.latitude, 2)
@@ -286,8 +362,8 @@ export class HexHeightCache {
       }
     });
     
-    console.log(`[DEBUG] 使用最近点高度: ${closestHeight}, 最终高度: ${closestHeight + hexCache.heightOffset}`);
-    return closestHeight + hexCache.heightOffset;
+    console.log(`[DEBUG] 使用最近点高度: ${closestHeight}, 最终高度: ${closestHeight + closestHexCache.heightOffset}`);
+    return closestHeight + closestHexCache.heightOffset;
   }
 
   /**
@@ -597,6 +673,73 @@ export class HexHeightCache {
     
     // 所有叉积必须同号或者有一个在边界上
     return (isSameSign(cp1, cp2) && isSameSign(cp2, cp3) && isSameSign(cp3, cp1));
+  }
+
+  /**
+   * 使用放宽标准查找指定点所处的三角形分区
+   * @private
+   * @param {Object} hexCache 六角格缓存
+   * @param {number} longitude 经度
+   * @param {number} latitude 纬度
+   * @param {number} tolerance 容差值
+   * @returns {Object|null} 包含该点的三角形
+   */
+  _findContainingTriangleRelaxed(hexCache, longitude, latitude, tolerance = 0) {
+    for (const triangle of hexCache.triangles) {
+      // 判断点是否在三角形内（使用放宽的标准）
+      if (this._isPointInTriangleRelaxed(
+        {longitude, latitude},
+        triangle.points[0],
+        triangle.points[1],
+        triangle.points[2],
+        tolerance
+      )) {
+        return triangle;
+      }
+    }
+    return null;
+  }
+  
+  /**
+   * 使用放宽标准判断点是否在三角形内
+   * @private
+   * @param {Object} p 点 {longitude, latitude}
+   * @param {Object} a 三角形顶点1
+   * @param {Object} b 三角形顶点2
+   * @param {Object} c 三角形顶点3
+   * @param {number} tolerance 容差值
+   * @returns {boolean} 是否在三角形内
+   */
+  _isPointInTriangleRelaxed(p, a, b, c, tolerance = 0) {
+    // 特殊情况：如果是中心点则直接返回true
+    // 使用一个很小的阈值进行判断，以应对可能的浮点数精度问题
+    const EPSILON = 1e-6;
+    if (Math.abs(p.longitude - a.longitude) < EPSILON && 
+        Math.abs(p.latitude - a.latitude) < EPSILON) {
+      return true;
+    }
+    
+    // 使用向量叉积的方法判断点是否在三角形内
+    function crossProduct(p1, p2, p3) {
+      return (p2.longitude - p1.longitude) * (p3.latitude - p1.latitude) - 
+             (p3.longitude - p1.longitude) * (p2.latitude - p1.latitude);
+    }
+    
+    // 计算三次叉积，并添加容差
+    const cp1 = crossProduct(p, a, b);
+    const cp2 = crossProduct(p, b, c);
+    const cp3 = crossProduct(p, c, a);
+    
+    // 添加容错处理，使用放宽的判断标准
+    const isSameSignRelaxed = (v1, v2) => {
+      // 如果任一值的绝对值小于容差，视为在边界上
+      if (Math.abs(v1) < tolerance || Math.abs(v2) < tolerance) return true;
+      // 否则检查符号是否相同
+      return (v1 * v2 > -tolerance); // 放宽符号检查的标准
+    };
+    
+    // 所有叉积必须同号或者在容差范围内
+    return (isSameSignRelaxed(cp1, cp2) && isSameSignRelaxed(cp2, cp3) && isSameSignRelaxed(cp3, cp1));
   }
 
   /**

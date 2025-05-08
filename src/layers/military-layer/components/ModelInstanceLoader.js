@@ -65,17 +65,10 @@ export class ModelInstanceLoader {
     // 并行加载所有LOD级别模型
     const loadPromises = sortedLevels.map(async (lod) => {
       try {
-        // 准备模型变换矩阵
-        const modelMatrix = Cesium.Matrix4.IDENTITY.clone();
-        
-        // 应用偏移
-        const translation = new Cesium.Cartesian3(offset.x, offset.y, offset.z);
-        Cesium.Matrix4.multiplyByTranslation(modelMatrix, translation, modelMatrix);
-        
-        // 等待模型加载完成
+        // 加载模型
         const model = await Cesium.Model.fromGltfAsync({
           url: lod.path,
-          modelMatrix: modelMatrix,
+          modelMatrix: Cesium.Matrix4.IDENTITY.clone(),
           scale: scale,
           allowPicking: false, 
           shadows: Cesium.ShadowMode.ENABLED
