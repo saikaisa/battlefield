@@ -65,13 +65,24 @@ export class CommandProcessor {
   }
 
   // ================ 场景控制命令 ================
-
   /**
    * 切换俯瞰模式
+   * - 初始模式：自由模式/俯瞰模式
+   * - 目标模式：自由模式/俯瞰模式
+   * - Fallback模式：自由模式
    * @param {boolean} enabled 是否启用俯瞰模式
    * @returns {Object} 命令执行结果
    */
   async setPanoramaMode(enabled) {
+    // 仅能在自由模式或俯瞰模式下切换俯瞰模式
+    const currentMode = gameModeService.getCurrentMode();
+    if (currentMode !== GameMode.FREE && currentMode !== GameMode.PANORAMA) {
+      throw new CommandError("仅能在自由模式或俯瞰模式下切换俯瞰模式", "panorama");
+    }
+
+    // 切换到对应的游戏模式
+    gameModeService.setMode(enabled ? GameMode.PANORAMA : GameMode.FREE);
+
     try {
       // 设置相机俯瞰视角
       if (enabled) {
@@ -79,11 +90,8 @@ export class CommandProcessor {
         this.cameraController.setTopDownView();
       } else {
         // 禁用俯瞰模式，并恢复上次视角
-        this.cameraController.focusOnLocation(null, 2.0);
-      }
-
-      // 切换到对应的游戏模式
-      gameModeService.setMode(enabled ? GameMode.PANORAMA : GameMode.FREE);
+        this.cameraController.focusOnLocation(null, 2.0, false);
+      }  
 
       return {
         status: CommandStatus.FINISHED,
@@ -91,40 +99,55 @@ export class CommandProcessor {
       };
     } catch (error) {
       gameModeService.setMode(GameMode.FREE);
+      this.resetCamera();
       throw new CommandError(`切换俯瞰模式失败: ${error.message}`, "panorama");
     }
   }
 
   /**
    * 切换环绕模式
+   * - 初始模式：自由模式/环绕模式
+   * - 目标模式：自由模式/环绕模式
+   * - Fallback模式：自由模式
    * @param {boolean} enabled 是否启用环绕模式
    * @returns {Object} 命令执行结果
    */
   async toggleOrbitMode(enabled) {
+    // 仅能在自由模式或环绕模式下切换环绕模式
+    const currentMode = gameModeService.getCurrentMode();
+    if (currentMode !== GameMode.FREE && currentMode !== GameMode.ORBIT) {
+      throw new CommandError("仅能在自由模式或环绕模式下切换环绕模式", "orbit");
+    }
+
+    // 切换到对应的游戏模式
+    gameModeService.setMode(enabled ? GameMode.ORBIT : GameMode.FREE);
+
     try {
       // 切换相机控制
       this.cameraController.setOrbitMode(enabled);
-
-      // 切换到对应的游戏模式
-      gameModeService.setMode(enabled ? GameMode.ORBIT : GameMode.FREE);
 
       return {
         status: CommandStatus.FINISHED,
         message: `环绕模式已${enabled ? "启用" : "禁用"}`,
       };
     } catch (error) {
-      // 发生错误时恢复状态
       gameModeService.setMode(GameMode.FREE);
-      this.cameraController.resetToDefaultView();
+      this.resetCamera();
       throw new CommandError(`切换环绕模式失败: ${error.message}`, "orbit");
     }
   }
 
   /**
-   * 重置相机位置
+   * 复位
+   * - 初始模式：任意
+   * - 目标模式：自由模式
+   * - Fallback模式：无
    * @returns {Object} 命令执行结果
    */
   async resetCamera() {
+    // 切换到自由模式
+    gameModeService.setMode(GameMode.FREE);
+
     try {
       this.cameraController.resetToDefaultView();
       return {
@@ -138,10 +161,21 @@ export class CommandProcessor {
 
   /**
    * 聚焦到指定部队，如果未指定部队ID，则使用当前选中的部队
+   * - 初始模式：任意
+   * - 目标模式：无。但如果处于俯瞰模式/环绕模式，则恢复到自由模式
+   * - Fallback模式：无
    * @param {string} [forceId] 部队ID
    * @returns {Object} 命令执行结果
    */
   async focusOnForce(forceId = null) {
+    // 如果处于俯瞰模式或环绕模式则先回到自由模式
+    // 不直接调用切换俯瞰模式或切换环绕模式方法，因为它们在切换模式的同时会移动视角，
+    // 导致聚焦部队前还要进行不必要的视角移动
+    const currentMode = gameModeService.getCurrentMode();
+    if (currentMode === GameMode.PANORAMA || currentMode === GameMode.ORBIT) {
+      gameModeService.setMode(GameMode.FREE);
+    }
+
     try {
       // 如果没有指定部队ID，则使用当前选中的最后一个部队
       if (!forceId && this.store.selectedForceIds.size > 0) {
@@ -172,6 +206,7 @@ export class CommandProcessor {
 
   /**
    * 切换图层
+   * - 不影响游戏模式
    * @param {number} layerIndex 图层索引
    * @returns {Object} 命令执行结果
    */
@@ -189,9 +224,18 @@ export class CommandProcessor {
 
   /**
    * 切换到下一个阵营/回合
+   * - 初始模式：自由模式
+   * - 目标模式：无
+   * - Fallback模式：无
    * @returns {Object} 命令执行结果
    */
   async switchToNextFaction() {
+    // 仅能在自由模式下切换阵营
+    const currentMode = gameModeService.getCurrentMode();
+    if (currentMode !== GameMode.FREE) {
+      throw new CommandError("仅能在自由模式下切换阵营", "faction");
+    }
+
     try {
       // 记录切换前的回合数
       const prevRound = this.store.currentRound;
@@ -234,10 +278,19 @@ export class CommandProcessor {
 
   /**
    * 切换统计模式
+   * - 初始模式：自由模式/统计模式
+   * - 目标模式：自由模式/统计模式
+   * - Fallback模式：自由模式
    * @param {boolean} enabled 是否启用统计模式
    * @returns {Object} 命令执行结果
    */
   async toggleStatMode(enabled) {
+    // 仅能在自由模式和统计模式下切换统计模式
+    const currentMode = gameModeService.getCurrentMode();
+    if (currentMode !== GameMode.FREE && currentMode !== GameMode.STATISTICS) {
+      throw new CommandError("仅能在自由模式和统计模式下切换统计模式", "statistics");
+    }
+
     try {
       if (enabled) {
         // 进入统计模式前保存当前选择状态
@@ -268,14 +321,20 @@ export class CommandProcessor {
   }
 
   // ================ 移动命令 ================
-  // GameMode为FREE时，点击移动按钮调用movePrepare
-  // GameMode为MOVE_PREPARE时，点击移动按钮调用move
   /**
    * 移动准备
+   * - 初始模式：自由模式
+   * - 目标模式：移动准备模式
+   * - Fallback模式：自由模式
    * @param {string} forceId 部队ID
    * @returns {Object} 命令执行结果
    */
   async movePrepare(forceId) {
+    // 仅能在自由模式下进行移动准备
+    if (gameModeService.getCurrentMode() !== GameMode.FREE) {
+      throw new CommandError("仅能在自由模式下执行移动准备", "move");
+    }
+
     try {
       // 先保存当前选择状态
       gameModeService.saveSelectedHexIds();
@@ -290,7 +349,7 @@ export class CommandProcessor {
       }
 
       // 切换到移动准备模式
-      gameModeService.setMode(GameMode.MOVE_PREPARE);      
+      gameModeService.setMode(GameMode.MOVE_PREPARE);
 
       return {
         status: CommandStatus.FINISHED,
@@ -306,11 +365,20 @@ export class CommandProcessor {
 
   /**
    * 执行移动
+   * - 初始模式：自由模式(JSON指令)或移动准备模式(UI)
+   * - 目标模式：移动执行模式
+   * - Fallback模式：自由模式(JSON指令)或移动准备模式(UI)
    * @param {string} forceId 部队ID
    * @param {string[]} path 移动路径（六角格ID数组）
    * @returns {Object} 命令执行结果
    */
   async move(forceId, path) {
+    // 仅能在自由模式或移动准备模式下执行移动
+    const lastMode = gameModeService.getCurrentMode();
+    if (lastMode !== GameMode.FREE && lastMode !== GameMode.MOVE_PREPARE) {
+      throw new CommandError("仅能在自由模式或移动准备模式下执行移动", "move");
+    }
+
     const forceInstance = this.forceInstanceMap.get(forceId);
     if (!forceInstance) {
       console.error(`未找到部队实例: ${forceId}`);
@@ -322,8 +390,6 @@ export class CommandProcessor {
       throw new CommandError(`无法获取部队: ${forceId}`, "validation");
     }
 
-    // 保存进入时的模式
-    const lastMode = gameModeService.getCurrentMode();
     // 保存进入时的选中的六角格和部队id
     gameModeService.saveSelectedHexIds();
 
@@ -417,15 +483,21 @@ export class CommandProcessor {
   }
 
   // ================ 攻击命令 ================
-  // GameMode为FREE时，点击攻击按钮调用attackPrepare
-  // GameMode为ATTACK_PREPARE时，点击攻击按钮调用attack
   /**
    * 攻击准备
+   * - 初始模式：自由模式
+   * - 目标模式：攻击准备模式
+   * - Fallback模式：自由模式
    * @param {string} forceId 部队ID
    * @returns {Object} 命令执行结果
    */
   async attackPrepare(forceId) {
     try {
+      // 仅能在自由模式下进行攻击准备
+      if (gameModeService.getCurrentMode() !== GameMode.FREE) {
+        throw new CommandError("仅能在自由模式下进行攻击准备", "attack");
+      }
+
       // 先保存当前选择状态
       gameModeService.saveSelectedHexIds();
 
@@ -458,14 +530,21 @@ export class CommandProcessor {
 
   /**
    * 执行攻击
+   * - 初始模式：自由模式(JSON指令)或攻击准备模式(UI)
+   * - 目标模式：攻击执行模式
+   * - Fallback模式：自由模式(JSON指令)或攻击准备模式(UI)
    * @param {string} commandForceId 指挥部队ID
    * @param {string} targetHex 目标六角格ID
    * @param {Array<string>} supportForceIds 支援部队ID数组
    * @returns {Object} 命令执行结果
    */
   async attack(commandForceId, targetHex, supportForceIds = []) {
-    // 保存进入时的模式
+    // 仅能在自由模式或攻击准备模式下执行攻击
     const lastMode = gameModeService.getCurrentMode();
+    if (lastMode !== GameMode.FREE && lastMode !== GameMode.ATTACK_PREPARE) {
+      throw new CommandError("仅能在自由模式或攻击准备模式下执行攻击", "attack");
+    }
+
     // 保存进入时的选中的六角格和部队id
     gameModeService.saveSelectedHexIds();
 
@@ -501,6 +580,7 @@ export class CommandProcessor {
   }
 
   // ================ 部队和兵种管理命令 ================
+  // 这些命令在自由模式下执行
 
   /**
    * 编辑兵种
@@ -508,6 +588,11 @@ export class CommandProcessor {
    * @returns {Object} 命令执行结果
    */
   async editUnit(unitData) {
+    // 仅能在自由模式下编辑兵种
+    if (gameModeService.getCurrentMode() !== GameMode.FREE) {
+      throw new CommandError("仅能在自由模式下编辑兵种", "unit");
+    }
+
     try {
       // 判断是修改还是创建操作
       const isUpdate = !!unitData.unitId && this.store.getUnitById(unitData.unitId);
@@ -538,6 +623,11 @@ export class CommandProcessor {
    * @returns {Object} 命令执行结果
    */
   async deleteUnit(unitId) {
+    // 仅能在自由模式下删除兵种
+    if (gameModeService.getCurrentMode() !== GameMode.FREE) {
+      throw new CommandError("仅能在自由模式下删除兵种", "unit");
+    }
+
     try {
       // 检查兵种是否存在
       const unit = this.store.getUnitById(unitId);
@@ -574,6 +664,11 @@ export class CommandProcessor {
    * @returns {Object} 命令执行结果
    */
   async createForce(forceData, formationId = null) {
+    // 仅能在自由模式下创建部队
+    if (gameModeService.getCurrentMode() !== GameMode.FREE) {
+      throw new CommandError("仅能在自由模式下创建部队", "force");
+    }
+
     try {
       if (forceData.forceId || !forceData || !forceData.hexId || !forceData.composition || forceData.composition.length === 0) {
         throw new CommandError("部队数据无效", "validation");

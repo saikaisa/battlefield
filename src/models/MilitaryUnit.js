@@ -193,7 +193,7 @@ export class Force {
   get visibilityRadius() { return this._maxUnitAttr('visibilityRadius'); }
 
   // 兵力值恢复速率
-  get recoveryRate() { return this._weightedSumUnitAttr('recoveryRate') * this.fatigueFactor; }
+  get recoveryRate() { return this._sumUnitAttr('recoveryRate') * this.fatigueFactor; }
 
   // 指挥能力
   get commandCapability() { return this._maxUnitAttr('commandCapability'); }

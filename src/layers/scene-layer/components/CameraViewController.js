@@ -42,6 +42,14 @@ export class CameraViewController {
     this._MAX_HISTORY = 10;
     // 用于存储相机飞行前的输入状态
     this._savedInputState = null;
+    // 跟踪相机是否正在飞行中
+    this._isFlying = false;
+    // 当前活跃的飞行ID，用于追踪最近的飞行请求
+    this._currentFlightId = 0;
+    // 防抖定时器ID
+    this._focusDebounceTimer = null;
+    // 飞行安全计时器ID（确保飞行能在超时后恢复输入控制）
+    this._flightSafetyTimer = null;
   }
 
   /**
@@ -78,10 +86,37 @@ export class CameraViewController {
   }
 
   /**
-   * 重置相机视角到默认视角
+   * 重置相机视角到默认视角（看向地图中心）
    */
   resetToDefaultView() {
     this.focusOnLocation(new CameraView(), 1.0);
+  }
+
+  /**
+   * 恢复正常视角（相机看向的中心位置不变）
+   */
+  resetView() {
+    const cameraView = CameraView.fromCurrentView(this.viewer);
+    this.focusOnLocation(cameraView, 0.5);
+  }
+
+  /**
+   * 取消当前进行中的相机飞行
+   * @private
+   */
+  _cancelCurrentFlight() {
+    if (this._isFlying) {
+      this.viewer.camera.cancelFlight();
+      // 确保手动调用恢复输入
+      this._restoreUserInputs();
+      this._isFlying = false;
+    }
+    
+    // 清除所有相关计时器
+    if (this._flightSafetyTimer) {
+      clearTimeout(this._flightSafetyTimer);
+      this._flightSafetyTimer = null;
+    }
   }
 
   /**
@@ -90,57 +125,109 @@ export class CameraViewController {
    * @param {number} duration 动画持续时间
    */
   focusOnHex(hexId, duration = 0.7) {
-    const hexCell = this.store.getHexCellById(hexId);
-    if (!hexCell) {
-      throw new Error(`无法找到六角格: ${hexId}`);
-    } 
-    const center = hexCell.getCenter();
-    const cameraView = CameraView.closeUpView(this.viewer,
-      Cesium.Cartographic.fromDegrees(center.longitude, center.latitude, center.height)
-    );
-    this.focusOnLocation(cameraView, duration);
+    // 防抖处理：如果短时间内多次调用，只执行最后一次
+    if (this._focusDebounceTimer) {
+      clearTimeout(this._focusDebounceTimer);
+    }
+    
+    this._focusDebounceTimer = setTimeout(() => {
+      try {
+        const hexCell = this.store.getHexCellById(hexId);
+        if (!hexCell) {
+          console.warn(`无法找到六角格: ${hexId}`);
+          return;
+        } 
+        const center = hexCell.getCenter();
+        const cameraView = CameraView.closeUpView(this.viewer,
+          Cesium.Cartographic.fromDegrees(center.longitude, center.latitude, center.height)
+        );
+        this.focusOnLocation(cameraView, duration);
+      } catch (error) {
+        console.error("聚焦六角格发生错误:", error);
+        // 确保恢复输入控制
+        this._restoreUserInputs();
+        this._isFlying = false;
+      }
+    }, 100); // 100ms防抖延迟
   }
 
   /**
    * 定点居中显示：以45度倾斜角观察一个指定经纬度的地表上的点并居中显示
-   * @param {CameraView} cameraView 当前相机视角对象
-   * @param {number} duration 动画持续时间
+   * @param {CameraView} [cameraView] 当前相机视角对象
+   * @param {number} [duration] 动画持续时间
    */
-  focusOnLocation(cameraView, duration = 0.7) {
-    // 如果没有传入cameraView，则恢复上一次的视角
-    if (!cameraView) {
-      const lastView = this._getLatestView();
-      if (lastView) {
-        cameraView = lastView;
-      } else {
-        // 如果没有历史视角，则使用默认视角
-        cameraView = new CameraView();
+  focusOnLocation(cameraView, duration = 0.7, save = true) {
+    try {
+      // 取消之前正在进行的飞行
+      this._cancelCurrentFlight();
+      
+      // 如果没有传入cameraView，则恢复上一次的视角
+      if (!cameraView) {
+        const lastView = this._getLatestView();
+        if (lastView) {
+          cameraView = lastView;
+          // console.log(`恢复上一次的视角: ${cameraView.position.latitude}, ${cameraView.position.longitude}, ${cameraView.position.height}`);
+        } else {
+          // 如果没有历史视角，则使用默认视角
+          cameraView = new CameraView();
+          // console.log(`没有历史视角，使用默认视角: ${cameraView.position.latitude}, ${cameraView.position.longitude}, ${cameraView.position.height}`);
+        }
       }
-    }
 
-    this._addViewHistory(cameraView); // 移动视角前存储当前视角位置
-    this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-    
-    // 禁用用户输入
-    this._disableUserInputs();
-    
-    // 平滑飞行，以pivot为中心，恢复高度和角度，保证 pivot 在屏幕中心
-    this.viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(cameraView.getCartesianPos(), 0), {
-      offset: new Cesium.HeadingPitchRange(cameraView.heading, cameraView.pitch, cameraView.range),
-      duration: duration,
-      complete: () => {
-        // 飞行完成后恢复用户输入
-        if (this.store.cameraControlEnabled) {
-          this._restoreUserInputs();
-        }
-      },
-      cancel: () => {
-        // 飞行被取消时也要恢复用户输入
-        if (this.store.cameraControlEnabled) {
-          this._restoreUserInputs();
-        }
+      // 创建本次飞行的ID
+      const flightId = ++this._currentFlightId;
+      if (save) {
+        this._addViewHistory(cameraView); // 移动视角前存储当前视角位置
       }
-    });
+      this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      
+      // 标记飞行状态并禁用用户输入
+      this._isFlying = true;
+      this._disableUserInputs();
+      
+      // 设置安全计时器，确保即使飞行回调未触发，也能在一定时间后恢复输入
+      if (this._flightSafetyTimer) {
+        clearTimeout(this._flightSafetyTimer);
+      }
+      this._flightSafetyTimer = setTimeout(() => {
+        if (this._isFlying && this._currentFlightId === flightId) {
+          console.warn("相机飞行安全超时，强制恢复输入控制");
+          this._restoreUserInputs();
+          this._isFlying = false;
+        }
+      }, (duration * 1000) + 2000); // 飞行时间 + 2秒安全边界
+      
+      // 平滑飞行，以pivot为中心，恢复高度和角度，保证 pivot 在屏幕中心
+      this.viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(cameraView.getCartesianPos(), 0), {
+        offset: new Cesium.HeadingPitchRange(cameraView.heading, cameraView.pitch, cameraView.range),
+        duration: duration,
+        complete: () => {
+          // 只有当这是最近的飞行请求时，才恢复输入
+          if (this._currentFlightId === flightId) {
+            // 飞行完成后恢复用户输入
+            this._isFlying = false;
+            if (this.store.cameraControlEnabled) {
+              this._restoreUserInputs();
+            }
+          }
+        },
+        cancel: () => {
+          // 只有当这是最近的飞行请求时，才恢复输入
+          if (this._currentFlightId === flightId) {
+            // 飞行被取消时也要恢复用户输入
+            this._isFlying = false;
+            if (this.store.cameraControlEnabled) {
+              this._restoreUserInputs();
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error("聚焦位置发生错误:", error);
+      // 确保恢复输入控制
+      this._restoreUserInputs();
+      this._isFlying = false;
+    }
   }
 
   /**
@@ -171,9 +258,10 @@ export class CameraViewController {
     panoramaView.range = range;
     panoramaView.heading = 0; // 正北方向
     panoramaView.pitch = Cesium.Math.toRadians(-90); // 垂直向下俯瞰
+    // console.log(`设置俯瞰视角: ${panoramaView.position.latitude}, ${panoramaView.position.longitude}, ${panoramaView.position.height}`);
     
     // 飞行到俯瞰位置
-    this.focusOnLocation(panoramaView, 2.0);
+    this.focusOnLocation(panoramaView, 2.0, false);
   }
 
   /**
@@ -206,10 +294,12 @@ export class CameraViewController {
       // 退出 orbit 模式：解除 lookAt，并平滑飞行恢复
       console.log(`-----------------Orbit Disable--------------`);
       this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-      const oldCameraView = this._getLatestView();
+      let oldCameraView = this._getLatestView();
       
+      // 如果无法获取历史视角，则使用默认视角
       if (!oldCameraView) {
-        console.error("无法获取历史视角，无法退出环绕模式");
+        console.error("无法获取历史视角！");
+        this.resetView();
         return;
       }
 
@@ -229,14 +319,16 @@ export class CameraViewController {
   _disableUserInputs() {
     const controller = this.viewer.scene.screenSpaceCameraController;
     
-    // 保存当前输入状态
-    this._savedInputState = {
-      enableRotate: controller.enableRotate,
-      enableTranslate: controller.enableTranslate,
-      enableZoom: controller.enableZoom,
-      enableTilt: controller.enableTilt,
-      enableLook: controller.enableLook
-    };
+    // 保存当前输入状态（如果尚未保存）
+    if (!this._savedInputState) {
+      this._savedInputState = {
+        enableRotate: controller.enableRotate,
+        enableTranslate: controller.enableTranslate,
+        enableZoom: controller.enableZoom,
+        enableTilt: controller.enableTilt,
+        enableLook: controller.enableLook
+      };
+    }
     
     // 禁用所有用户输入
     controller.enableRotate = false;
@@ -262,6 +354,13 @@ export class CameraViewController {
       controller.enableLook = this._savedInputState.enableLook;
       
       this._savedInputState = null;
+    } else {
+      // 如果没有保存的状态，则默认全部启用
+      controller.enableRotate = CameraConfig.enableRotate;
+      controller.enableTranslate = CameraConfig.enableTranslate;
+      controller.enableZoom = CameraConfig.enableZoom;
+      controller.enableTilt = CameraConfig.enableTilt;
+      controller.enableLook = CameraConfig.enableLook;
     }
   }
 

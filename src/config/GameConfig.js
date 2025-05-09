@@ -115,7 +115,11 @@ export const CameraConfig = {
   closeUpRange: 3000,
   minZoomDistance: 0,
   maxZoomDistance: 15000,
-  enableTilt: false
+  enableTilt: false,
+  enableRotate: true,
+  enableZoom: true,
+  enableTranslate: true,
+  enableLook: true,
 };
 
 /** 军事单位相关配置 */ 

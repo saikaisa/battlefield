@@ -2,327 +2,344 @@
   命令管理面板
 -->
 <template>
-  <div class="command-panel" :class="{ 'collapsed': isPanelCollapsed }">
-    <!-- 折叠/展开按钮 -->
-    <div class="toggle-panel-button" @click="togglePanelCollapse">
-      <i :class="isPanelCollapsed ? 'el-icon-arrow-right' : 'el-icon-arrow-left'"></i>
-    </div>
-
-    <!-- 主面板卡片 -->
-    <el-card v-show="!isPanelCollapsed" class="command-panel-card">
-      <!-- 面板标题 -->
-      <div class="panel-title">
-        <h3>命令管理面板</h3>
+  <teleport to="body">
+    <div class="command-panel" :class="{ 'collapsed': isPanelCollapsed }">
+      <!-- 折叠/展开按钮 -->
+      <div class="toggle-panel-button" @click="togglePanelCollapse">
+        <el-icon><ArrowLeft v-if="!isPanelCollapsed" /><ArrowRight v-else /></el-icon>
       </div>
-      
-      <!-- 面板控制行 -->
-      <div class="panel-controls">
+
+      <!-- 主面板卡片 -->
+      <el-card v-show="!isPanelCollapsed" class="command-panel-card">
+        <!-- 面板标题 -->
+        <div class="panel-title">
+          <h3>命令管理面板</h3>
+        </div>
+        
+        <!-- 面板控制行 -->
+        <div class="panel-controls">
           <!-- 自动/手动模式切换开关 -->
           <el-switch
             v-model="autoMode"
-            active-text="自动模式"
-            inactive-text="手动模式"
+            :active-text="autoMode ? '自动模式' : '手动模式'"
             :disabled="isButtonDisabled('auto-mode')"
+            size="small"
           />
-        <!-- 清空列表链接 -->
-        <a 
-          class="clear-list-link" 
-          @click="activeTab === 'queue' ? clearQueue() : clearHistory()"
-          :class="{ 'disabled': isButtonDisabled('clear-list') || 
-                    (activeTab === 'queue' && filteredQueueCommands.length === 0) || 
-                    (activeTab === 'history' && filteredHistoryCommands.length === 0) }"
-        >
-          清空列表
-        </a>
-      </div>
+          <!-- 清空列表链接 -->
+          <a 
+            class="clear-list-link" 
+            @click="activeTab === 'queue' ? clearQueue() : clearHistory()"
+            :class="{ 'disabled': isButtonDisabled('clear-list') || 
+                      (activeTab === 'queue' && filteredQueueCommands.length === 0) || 
+                      (activeTab === 'history' && filteredHistoryCommands.length === 0) }"
+          >
+            清空列表
+          </a>
+        </div>
 
-      <!-- 标签页容器 -->
-      <el-tabs v-model="activeTab">
-        <!-- 命令队列标签页 -->
-        <el-tab-pane label="命令队列" name="queue">
-          <!-- 队列标题和过滤器 -->
-          <div class="section-header">
-            <h4>命令队列 ({{ filteredQueueCommands.length }} / {{ CommandLimit.QUEUE_LIMIT }})</h4>
-            <!-- 命令来源过滤器（单选） -->
-            <div class="source-filters">
-              <el-radio-group 
-                v-model="queueSourceSelected" 
-                @change="handleQueueSourceChange"
-                :disabled="autoMode || isExecuting"
-              >
-                <el-radio label="API">API</el-radio>
-                <el-radio label="FILE">文件</el-radio>
-                <el-radio label="MANUAL">手动</el-radio>
-              </el-radio-group>
+        <!-- 自定义标签栏 -->
+        <div class="custom-tabs">
+          <!-- 标签头部 -->
+          <div class="custom-tabs-header">
+            <div 
+              class="custom-tab" 
+              :class="{ 'active': activeTab === 'queue' }"
+              @click="activeTab = 'queue'"
+            >
+              命令队列
+            </div>
+            <div 
+              class="custom-tab" 
+              :class="{ 'active': activeTab === 'history' }"
+              @click="activeTab = 'history'"
+            >
+              命令历史
             </div>
           </div>
-          
-          <!-- 空队列提示 -->
-          <el-empty v-if="filteredQueueCommands.length === 0" description="暂无待执行命令">
-            <el-button type="primary" size="small" @click="handleAddCommand('manual')" :disabled="autoMode || isExecuting">
-              添加命令
-            </el-button>
-          </el-empty>
-          
-          <!-- 命令表格 -->
-          <div v-else class="command-table-container">
-            <!-- 表格头部 -->
-            <div class="command-table-header">
-              <div class="column type-column">类型</div>
-              <div class="column desc-column">描述</div>
-              <div class="column interval-column">间隔</div>
-              <div class="column handle-column"></div>
-            </div>
-          
-            <!-- 可拖拽的命令列表 -->
-            <draggable
-              v-model="draggedQueueCommands"
-              item-key="id"
-              handle=".drag-handle"
-              ghost-class="ghost"
-              :disabled="autoMode || isExecuting"
-              @end="handleDragEnd"
-              class="command-table-body"
-            >
-              <!-- 单个命令项模板 -->
-              <template #item="{ element }">
-                <!-- 命令项的status颜色样式及高亮样式 -->
-                <div 
-                  class="command-table-row"
-                  :class="[
-                    commandStatusClass(element.status),
-                    { 'selected-row': selectedCommandId === element.id }
-                  ]"
-                  @click="selectCommand(element.id)"
+        
+          <!-- 标签内容区域 -->
+          <div class="custom-tabs-content">
+            <!-- 命令队列面板 -->
+            <div v-if="activeTab === 'queue'" class="custom-tab-pane">
+              <!-- 命令来源过滤器（单选） -->
+              <div class="filter-container">
+                <el-radio-group 
+                  v-model="queueSourceSelected" 
+                  @change="handleQueueSourceChange"
+                  :disabled="autoMode || isExecuting"
+                  size="small"
                 >
-                  <!-- 命令类型 -->
-                  <div class="column type-column" :title="commandTypeText(element.type)">
-                    <el-tooltip :content="element.status === CommandStatus.EXECUTING ? '执行中' : ''" placement="top" :disabled="element.status !== CommandStatus.EXECUTING">
-                      <span>{{ commandTypeText(element.type) }}</span>
-                      <i v-if="element.status === CommandStatus.EXECUTING" class="el-icon-loading"></i>
-                    </el-tooltip>
+                  <el-radio :label="CommandSource.MANUAL">手动</el-radio>
+                  <el-radio :label="CommandSource.API">API</el-radio>
+                  <el-radio :label="CommandSource.FILE">文件</el-radio>
+                </el-radio-group>
+                <div class="count-badge">
+                  {{ filteredQueueCommands.length }} / {{ CommandLimit.QUEUE_LIMIT }}
+                </div>
+              </div>
+              
+              <!-- 内容区域（固定高度可滚动区域） -->
+              <div class="tab-content-area">
+                <!-- 空队列提示 -->
+                <el-empty v-if="filteredQueueCommands.length === 0" description="暂无待执行命令" :image-size="60">
+                  <el-button type="primary" size="small" @click="handleAddCommand('manual')" :disabled="autoMode || isExecuting">
+                    添加命令
+                  </el-button>
+                </el-empty>
+                
+                <!-- 命令表格 -->
+                <div v-else class="command-table-container" :class="{'command-table-container-queue': activeTab === 'queue'}">
+                  <!-- 表格头部 -->
+                  <div class="command-table-header">
+                    <div class="column type-column">类型</div>
+                    <div class="column desc-column">描述</div>
+                    <div class="column interval-column">间隔</div>
+                    <div class="column handle-column"></div>
                   </div>
-                  
-                  <!-- 命令描述 -->
-                  <div class="column desc-column" :title="getCommandSummary(element)">
-                    {{ getCommandSummary(element) }}
+                
+                  <!-- 可拖拽的命令列表 -->
+                  <draggable
+                    v-model="draggedQueueCommands"
+                    item-key="id"
+                    handle=".drag-handle"
+                    ghost-class="ghost"
+                    :disabled="autoMode || isExecuting"
+                    class="command-table-body"
+                    :animation="150"
+                  >
+                    <template #item="{ element }">
+                      <div 
+                        class="command-table-row"
+                        :class="[
+                          commandStatusClass(element.status),
+                          { 'selected-row': selectedCommandId === element.id }
+                        ]"
+                        @click="selectCommand(element.id)"
+                      >
+                        <!-- 命令类型 -->
+                        <div class="column type-column" :title="commandTypeText(element.type)">
+                          <el-tooltip :content="element.status === CommandStatus.EXECUTING ? '执行中' : ''" placement="top" :disabled="element.status !== CommandStatus.EXECUTING">
+                            <span>{{ commandTypeText(element.type) }}</span>
+                            <i v-if="element.status === CommandStatus.EXECUTING" class="el-icon-loading"></i>
+                          </el-tooltip>
+                        </div>
+                        
+                        <!-- 命令描述 -->
+                        <div class="column desc-column" :title="getCommandSummary(element)">
+                          {{ getCommandSummary(element) }}
+                        </div>
+                        
+                        <!-- 命令执行间隔 -->
+                        <div class="column interval-column" :title="element.interval !== undefined ? (element.interval < 0 ? '停止' : element.interval + 'ms') : ''">
+                          {{ element.interval !== undefined ? (element.interval < 0 ? '停止' : element.interval + 'ms') : '' }}
+                        </div>
+                        
+                        <!-- 拖拽手柄 -->
+                        <div class="column handle-column">
+                          <div class="drag-handle" v-if="!autoMode && !isExecuting">
+                            <el-icon><Menu /></el-icon>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </draggable>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 命令历史面板 -->
+            <div v-if="activeTab === 'history'" class="custom-tab-pane">
+              <!-- 命令来源过滤器（多选） -->
+              <div class="filter-container">
+                <div class="history-filters">
+                  <el-checkbox v-model="historyFilters[CommandSource.UI]" @change="handleHistoryFilterChange" size="small">UI</el-checkbox>
+                  <el-checkbox v-model="historyFilters[CommandSource.API]" @change="handleHistoryFilterChange" size="small">API</el-checkbox>
+                  <el-checkbox v-model="historyFilters[CommandSource.FILE]" @change="handleHistoryFilterChange" size="small">文件</el-checkbox>
+                  <el-checkbox v-model="historyFilters[CommandSource.MANUAL]" @change="handleHistoryFilterChange" size="small">手动</el-checkbox>
+                </div>
+                <div class="count-badge">
+                  {{ filteredHistoryCommands.length }} / {{ CommandLimit.HISTORY_LIMIT }}
+                </div>
+              </div>
+              
+              <!-- 内容区域（固定高度可滚动区域） -->
+              <div class="tab-content-area">
+                <!-- 空历史提示 -->
+                <el-empty v-if="filteredHistoryCommands.length === 0" description="暂无命令历史" :image-size="60">
+                  <el-button v-if="store.commandQueue.length > 0" type="primary" size="small" @click="activeTab = 'queue'">
+                    查看命令队列
+                  </el-button>
+                </el-empty>
+                
+                <!-- 历史命令表格 -->
+                <div v-else class="command-table-container" :class="{'command-table-container-history': activeTab === 'history'}">
+                  <!-- 表格头部 -->
+                  <div class="command-table-header">
+                    <div class="column type-column">类型</div>
+                    <div class="column desc-column">结果信息</div>
+                    <div class="column interval-column">执行时间</div>
+                    <div class="column handle-column">来源</div>
                   </div>
-                  
-                  <!-- 命令执行间隔 -->
-                  <div class="column interval-column" :title="element.interval !== undefined ? (element.interval < 0 ? '停止' : element.interval + 'ms') : ''">
-                    {{ element.interval !== undefined ? (element.interval < 0 ? '停止' : element.interval + 'ms') : '' }}
-                  </div>
-                  
-                  <!-- 拖拽手柄 -->
-                  <div class="column handle-column">
-                    <div class="drag-handle" v-if="!autoMode && !isExecuting">
-                      <i class="el-icon-menu"></i>
+                
+                  <!-- 历史命令列表 -->
+                  <div class="command-table-body">
+                    <div 
+                      v-for="item in filteredHistoryCommands" 
+                      :key="item.command.id"
+                      class="command-table-row"
+                      :class="[
+                        commandStatusClass(item.command.status),
+                        { 'selected-row': selectedCommandId === item.command.id }
+                      ]"
+                      @click="selectCommand(item.command.id)"
+                    >
+                      <!-- 命令类型 -->
+                      <div class="column type-column" :title="commandTypeText(item.command.type)">
+                        {{ commandTypeText(item.command.type) }}
+                      </div>
+                      
+                      <!-- 结果信息 -->
+                      <div class="column desc-column" :title="item.result?.message || ''">
+                        {{ item.result?.message || '' }}
+                      </div>
+                      
+                      <!-- 执行时间 -->
+                      <div class="column interval-column" :title="calDuration(item.command.startTime, item.command.endTime)">
+                        {{ calDuration(item.command.startTime, item.command.endTime) }}
+                      </div>
+                      
+                      <!-- 命令来源 -->
+                      <div class="column handle-column" :title="commandSourceText(item.command.source)">
+                        {{ commandSourceText(item.command.source) }}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </template>
-            </draggable>
-          </div>
-        </el-tab-pane>
-        
-        <!-- 命令历史标签页 -->
-        <el-tab-pane label="命令历史" name="history">
-          <!-- 历史标题和操作 -->
-          <div class="section-header">
-            <h4>命令历史 ({{ filteredHistoryCommands.length }} / {{ CommandLimit.HISTORY_LIMIT }})</h4>
-            <div class="history-actions">
-              <!-- 命令来源过滤器（多选） -->
-              <div class="source-filters">
-                <el-checkbox v-model="historyFilters.UI" @change="handleHistoryFilterChange">UI</el-checkbox>
-                <el-checkbox v-model="historyFilters.API" @change="handleHistoryFilterChange">API</el-checkbox>
-                <el-checkbox v-model="historyFilters.FILE" @change="handleHistoryFilterChange">文件</el-checkbox>
-                <el-checkbox v-model="historyFilters.MANUAL" @change="handleHistoryFilterChange">手动</el-checkbox>
               </div>
             </div>
           </div>
-          
-          <!-- 空历史提示 -->
-          <el-empty v-if="filteredHistoryCommands.length === 0" description="暂无命令历史">
-            <el-button v-if="store.commandQueue.length > 0" type="primary" size="small" @click="activeTab = 'queue'">
-              查看命令队列
-            </el-button>
-          </el-empty>
-          
-          <!-- 历史命令表格 -->
-          <div v-else class="command-table-container">
-            <!-- 表格头部 -->
-            <div class="command-table-header">
-              <div class="column type-column">类型</div>
-              <div class="column desc-column">结果信息</div>
-              <div class="column interval-column">执行时间</div>
-              <div class="column handle-column">来源</div>
-            </div>
-          
-          <!-- 历史命令列表 -->
-            <div class="command-table-body">
-            <div 
-              v-for="item in filteredHistoryCommands" 
-              :key="item.command.id"
-                class="command-table-row"
-                :class="[
-                  commandStatusClass(item.command.status),
-                  { 'selected-row': selectedCommandId === item.command.id }
-                ]"
-                @click="selectCommand(item.command.id)"
-              >
-                <!-- 命令类型 -->
-                <div class="column type-column" :title="commandTypeText(item.command.type)">
-                  {{ commandTypeText(item.command.type) }}
-                </div>
-                
-                <!-- 结果信息 -->
-                <div class="column desc-column" :title="item.result?.message || ''">
-                  {{ item.result?.message || '' }}
-                </div>
-                
-                <!-- 执行时间 -->
-                <div class="column interval-column" :title="calDuration(item.command.startTime, item.command.endTime)">
-                  {{ calDuration(item.command.startTime, item.command.endTime) }}
-                </div>
-                
-                <!-- 命令来源 -->
-                <div class="column handle-column">
-                  <div 
-                    class="source-color-block"
-                    :style="{backgroundColor: commandSourceColor(item.command.source)}"
-                    :title="commandSourceText(item.command.source)"
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-      
-      <!-- 底部操作按钮区域 -->
-      <div class="action-buttons">
-        <div class="command-actions" v-if="activeTab === 'queue'">
-          <el-button 
-            type="primary" 
-            size="small" 
-            @click="executeCommand(selectedCommandId)"
-            :disabled="!selectedCommandId || isButtonDisabled('execute')"
-          >
-            执行
-          </el-button>
-          <el-button 
-            type="warning" 
-            size="small" 
-            @click="editSelectedCommand"
-            :disabled="!selectedCommandId || isButtonDisabled('edit')"
-          >
-            编辑
-          </el-button>
-          <el-button 
-            type="danger" 
-            size="small" 
-            @click="removeCommand(selectedCommandId)"
-            :disabled="!selectedCommandId || isButtonDisabled('delete')"
-          >
-            删除
-          </el-button>
         </div>
         
-        <el-dropdown @command="handleAddCommand" trigger="click">
-          <el-button 
-            type="success" 
-            :disabled="isButtonDisabled('add')">
-            新增<i class="el-icon-arrow-down el-icon--right"></i>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="manual">手动添加</el-dropdown-item>
-              <el-dropdown-item command="file">从文件导入</el-dropdown-item>
-              <el-dropdown-item command="api">从API获取</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-      
-      <!-- 游戏模式状态信息 -->
-      <div class="game-mode-info" v-if="currentGameMode !== 'FREE'">
-        <span class="mode-label">当前模式: </span>
-        <span class="mode-value">{{ currentGameModeName }}</span>
-      </div>
+        <!-- 底部操作按钮区域 -->
+        <div class="action-buttons" v-if="activeTab === 'queue'">
+          <div class="command-actions">
+            <el-button 
+              type="primary" 
+              size="small" 
+              @click="executeCommand(selectedCommandId)"
+              :disabled="!selectedCommandId || isButtonDisabled('execute')"
+            >
+              执行
+            </el-button>
+            <el-button 
+              type="warning" 
+              size="small" 
+              @click="editSelectedCommand"
+              :disabled="!selectedCommandId || isButtonDisabled('edit')"
+            >
+              编辑
+            </el-button>
+            <el-button 
+              type="danger" 
+              size="small" 
+              @click="removeCommand(selectedCommandId)"
+              :disabled="!selectedCommandId || isButtonDisabled('delete')"
+            >
+              删除
+            </el-button>
+          </div>
+          
+          <el-dropdown @command="handleAddCommand" trigger="click">
+            <el-button 
+              type="success" 
+              size="small"
+              :disabled="isButtonDisabled('add')">
+              新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="manual">手动添加</el-dropdown-item>
+                <el-dropdown-item command="file">从文件导入</el-dropdown-item>
+                <el-dropdown-item command="api">从API获取</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
 
-      <!-- 隐藏的文件上传输入框 -->
-      <input 
-        type="file" 
-        ref="fileInput" 
-        style="display: none" 
-        accept=".json"
-        @change="handleFileUpload"
-      />
-    </el-card>
-    
-    <!-- 命令编辑弹窗 -->
-    <el-dialog
-      v-model="commandEditorVisible"
-      :title="isEditMode ? '编辑命令' : '添加命令'"
-      width="600px"
-    >
-      <!-- 命令编辑表单 -->
-      <el-form :model="commandForm" label-position="top">
-        <el-form-item label="命令格式">
-          <!-- 命令格式说明 -->
-          <el-alert
-            type="info"
-            show-icon
-            title="请输入JSON格式的命令"
-            description="格式: { 'type': '命令类型', 'params': {命令参数}, 'interval': 间隔时间(ms) }"
-            :closable="false"
-          />
-          <!-- 命令JSON输入框 -->
-          <el-input
-            v-model="commandForm.json"
-            type="textarea"
-            :rows="10"
-            :autosize="{ minRows: 10, maxRows: 20 }"
-            placeholder='{
+        <!-- 隐藏的文件上传输入框 -->
+        <input 
+          type="file" 
+          ref="fileInput" 
+          style="display: none" 
+          accept=".json"
+          @change="handleFileUpload"
+        />
+      </el-card>
+      
+      <!-- 命令编辑弹窗 -->
+      <el-dialog
+        v-model="commandEditorVisible"
+        :title="isEditMode ? '编辑命令' : '添加命令'"
+        width="600px"
+      >
+        <!-- 命令编辑表单 -->
+        <el-form :model="commandForm" label-position="top">
+          <el-form-item label="命令格式">
+            <!-- 命令格式说明 -->
+            <el-alert
+              type="info"
+              show-icon
+              title="请输入JSON格式的命令"
+              description="格式: { 'type': '命令类型', 'params': {命令参数}, 'interval': 间隔时间(ms) }"
+              :closable="false"
+            />
+            <!-- 命令JSON输入框 -->
+            <el-input
+              v-model="commandForm.json"
+              type="textarea"
+              :rows="10"
+              :autosize="{ minRows: 10, maxRows: 20 }"
+              placeholder='{
   "type": "PANORAMA_MODE",
   "params": {
     "enabled": true
   },
   "interval": 0
 }'
-          ></el-input>
-        </el-form-item>
-      </el-form>
-      <!-- 弹窗底部按钮 -->
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="commandEditorVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitCommand" :disabled="!commandForm.json.trim()">确定</el-button>
-        </span>
-      </template>
-    </el-dialog>
-    
-    <!-- API获取弹窗 -->
-    <el-dialog
-      v-model="apiDialogVisible"
-      title="从API获取命令"
-      width="500px"
-    >
-      <!-- API表单 -->
-      <el-form :model="apiForm" label-position="top">
-        <el-form-item label="API地址">
-          <el-input v-model="apiForm.url" :placeholder="`请输入API地址，默认为：${ApiConfig.URL}`"></el-input>
-        </el-form-item>
-      </el-form>
-      <!-- 弹窗底部按钮 -->
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="apiDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="fetchFromAPI" :disabled="!apiForm.url.trim()">获取</el-button>
-        </span>
-      </template>
-    </el-dialog>
-  </div>
+            ></el-input>
+          </el-form-item>
+        </el-form>
+        <!-- 弹窗底部按钮 -->
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="commandEditorVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitCommand" :disabled="!commandForm.json.trim()">确定</el-button>
+          </span>
+        </template>
+      </el-dialog>
+      
+      <!-- API获取弹窗 -->
+      <el-dialog
+        v-model="apiDialogVisible"
+        title="从API获取命令"
+        width="500px"
+      >
+        <!-- API表单 -->
+        <el-form :model="apiForm" label-position="top">
+          <el-form-item label="API地址">
+            <el-input v-model="apiForm.url" :placeholder="`请输入API地址，默认为：${ApiConfig.URL}`"></el-input>
+          </el-form-item>
+        </el-form>
+        <!-- 弹窗底部按钮 -->
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="apiDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="fetchFromAPI" :disabled="!apiForm.url.trim()">获取</el-button>
+          </span>
+        </template>
+      </el-dialog>
+    </div>
+  </teleport>
 </template>
 
 <script setup>
@@ -330,9 +347,11 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { showSuccess, showError, showWarning } from '@/layers/interaction-layer/utils/MessageBox';
-import { VueDraggableNext as draggable } from 'vue-draggable-next';
+import draggable from 'vuedraggable';
 import { CommandLimit, CommandType, CommandName, CommandSource, CommandStatus, ApiConfig } from '@/config/CommandConfig';
-import { GameMode, GameModeNames } from '@/config/GameModeConfig';
+import { GameMode } from '@/config/GameModeConfig';
+// 导入Element Plus图标
+import { ArrowLeft, ArrowRight, ArrowDown, Menu } from '@element-plus/icons-vue';
 
 // 表单状态
 const commandEditorVisible = ref(false); // 命令编辑器弹窗是否可见
@@ -352,17 +371,19 @@ const fileInput = ref(null);
 const activeTab = ref('queue');  // 默认显示命令队列标签页
 const selectedCommandId = ref(null);  // 当前选中的命令ID
 const isPanelCollapsed = ref(false); // 面板是否折叠
+// 防抖控制
+const isSubmitting = ref(false); // 是否正在提交命令，防止重复提交
 
 // 过滤器状态
 const historyFilters = ref({
-  UI: true,
-  API: true,
-  FILE: true,
-  MANUAL: true
+  [CommandSource.UI]: true,
+  [CommandSource.API]: true,
+  [CommandSource.FILE]: true,
+  [CommandSource.MANUAL]: true
 });
 
 // 队列源选择（单选）
-const queueSourceSelected = ref('API'); // 默认选中API
+const queueSourceSelected = ref(CommandSource.MANUAL); // 默认选中"手动"源
 
 // Store 相关
 const store = openGameStore();
@@ -378,14 +399,15 @@ const autoMode = computed({
     }
   }
 });
-const isExecuting = computed(() => store.isExecuting);
-
-// 当前游戏模式
-const currentGameMode = computed(() => store.gameMode);
-const currentGameModeName = computed(() => GameModeNames[store.gameMode] || '未知模式');
+const isExecuting = computed(() => store.isExecuting)
 
 // 过滤后的命令队列
 const filteredQueueCommands = computed(() => {
+  // 检查队列是否为空
+  if (commandQueue.value.length === 0) return [];
+  if (activeTab.value === 'queue') {
+    console.log('队列中的命令数量:', commandQueue.value.length);
+  }
   return commandQueue.value.filter(cmd => {
     // 排除UI来源，只显示符合当前选择的来源
     return cmd.source !== CommandSource.UI && cmd.source === queueSourceSelected.value;
@@ -396,20 +418,41 @@ const filteredQueueCommands = computed(() => {
 const filteredHistoryCommands = computed(() => {
   return commandHistory.value.filter(item => {
     // 根据历史记录过滤器显示选中的来源
-    return store.commandHistoryFilter[item.command.source];
+    return historyFilters.value[item.command.source];
   });
 });
 
 // 可拖拽排序的命令队列
 const draggedQueueCommands = computed({
-  get: () => filteredQueueCommands.value,
-  set: () => {
-    // 拖拽结束后会触发这里，但我们在handleDragEnd中处理排序
+  get: () => {
+    // 确保返回有效的数组，过滤掉可能的null或undefined值
+    return filteredQueueCommands.value.filter(cmd => cmd && cmd.id);
+  },
+  set: (value) => {
+    // 拖拽结束后会触发这里，我们直接在handleDragEnd中处理排序
+    // 但需要确保value是有效的，防止vuedraggable内部错误
+    if (Array.isArray(value) && value.length > 0) {
+      const validIds = value.filter(cmd => cmd && cmd.id).map(cmd => cmd.id);
+      if (validIds.length > 0) {
+        store.reorderCommandQueue(validIds);
+      }
+    }
   }
 });
 
 // 按钮禁用状态检查
 function isButtonDisabled(buttonId) {
+  // 如果队列为空，禁用执行按钮
+  if (commandQueue.value.length === 0) {
+    return buttonId === 'execute';
+  }
+  
+  // 自动模式下禁用的按钮
+  if (store.autoMode && 
+      (buttonId === 'edit' || buttonId === 'delete' || buttonId === 'add' || buttonId === 'clear-list')) {
+    return true;
+  }
+
   // 如果在当前游戏模式下被禁用
   if (store.gameMode !== GameMode.FREE && store.disabledButtons.has(buttonId)) {
     return true;
@@ -418,12 +461,6 @@ function isButtonDisabled(buttonId) {
   // 历史标签页时禁用编辑和执行按钮
   if (activeTab.value === 'history' && 
       (buttonId === 'execute' || buttonId === 'edit' || buttonId === 'delete')) {
-    return true;
-  }
-  
-  // 自动模式下禁用的按钮
-  if (store.autoMode && 
-      (buttonId === 'edit' || buttonId === 'delete' || buttonId === 'add' || buttonId === 'clear-list')) {
     return true;
   }
   
@@ -487,17 +524,6 @@ function commandSourceText(source) {
     case CommandSource.FILE: return '文件';
     case CommandSource.MANUAL: return '手动';
     default: return source;
-  }
-}
-
-/** 命令来源-颜色值映射 */
-function commandSourceColor(source) {
-  switch (source) {
-    case CommandSource.UI: return '#909399'; // 灰色
-    case CommandSource.API: return '#67C23A'; // 绿色
-    case CommandSource.FILE: return '#E6A23C'; // 黄色
-    case CommandSource.MANUAL: return '#F56C6C'; // 红色
-    default: return '#909399';
   }
 }
 
@@ -600,12 +626,21 @@ function editCommand(command) {
 
 /** 提交命令 */
 function submitCommand() {
+  // 防抖机制：如果已经在提交过程中，则不重复执行
+  if (isSubmitting.value) {
+    return;
+  }
+  
+  // 设置提交中状态
+  isSubmitting.value = true;
+  
   try {
     const commandData = JSON.parse(commandForm.value.json);
     
     // 验证命令格式
     if (!commandData.type) {
       showError('命令格式错误：缺少type字段');
+      isSubmitting.value = false;
       return;
     }
     
@@ -622,24 +657,41 @@ function submitCommand() {
         command.params = commandData.params;
         command.interval = commandData.interval;
         showSuccess('命令已更新');
+        commandEditorVisible.value = false;
       }
+      
+      // 延迟重置提交状态，防止快速多次点击
+      setTimeout(() => {
+        isSubmitting.value = false;
+      }, 500);
     } else {
       // 添加新命令
       try {
-        store.addCommandToQueue({
-          type: commandData.type,
-          params: commandData.params,
-          interval: commandData.interval !== undefined ? commandData.interval : 0,
-          source: CommandSource.MANUAL,  // 手动输入的命令
-        });
-        showSuccess('命令已添加到队列');
-        commandEditorVisible.value = false;
+        CommandService.addManualCommand(commandData)
+          .then(() => {
+            // 更新队列源选择
+            queueSourceSelected.value = CommandSource.MANUAL;
+            handleQueueSourceChange(CommandSource.MANUAL);
+            showSuccess('命令已添加到队列');
+            commandEditorVisible.value = false;
+          })
+          .catch(error => {
+            showError(`添加命令失败: ${error.message}`);
+          })
+          .finally(() => {
+            // 延迟重置提交状态，确保防抖生效
+            setTimeout(() => {
+              isSubmitting.value = false;
+            }, 500);
+          });
       } catch (error) {
         showError(`添加命令失败: ${error.message}`);
+        isSubmitting.value = false;
       }
     }
   } catch (error) {
     showError(`解析命令失败: ${error.message}`);
+    isSubmitting.value = false;
   }
 }
 
@@ -706,6 +758,9 @@ function handleFileUpload(event) {
   CommandService.loadCommandsFromFile(file)
     .then(length => {
       showSuccess(`成功从文件加载 ${length} 条命令`);
+      // 更新队列源选择
+      queueSourceSelected.value = CommandSource.FILE;
+      handleQueueSourceChange(CommandSource.FILE);
     })
     .catch(error => {
       // 根据错误类型处理
@@ -739,6 +794,9 @@ function fetchFromAPI() {
     .then(length => {
       apiDialogVisible.value = false;
       showSuccess(`成功从API拉取 ${length} 条命令`);
+      // 更新队列源选择
+      queueSourceSelected.value = CommandSource.API;
+      handleQueueSourceChange(CommandSource.API);
     })
     .catch(error => {
       // 根据错误类型处理
@@ -752,29 +810,28 @@ function fetchFromAPI() {
     });
 }
 
-/** 拖拽结束处理 */ 
-function handleDragEnd() {
-  // 获取所有命令ID的新顺序
-  const newOrder = draggedQueueCommands.value.map(cmd => cmd.id);
-  store.reorderCommandQueue(newOrder);
-}
-
 /** 处理命令队列源选择变化 */
 function handleQueueSourceChange(value) {
+  console.log('队列源选择变化:', value);
+  
   // 更新store中的过滤器
   const filter = {
-    API: false,
-    FILE: false,
-    MANUAL: false
+    [CommandSource.API]: false,
+    [CommandSource.FILE]: false,
+    [CommandSource.MANUAL]: false
   };
   filter[value] = true;
+  
+  console.log('设置队列过滤器:', filter);
   store.setCommandQueueFilter(filter);
+  
   // 清除选中状态
   selectedCommandId.value = null;
 }
 
 /** 处理历史记录过滤器变化 */
 function handleHistoryFilterChange() {
+  console.log('历史记录过滤器变化:', historyFilters.value);
   store.setCommandHistoryFilter(historyFilters.value);
   // 清除选中状态
   selectedCommandId.value = null;
@@ -800,26 +857,37 @@ function togglePanelCollapse() {
   isPanelCollapsed.value = !isPanelCollapsed.value;
 }
 
+// 监听对话框状态变化，确保关闭对话框时重置提交状态
+watch(commandEditorVisible, (visible) => {
+  if (!visible) {
+    // 对话框关闭时，重置提交状态
+    setTimeout(() => {
+      isSubmitting.value = false;
+    }, 300);
+  }
+});
+
 </script>
 
 <style scoped>
 /* 命令面板样式 - 整体容器 */
 .command-panel {
-  max-width: 800px;
-  min-width: 400px;
-  margin: 0 auto;
-  position: relative;
-  transition: all 0.3s ease;
-  position: absolute;
+  width: 320px;
+  max-height: 500px;
+  position: fixed;
   left: 20px;
   bottom: 20px;
   z-index: 100;
+  transition: all 0.3s ease;
 }
 
 /* 面板卡片样式 */
 .command-panel-card {
   background-color: rgba(169, 140, 102, 0.9) !important;
   border: none !important;
+  height: 500px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 面板折叠/展开按钮 */
@@ -849,14 +917,15 @@ function togglePanelCollapse() {
 /* 面板标题样式 */
 .panel-title {
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  padding-bottom: 10px;
+  padding-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .panel-title h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
   color: #fff;
 }
 
@@ -865,7 +934,8 @@ function togglePanelCollapse() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 /* 清空列表链接样式 */
@@ -873,6 +943,7 @@ function togglePanelCollapse() {
   color: rgba(255, 255, 255, 0.8);
   text-decoration: underline;
   cursor: pointer;
+  font-size: 12px;
 }
 
 .clear-list-link:hover {
@@ -885,24 +956,103 @@ function togglePanelCollapse() {
   text-decoration: none;
 }
 
-/* 区域头部样式 - 标题和过滤器的容器 */
-.section-header {
+/* 自定义标签栏 */
+.custom-tabs {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 标签头部 */
+.custom-tabs-header {
+  display: flex;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 8px;
+  margin-top: -4px;
+  flex-shrink: 0;
+}
+
+.custom-tab {
+  padding: 8px 16px;
+  margin: 0 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  position: relative;
+  transition: all 0.3s;
+  font-size: 13px;
+}
+
+.custom-tab:hover {
+  color: #fff;
+}
+
+.custom-tab.active {
+  color: #409EFF;
+}
+
+.custom-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #409EFF;
+}
+
+/* 标签内容 */
+.custom-tabs-content {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.custom-tab-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* tab内容区域 */
+.tab-content-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+}
+
+/* 过滤器容器 */
+.filter-container {
+  display: flex;
+  justify-content: center;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-/* 区域标题样式 */
-.section-header h4 {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.9);
+/* 记录数量显示 */
+.count-badge {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 5px;
 }
 
-/* 来源过滤器容器样式 */
-.source-filters {
+/* 历史过滤器 */
+.history-filters {
   display: flex;
-  gap: 10px;
+  gap: 6px;
+  justify-content: center;
 }
 
 /* 命令表格容器样式 */
@@ -910,8 +1060,20 @@ function togglePanelCollapse() {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   overflow: hidden;
-  margin-bottom: 15px;
   background-color: rgba(0, 0, 0, 0.1);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.command-table-container-queue {
+  min-height: 280px;
+  max-height: 280px;
+}
+
+.command-table-container-history {
+  min-height: 320px;
+  max-height: 320px;
 }
 
 /* 表格头部样式 */
@@ -921,12 +1083,16 @@ function togglePanelCollapse() {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   font-weight: bold;
   color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 /* 命令表格体 */
 .command-table-body {
-  max-height: 300px;
   overflow-y: auto;
+  flex: 1;
+  font-size: 12px;
+  min-height: 200px;
 }
 
 /* 表格行样式 */
@@ -953,27 +1119,27 @@ function togglePanelCollapse() {
 
 /* 等待执行状态的命令样式 */
 .command-table-row.status-pending {
-  border-left: 4px solid #E6A23C;
+  border-left: 3px solid #E6A23C;
 }
 
 /* 正在执行状态的命令样式 */
 .command-table-row.status-executing {
-  border-left: 4px solid #409EFF;
+  border-left: 3px solid #409EFF;
 }
 
 /* 执行完成状态的命令样式 */
 .command-table-row.status-finished {
-  border-left: 4px solid #67C23A;
+  border-left: 3px solid #67C23A;
 }
 
 /* 执行失败状态的命令样式 */
 .command-table-row.status-failed {
-  border-left: 4px solid #F56C6C;
+  border-left: 3px solid #F56C6C;
 }
 
 /* 表格列样式 */
 .column {
-  padding: 12px 8px;
+  padding: 8px 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -983,7 +1149,7 @@ function togglePanelCollapse() {
 .type-column {
   width: 20%;
   flex-shrink: 0;
-  min-width: 60px;
+  min-width: 40px;
 }
 
 /* 描述列 */
@@ -996,12 +1162,12 @@ function togglePanelCollapse() {
 .interval-column {
   width: 20%;
   flex-shrink: 0;
-  min-width: 60px;
+  min-width: 40px;
 }
 
 /* 拖拽列 */
 .handle-column {
-  width: 40px;
+  width: 30px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -1010,8 +1176,8 @@ function togglePanelCollapse() {
 
 /* 拖拽手柄样式 - 用于拖动排序 */
 .drag-handle {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   cursor: move;
   opacity: 0.6;
   display: flex;
@@ -1026,9 +1192,9 @@ function togglePanelCollapse() {
 
 /* 命令来源色块样式 */
 .source-color-block {
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
   display: inline-block;
 }
 
@@ -1036,18 +1202,20 @@ function togglePanelCollapse() {
 .action-buttons {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 15px;
+  gap: 8px;
+  margin-top: 8px;
+  flex-shrink: 0;
 }
 
 /* 游戏模式信息显示 */
 .game-mode-info {
-  margin-top: 10px;
-  font-size: 0.85em;
-  padding: 5px 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 3px 6px;
   background-color: rgba(0, 0, 0, 0.2);
   border-radius: 3px;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .mode-label {
@@ -1065,38 +1233,70 @@ function togglePanelCollapse() {
   background: rgba(64, 158, 255, 0.2);
 }
 
+/* 滚动条样式美化 */
+.command-table-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.command-table-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.command-table-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.command-table-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* 修改Element组件样式 */
+:deep(.el-switch__label) {
+  font-size: 12px !important;
+}
+
+:deep(.el-switch__label--right) {
+  margin-left: 6px !important;
+}
+
+:deep(.el-radio), :deep(.el-checkbox) {
+  font-size: 12px;
+  margin-right: 0;
+}
+
+:deep(.el-radio + .el-radio) {
+  margin-left: 12px;
+}
+
+:deep(.el-checkbox + .el-checkbox) {
+  margin-left: 12px;
+}
+
+:deep(.el-checkbox__label), :deep(.el-radio__label) {
+  font-size: 12px;
+}
+
+:deep(.el-button--small) {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+/* 空状态小一点 */
+:deep(.el-empty__description p) {
+  font-size: 12px;
+}
+
 /* 响应式布局 - 移动设备适配 */
 @media (max-width: 576px) {
-  /* 移动设备下区域头部改为垂直排列 */
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  /* 移动设备下面板控制行改为垂直排列 */
-  .panel-controls {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
   /* 移动设备下操作按钮均匀分布 */
   .action-buttons {
     flex-direction: column;
   }
   
-  /* 移动设备下列宽度调整 */
-  .type-column {
-    width: 30%;
-  }
-  
-  .desc-column {
-    width: 40%;
-  }
-  
-  .interval-column {
-    width: 20%;
+  /* 命令面板最小宽度 */
+  .command-panel {
+    width: 280px;
   }
 }
 </style> 

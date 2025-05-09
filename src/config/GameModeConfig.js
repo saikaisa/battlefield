@@ -10,9 +10,10 @@ export const GameMode = {
   ATTACK_PREPARE: 'ATTACK_PREPARE', // 进攻准备模式
   ATTACK_EXECUTE: 'ATTACK_EXECUTE', // 进攻执行模式
   STATISTICS: 'STATISTICS',     // 统计模式
-  AUTO: 'AUTO'                  // 自动模式
+  AUTO: 'AUTO',                 // 自动模式
 };
 
+// TODO: 面板名称需要重新整理
 export const GamePanels = {
   FORMATION_LIST: 'formation-list', // 编队列表
   COMMAND_PANEL: 'command-panel',   // 命令面板
@@ -22,6 +23,7 @@ export const GamePanels = {
   OVERVIEW_PANEL: 'overview-panel'    // 总览面板
 };
 
+// TODO: 按钮名称需要重新整理
 export const GameButtons = {
   PANORAMA: 'panorama', // 俯瞰全景
   ORBIT: 'orbit', // 环绕按钮
@@ -41,8 +43,7 @@ export const GameButtons = {
  * 每个模式包含以下配置：
  * - ui: UI界面控制
  *   - visiblePanels: 可见面板列表
- *   - disabledButtons: 禁用的按钮列表，特殊值'all'表示全部禁用
- *   - modalPanel: 当前显示的模态面板ID
+ *   - disabledButtons: 禁用的按钮列表
  * - interaction: 交互控制
  *   - cameraControl: 是否允许相机控制
  *   - hexSelectMode: 六角格选择模式 ('single'单选, 'multi'多选, 'none'禁止选择)
@@ -50,6 +51,19 @@ export const GameButtons = {
  *   - validator: 验证器函数名，用于验证当前操作是否有效
  */
 export const ModesConfig = {
+  // 自动模式
+  [GameMode.AUTO]: {
+    ui: {
+      visiblePanels: [GamePanels.OVERVIEW_PANEL, GamePanels.COMMAND_PANEL],
+      disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.AUTO_MODE),
+    },
+    interaction: {
+      cameraControl: true,
+      hexSelectMode: 'none',
+      forceSelectMode: 'independent',
+      validator: null
+    }
+  },
   // 自由模式
   [GameMode.FREE]: {
     // UI 控制
@@ -182,61 +196,20 @@ export const ModesConfig = {
       forceSelectMode: 'linked',
       validator: null
     }
-  },
-  
-  // 自动模式
-  [GameMode.AUTO]: {
-    ui: {
-      visiblePanels: [
-        GamePanels.OVERVIEW_PANEL,
-        GamePanels.COMMAND_PANEL
-      ],
-      disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.AUTO_MODE),
-    },
-    interaction: {
-      cameraControl: true,
-      hexSelectMode: 'none',
-      forceSelectMode: 'linked',
-      validator: null
-    }
   }
 };
-
-/**
- * 根据命令类型获取相应的执行模式
- */
-export function getGameModeForCommand(commandType) {
-  switch (commandType) {
-    case 'MOVE':
-      return GameMode.MOVE_EXECUTE;
-    case 'ATTACK':
-      return GameMode.ATTACK_EXECUTE;
-    case 'ORBIT_MODE':
-    case 'RESET_CAMERA':
-    case 'FOCUS_FORCE':
-      return GameMode.GAZE;
-    case 'CHANGE_LAYER':
-    case 'SELECTION_MODE':
-    case 'NEXT_FACTION':
-    case 'AUTO_MODE':
-      return GameMode.FREE; // 这些命令在自由模式下执行
-    case 'STATISTICS':
-      return GameMode.STATISTICS; // 统计模式
-    default:
-      return null;
-  }
-}
 
 /**
  * 模式名称中文显示
  */
 export const GameModeNames = {
   [GameMode.FREE]: '自由模式',
-  [GameMode.GAZE]: '相机控制禁用',
-  [GameMode.MOVE_PREPARE]: '移动准备',
-  [GameMode.MOVE_EXECUTE]: '移动执行中',
-  [GameMode.ATTACK_PREPARE]: '攻击准备',
-  [GameMode.ATTACK_EXECUTE]: '战斗执行中',
+  [GameMode.PANORAMA]: '俯瞰模式',
+  [GameMode.ORBIT]: '环绕模式',
+  [GameMode.MOVE_PREPARE]: '移动准备模式',
+  [GameMode.MOVE_EXECUTE]: '移动执行模式',
+  [GameMode.ATTACK_PREPARE]: '进攻准备模式',
+  [GameMode.ATTACK_EXECUTE]: '进攻执行模式',
   [GameMode.STATISTICS]: '统计模式',
   [GameMode.AUTO]: '自动模式'
 }; 

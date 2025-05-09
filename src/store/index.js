@@ -37,7 +37,6 @@ export const openGameStore = defineStore("gameStore", () => {
   const selectedForceIds = reactive(new Set());
 
   /* 5. 命令系统相关状态 */
-  const autoMode = ref(false);          // 是否处于自动模式
   const isExecuting = ref(false);      // 是否有命令正在执行
   const commandQueue = reactive([]);    // 命令队列 [{id, type, params, startTime, endTime, interval, source, status}]
   const currentCommand = ref(null);     // 当前执行的命令
@@ -49,11 +48,11 @@ export const openGameStore = defineStore("gameStore", () => {
   
   /* 6. 游戏模式相关状态 */
   const gameMode = ref(GameMode.FREE);  // 当前游戏模式
+  const autoMode = ref(false);          // 是否处于自动模式，独立于游戏模式
   
   // UI控制
   const disabledPanels = reactive(new Set());  // 禁用的面板ID集合
-  const disabledButtons = reactive(new Set()); // 禁用的按钮ID集合，特殊值'all'表示全部禁用
-  const modalPanel = ref(null);               // 当前显示的模态面板ID
+  const disabledButtons = reactive(new Set()); // 禁用的按钮ID集合
   
   // 交互控制
   const hexSelectMode = ref('single');      // 鼠标选择模式：'single', 'multi', 'none'
@@ -319,6 +318,7 @@ export const openGameStore = defineStore("gameStore", () => {
     if (command.interval === undefined) command.interval = 0;
     
     commandQueue.push(command);
+    console.log('添加命令到队列', command);
     return command;
   }
   
@@ -419,11 +419,6 @@ export const openGameStore = defineStore("gameStore", () => {
     }
   }
   
-  /** 设置模态面板 */
-  function setModalPanel(panel) {
-    modalPanel.value = panel;
-  }
-  
   /** 设置六角格选择模式 */
   function setHexSelectMode(mode) {
     hexSelectMode.value = mode;
@@ -477,7 +472,6 @@ export const openGameStore = defineStore("gameStore", () => {
     gameMode,
     disabledPanels,
     disabledButtons,
-    modalPanel,
     hexSelectMode,
     forceSelectMode,
     cameraControlEnabled,
@@ -555,7 +549,6 @@ export const openGameStore = defineStore("gameStore", () => {
     setGameMode,
     setDisabledPanels,
     setDisabledButtons,
-    setModalPanel,
     setHexSelectMode,
     setForceSelectMode,
     setCameraControlEnabled,

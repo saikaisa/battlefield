@@ -6,9 +6,9 @@
     <!-- Viewer 初始化完成后再渲染面板 -->
     <div v-if="gameReady">
       <OverviewPanel /> <!-- 概览面板 -->
-      <!-- <DetailInfoPanel /> 详情信息面板 -->
+      <DetailInfoPanel /> <!-- 详情信息面板 -->
       <FormationPanel /> <!-- 编队列表 -->
-      <!-- <CommandPanel /> 命令管理面板 -->
+      <CommandPanel /> <!-- 命令管理面板 -->
     </div>
 
     <div v-else class="loading">
@@ -23,9 +23,9 @@ import { SceneManager } from '@/layers/scene-layer/SceneManager';
 import { MilitaryManager } from '@/layers/military-layer/MilitaryManager';
 import { CommandDispatcher } from '@/layers/interaction-layer/CommandDispatcher';
 import OverviewPanel from '@/components/hud/OverviewPanel.vue';
-// import DetailInfoPanel from '@/components/hud/DetailInfoPanel.vue';
+import DetailInfoPanel from '@/components/hud/DetailInfoPanel.vue';
 import FormationPanel from '@/components/hud/FormationPanel.vue';
-// import CommandPanel from '@/components/hud/CommandPanel.vue';
+import CommandPanel from '@/components/hud/CommandPanel.vue';
 
 // viewer 引用
 const viewerRef = ref(null);

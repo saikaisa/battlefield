@@ -2,7 +2,7 @@
 import { openGameStore } from '@/store';
 import { CommandProcessor, CommandError } from './CommandProcessor';
 import { CommandType, CommandSource, CommandStatus } from '@/config/CommandConfig';
-import { GameMode, getGameModeForCommand } from '@/config/GameModeConfig';
+import { GameMode } from '@/config/GameModeConfig';
 import { GameModeManager } from './GameModeManager';
 import { showSuccess, showError } from './utils/MessageBox';
 
@@ -106,6 +106,25 @@ export class CommandDispatcher {
     
     // 立即执行命令
     return this.executeQueuedCommand(command.id);
+  }
+
+  /**
+   * 手动添加命令
+   * @param {Object} data 命令数据
+   * @returns {Promise<Object>} 执行结果
+   */
+  async addManualCommand(data) {
+    try {
+      // 解析命令 - _parseCommands返回一个数组
+      const commands = this._parseCommands(data, CommandSource.MANUAL);
+      
+      // 将命令添加到队列
+      commands.forEach(cmd => this.store.addCommandToQueue(cmd));
+      
+      return commands.length;
+    } catch (error) {
+      throw new CommandError(`手动添加命令失败: ${error.message}`, 'validation');
+    }
   }
   
   /**
@@ -218,15 +237,6 @@ export class CommandDispatcher {
       command.status = CommandStatus.EXECUTING;
       command.startTime = Date.now();
       
-      // 手动模式下，执行命令前切换模式；自动模式下不切换，始终保持自动模式
-      if (!this.store.autoMode) {
-        // 根据命令类型获取执行模式
-        const newMode = getGameModeForCommand(command.type);
-        if (newMode && newMode !== GameMode.FREE) {
-          this.gameModeManager.setMode(newMode);
-        }
-      }
-      
       // 执行命令获取结果
       const result = await this._dispatchCommand(command);
       
@@ -302,19 +312,17 @@ export class CommandDispatcher {
    * @param {boolean} enable 是否启用自动模式
    */
   toggleAutoMode(enable) {
+    // 设置 store 中的自动模式状态
     this.store.setAutoMode(enable);
     
-    // 如果开启自动模式，切换到自动模式
-    if (enable) {
-      this.gameModeManager.setMode(GameMode.AUTO);
-    } else {
-      // 如果关闭自动模式且存在计时器，则清除计时器
-      if (this.autoModeTimer) {
-        clearTimeout(this.autoModeTimer);
-        this.autoModeTimer = null;
-      }
-      
-      // 恢复到自由模式
+    // 如果关闭自动模式且存在计时器，则清除计时器
+    if (!enable && this.autoModeTimer) {
+      clearTimeout(this.autoModeTimer);
+      this.autoModeTimer = null;
+    }
+    
+    // 如果关闭自动模式，恢复到自由模式
+    if (!enable) {
       this.gameModeManager.setMode(GameMode.FREE);
     }
   }
@@ -527,7 +535,7 @@ export class CommandDispatcher {
   }
   
   /**
-   * 安排执行下一条命令，上一条命令执行完成时执行这个方法
+   * 自动模式下，安排执行下一条命令，上一条命令执行完成时执行这个方法
    * @param {number} delay 延迟时间(毫秒)
    */
   _scheduleNextCommand(delay = 0) {
@@ -545,7 +553,7 @@ export class CommandDispatcher {
   }
   
   /**
-   * 执行队列中下一条可执行的命令
+   * 自动模式下，执行队列中下一条可执行的命令
    */
   async _executeNextCommand() {
     if (!this.store.autoMode) return;
@@ -617,6 +625,11 @@ export const CommandService = {
   async executeCommandFromUI(type, params) {
     const dispatcher = CommandDispatcher.getInstance();
     return dispatcher.executeCommandFromUI(type, params);
+  },
+
+  async addManualCommand(data) {
+    const dispatcher = CommandDispatcher.getInstance();
+    return dispatcher.addManualCommand(data);
   },
   
   async loadCommandsFromFile(file) {

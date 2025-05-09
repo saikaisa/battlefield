@@ -53,10 +53,17 @@ export class GameModeManager {
    */
   setMode(mode) {
     const prevMode = this.getCurrentMode();
-    const config = ModesConfig[mode] || ModesConfig[GameMode.FREE];
-    
+    let config = null;
+
     // 更新Store中的模式状态
     this.store.setGameMode(mode);
+
+    // 如果模式是自动模式，则应用自动模式配置
+    if (this.store.autoMode) {
+      config = ModesConfig[GameMode.AUTO];
+    } else {
+      config = ModesConfig[mode] || ModesConfig[GameMode.FREE];
+    }
 
     // 应用UI限制和交互设置
     this._applyUIRestrictions(config);
@@ -94,22 +101,13 @@ export class GameModeManager {
    */
   _applyUIRestrictions(config) {
     // 1. 设置禁用的面板
-    if (config.ui.visiblePanels === 'all') {
-      this.store.setDisabledPanels([]);
-    } else {
-      // 所有可能的面板
-      const allPanels = Object.values(GamePanels);
-      // 禁用不在visiblePanels中的面板
-      const disabledPanels = allPanels.filter(panel => 
-        !config.ui.visiblePanels.includes(panel));
-      this.store.setDisabledPanels(disabledPanels);
-    }
+    const allPanels = Object.values(GamePanels);
+    const disabledPanels = allPanels.filter(panel => 
+      !config.ui.visiblePanels.includes(panel));
+    this.store.setDisabledPanels(disabledPanels);
     
     // 2. 设置禁用的按钮
     this.store.setDisabledButtons(config.ui.disabledButtons || []);
-    
-    // 3. 设置模态面板
-    this.store.setModalPanel(config.ui.modalPanel);
   }
   
   /**

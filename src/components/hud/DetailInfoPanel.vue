@@ -30,8 +30,8 @@
         </div>
         <div class="info-row">
           <span class="info-label">隶属方:</span>
-          <span class="info-value" :class="`faction-${selectedHex.controlFaction || 'neutral'}`">
-            {{ getFactionName(selectedHex.controlFaction) }} 
+          <span class="info-value" :class="`faction-${selectedHex.battlefieldState?.controlFaction || 'neutral'}`">
+            {{ getFactionName(selectedHex.battlefieldState?.controlFaction) }} 
             <span v-if="hexForces.length > 0">({{ hexForces.length }} 支部队)</span>
           </span>
         </div>
@@ -62,7 +62,7 @@
             @click="toggleForceSelection(force.forceId)"
           >
             <div class="column id-column">{{ getForceNumber(force.forceId) }}</div>
-            <div class="column name-column">{{ force.name }}</div>
+            <div class="column name-column">{{ force.forceName }}</div>
             <div class="column strength-column">{{ force.troopStrength }}</div>
             <div class="column action-column">{{ force.actionPoints }}</div>
           </div>
@@ -74,12 +74,12 @@
     </div>
 
     <!-- 右侧：部队详细信息 -->
-    <div class="force-detail-section" v-if="selectedForce">
+    <div class="force-detail-section">
       <div class="section-header">
         <h4>部队详细信息</h4>
       </div>
       
-      <div class="force-detail-tabs">
+      <div class="force-detail-tabs" v-if="selectedForce">
         <!-- 标签切换 -->
         <div class="tabs-header">
           <div 
@@ -106,31 +106,31 @@
           </div>
           <div class="attr-row">
             <span class="attr-label">进攻/防御火力值:</span>
-            <span class="attr-value">{{ selectedForce.offensivePower }} / {{ selectedForce.defensivePower }}</span>
+            <span class="attr-value">{{ selectedForce.attackFirepower || 0 }} / {{ selectedForce.defenseFirepower || 0 }}</span>
           </div>
           <div class="attr-row">
             <span class="attr-label">兵力回复速率:</span>
-            <span class="attr-value">{{ selectedForce.recoveryRate }}</span>
+            <span class="attr-value">{{ selectedForce.recoveryRate || 0 }}</span>
           </div>
           <div class="attr-row">
             <span class="attr-label">士气值:</span>
-            <span class="attr-value">{{ selectedForce.morale }}</span>
+            <span class="attr-value">{{ selectedForce.morale || 0 }}</span>
           </div>
           <div class="attr-row">
             <span class="attr-label">疲劳系数:</span>
-            <span class="attr-value">{{ selectedForce.fatigue }}</span>
+            <span class="attr-value">{{ selectedForce.fatigueFactor || 0 }}</span>
           </div>
           <div class="attr-row">
             <span class="attr-label">指挥能力:</span>
-            <span class="attr-value">{{ selectedForce.commandPower }}</span>
+            <span class="attr-value">{{ selectedForce.commandCapability || 0 }}</span>
           </div>
           <div class="attr-row">
             <span class="attr-label">指挥范围:</span>
-            <span class="attr-value">{{ selectedForce.commandRange }}</span>
+            <span class="attr-value">{{ selectedForce.commandRange || 0 }}</span>
           </div>
           <div class="attr-row">
             <span class="attr-label">可视范围:</span>
-            <span class="attr-value">{{ selectedForce.visibilityRange }}</span>
+            <span class="attr-value">{{ selectedForce.visibilityRadius || 0 }}</span>
           </div>
         </div>
         
@@ -153,39 +153,36 @@
           </div>
         </div>
       </div>
-    </div>
-    <div class="force-detail-section empty-force" v-else>
-      <div class="section-header">
-        <h4>部队详细信息</h4>
+      <div class="empty-force" v-else>
+        <div class="empty-message">未选中部队</div>
       </div>
-      <div class="empty-message">未选中部队</div>
     </div>
 
     <!-- 最右侧：战斗命令按钮栏 -->
     <div class="command-buttons-section">
       <div class="command-button move-button" 
-           :class="{'disabled': isButtonDisabled(GameButtons.MOVE)}"
+           :class="{'disabled': isButtonDisabled('MOVE')}"
            @click="executeCommand('MOVE')">
         <el-tooltip content="移动部队" placement="left">
           <i class="el-icon-position"></i>
         </el-tooltip>
       </div>
       <div class="command-button attack-button" 
-           :class="{'disabled': isButtonDisabled(GameButtons.ATTACK)}"
+           :class="{'disabled': isButtonDisabled('ATTACK')}"
            @click="executeCommand('ATTACK')">
         <el-tooltip content="进攻" placement="left">
           <i class="el-icon-aim"></i>
         </el-tooltip>
       </div>
       <div class="command-button force-manage-button" 
-           :class="{'disabled': isButtonDisabled(GameButtons.MANAGE_FORCE)}"
+           :class="{'disabled': isButtonDisabled('MANAGE_FORCE')}"
            @click="executeCommand('MANAGE_FORCE')">
         <el-tooltip content="部队管理" placement="left">
           <i class="el-icon-data-analysis"></i>
         </el-tooltip>
       </div>
       <div class="command-button unit-manage-button" 
-           :class="{'disabled': isButtonDisabled(GameButtons.MANAGE_UNIT)}"
+           :class="{'disabled': isButtonDisabled('MANAGE_UNIT')}"
            @click="executeCommand('MANAGE_UNIT')">
         <el-tooltip content="兵种管理" placement="left">
           <i class="el-icon-edit-outline"></i>
@@ -199,8 +196,6 @@
 import { ref, computed, watch } from 'vue';
 import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
-import { GameMode, GameButtons } from '@/config/GameModeConfig';
-import { RuleConfig } from '@/config/GameConfig';
 import { showWarning } from '@/layers/interaction-layer/utils/MessageBox';
 
 // 状态管理
@@ -212,7 +207,9 @@ const selectedHex = computed(() => {
   // 获取第一个选中的六角格
   const hexIds = Array.from(store.selectedHexIds);
   if (hexIds.length === 0) return null;
-  return store.getHexCellById(hexIds[0]);
+  
+  const hex = store.getHexCellById(hexIds[0]);
+  return hex;
 });
 
 // 计算属性：获取六角格中的部队
@@ -220,14 +217,14 @@ const hexForces = computed(() => {
   if (!selectedHex.value) return [];
   
   const forces = [];
-  if (selectedHex.value.forcesIds) {
-    selectedHex.value.forcesIds.forEach(forceId => {
-      const force = store.getForceById(forceId);
-      if (force) forces.push(force);
-    });
-  }
+  const forceIds = selectedHex.value.forcesIds || [];
   
-  // 按战斗力排序
+  forceIds.forEach(forceId => {
+    const force = store.getForceById(forceId);
+    if (force) forces.push(force);
+  });
+  
+  // 按兵力值排序
   return forces.sort((a, b) => b.troopStrength - a.troopStrength);
 });
 
@@ -235,28 +232,30 @@ const hexForces = computed(() => {
 const selectedForce = computed(() => {
   const forceIds = Array.from(store.selectedForceIds);
   if (forceIds.length === 0) return null;
+  
+  // 获取第一个选中的部队
   return store.getForceById(forceIds[0]);
 });
 
-// 计算属性：当前选中部队的兵种组成
+// 计算属性：获取当前选中部队的兵种组成
 const forceUnits = computed(() => {
-  if (!selectedForce.value) return [];
+  if (!selectedForce.value || !selectedForce.value.composition) return [];
   
   const units = [];
-  const composition = selectedForce.value.composition;
-  if (!composition) return [];
   
-  // 解析兵种组成 (unitId: count)
-  Object.entries(composition).forEach(([unitId, count]) => {
-    const unit = store.getUnitById(unitId);
-    if (unit) {
-      units.push({
-        unitId,
-        name: unit.name,
-        count
-      });
+  // 处理部队组成数据结构
+  for (const comp of selectedForce.value.composition) {
+    if (comp && comp.unitId) {
+      const unit = store.getUnitById(comp.unitId);
+      if (unit) {
+        units.push({
+          unitId: comp.unitId,
+          name: unit.unitName || '未知兵种',
+          count: comp.unitCount || 0
+        });
+      }
     }
-  });
+  }
   
   return units;
 });
@@ -283,54 +282,66 @@ function toggleForceSelection(forceId) {
 
 // 辅助函数：获取地形类型
 function getTerrainType(hex) {
-  if (!hex) return '未知';
+  if (!hex || !hex.terrainAttributes) return '未知';
   
-  // 根据高程判断地形类型
-  if (hex.elevation < 10) return '平原';
-  if (hex.elevation < 50) return '丘陵';
-  if (hex.elevation < 200) return '山地';
-  return '高山';
+  const terrainType = hex.terrainAttributes.terrainType;
+  const terrainMap = {
+    'plain': '平原',
+    'hill': '丘陵',
+    'mountain': '山地',
+    'water': '水域'
+  };
+  
+  return terrainMap[terrainType] || terrainType || '未知';
 }
 
 // 辅助函数：获取可通行军种
 function getPassableTypes(hex) {
-  if (!hex) return '无';
+  if (!hex || !hex.terrainAttributes) return '无';
   
-  // 简化处理，假设有passableTypes属性
-  if (hex.passableTypes) {
-    return hex.passableTypes.join('、');
+  const terrainType = hex.terrainAttributes.terrainType;
+  
+  if (terrainType === 'water') {
+    return '海军';
+  } else if (terrainType === 'mountain') {
+    return '空军';
+  } else if (terrainType === 'hill' || terrainType === 'plain') {
+    return '陆军、空军';
   }
   
-  // 根据海拔判断（简化逻辑）
-  if (hex.elevation < 0) return '海军';
-  if (hex.elevation < 100) return '陆军、空军';
-  return '空军';
+  return '未知';
 }
 
 // 辅助函数：获取阵营名称
 function getFactionName(faction) {
-  if (!faction) return '中立';
-  return RuleConfig.factionNames[faction] || faction;
+  if (!faction || faction === 'neutral') return '中立';
+  return faction === 'blue' ? '蓝方' : '红方';
 }
 
 // 按钮禁用状态检查
-function isButtonDisabled(buttonId) {
-  // 如果在当前游戏模式下被禁用
-  if (store.gameMode !== GameMode.FREE && store.disabledButtons.has(buttonId)) {
+function isButtonDisabled(commandType) {
+  // 没有选中部队时禁用所有部队相关按钮
+  if (!selectedForce.value) {
     return true;
   }
   
-  // 没有选中部队时禁用所有部队相关按钮
-  const hasSelectedForce = store.selectedForceIds.size > 0;
-  if (!hasSelectedForce && 
-      (buttonId === GameButtons.MOVE || 
-       buttonId === GameButtons.ATTACK || 
-       buttonId === GameButtons.MANAGE_FORCE)) {
+  // 如果部队不属于当前玩家阵营，禁用按钮
+  if (selectedForce.value.faction !== store.currentFaction) {
     return true;
   }
   
   // 命令执行中禁用所有按钮
   if (store.isExecuting) {
+    return true;
+  }
+  
+  // MOVE按钮特殊处理：检查部队是否有行动点数
+  if (commandType === 'MOVE' && selectedForce.value.actionPoints <= 0) {
+    return true;
+  }
+  
+  // ATTACK按钮特殊处理：检查部队是否有战斗机会
+  if (commandType === 'ATTACK' && selectedForce.value.combatChance <= 0) {
     return true;
   }
   
@@ -340,12 +351,7 @@ function isButtonDisabled(buttonId) {
 // 执行命令
 function executeCommand(commandType) {
   // 检查按钮是否被禁用
-  if (isButtonDisabled(GameButtons[commandType])) {
-    return;
-  }
-  
-  if (!selectedForce.value) {
-    showWarning('请先选择一个部队');
+  if (isButtonDisabled(commandType)) {
     return;
   }
   
@@ -353,33 +359,36 @@ function executeCommand(commandType) {
     case 'MOVE':
       CommandService.executeCommandFromUI('MOVE_PREPARE', { 
         forceId: selectedForce.value.forceId 
+      }).catch(error => {
+        showWarning(`无法准备移动: ${error.message}`);
       });
       break;
     case 'ATTACK':
       CommandService.executeCommandFromUI('ATTACK_PREPARE', { 
         forceId: selectedForce.value.forceId 
+      }).catch(error => {
+        showWarning(`无法准备攻击: ${error.message}`);
       });
       break;
     case 'MANAGE_FORCE':
       // 打开部队管理面板
-      CommandService.executeCommandFromUI('MANAGE_FORCE', { 
-        forceId: selectedForce.value.forceId 
-      });
+      // 此处仅为示例，实际实现可能需要根据项目需求调整
+      showWarning('部队管理功能尚未实现');
       break;
     case 'MANAGE_UNIT':
       // 打开兵种管理面板
-      CommandService.executeCommandFromUI('MANAGE_UNIT', {});
+      // 此处仅为示例，实际实现可能需要根据项目需求调整
+      showWarning('兵种管理功能尚未实现');
       break;
   }
 }
 
-// 监听选中六角格变化
-watch(() => store.selectedHexIds, () => {
-  // 如果没有选中的六角格，清空部队选择
-  if (store.selectedHexIds.size === 0) {
+// 监听选中六角格变化，当没有选中六角格时清空部队选择
+watch(() => store.selectedHexIds.size, (newSize) => {
+  if (newSize === 0) {
     store.clearSelectedForceIds();
   }
-}, { deep: true });
+});
 </script>
 
 <style scoped>
@@ -387,7 +396,7 @@ watch(() => store.selectedHexIds, () => {
   display: flex;
   width: 100%;
   height: 240px;
-  background-color: rgba(158, 133, 98, 0.9);
+  background-color: rgba(169, 140, 102, 0.9);
   color: #f0f0f0;
   border-top: 1px solid rgba(255, 255, 255, 0.2);
   position: relative;
@@ -523,6 +532,13 @@ watch(() => store.selectedHexIds, () => {
   text-align: right;
 }
 
+.empty-forces {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 /* 部队详细信息区 */
 .force-detail-section {
   width: 350px;
@@ -534,8 +550,10 @@ watch(() => store.selectedHexIds, () => {
 }
 
 .empty-force {
+  flex: 1;
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .force-detail-tabs {
@@ -616,6 +634,11 @@ watch(() => store.selectedHexIds, () => {
   padding: 0 10px;
 }
 
+.units-table-body {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
 /* 命令按钮区 */
 .command-buttons-section {
   width: 60px;
@@ -670,29 +693,21 @@ watch(() => store.selectedHexIds, () => {
   background-color: #4ae24a;
 }
 
-/* 响应式设计 */
-@media (max-width: 1200px) {
-  .detail-info-panel {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: 240px;
-  }
-  
-  .hex-info-section,
-  .force-detail-section {
-    width: 50%;
-  }
-  
-  .hex-forces-section {
-    width: 100%;
-    order: 3;
-  }
-  
-  .command-buttons-section {
-    position: absolute;
-    right: 0;
-    top: 0;
-    height: 240px;
-  }
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
 }
 </style>
