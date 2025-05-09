@@ -103,7 +103,6 @@ export class HexGridGenerator {
           },
           terrainAttributes: {
             terrainType: "default",
-            terrainComposition: {},
             elevation: 0,
             passability: { land: true, naval: false, air: true }
           },

@@ -5,211 +5,296 @@
   - 部队详细信息
 -->
 <template>
-  <div class="detail-info-panel">
-    <!-- 左侧：六角格详细信息 -->
-    <div class="hex-info-section">
-      <div class="section-header">
-        <h4>六角格详细信息</h4>
+  <teleport to="body">
+    <div class="detail-info-panel">
+      <!-- 左侧：六角格详细信息 -->
+      <div class="hex-info-section">
+        <div class="section-header">
+          <h4>六角格详细信息</h4>
+        </div>
+        <div class="info-content" v-if="selectedHex">
+          <div class="info-row">
+            <span class="info-label">ID:</span>
+            <span class="info-value">{{ selectedHex.hexId }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">位置:</span>
+            <span class="info-value" v-if="selectedHexCenter">
+              ({{ selectedHexCenter.latitude.toFixed(3) }}°, {{ selectedHexCenter.longitude.toFixed(3) }}°)
+            </span>
+            <span class="info-value" v-else>未知位置</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">地形高度:</span>
+            <span class="info-value">{{ getTerrainType(selectedHex) }} ({{ selectedHex.terrainAttributes?.elevation.toFixed(2) || 0 }}m)</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">可通行军种:</span>
+            <span class="info-value">{{ getPassableTypes(selectedHex) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">隶属方:</span>
+            <span class="info-value" :class="`faction-${selectedHex.battlefieldState?.controlFaction || 'neutral'}`">
+              {{ getFactionName(selectedHex.battlefieldState?.controlFaction) }} 
+              <span v-if="hexForces.length > 0">({{ hexForces.length }} 支部队)</span>
+            </span>
+          </div>
+        </div>
+        <div class="info-content empty-info" v-else>
+          <div class="empty-message">未选中六角格</div>
+        </div>
       </div>
-      <div class="info-content" v-if="selectedHex">
-        <div class="info-row">
-          <span class="info-label">ID:</span>
-          <span class="info-value">{{ selectedHex.hexId }}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">位置:</span>
-          <span class="info-value">({{ selectedHex.latitude.toFixed(3) }}°, {{ selectedHex.longitude.toFixed(3) }}°)</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">地形高度:</span>
-          <span class="info-value">{{ getTerrainType(selectedHex) }} ({{ selectedHex.elevation.toFixed(2) }}m)</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">可通行军种:</span>
-          <span class="info-value">{{ getPassableTypes(selectedHex) }}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">隶属方:</span>
-          <span class="info-value" :class="`faction-${selectedHex.battlefieldState?.controlFaction || 'neutral'}`">
-            {{ getFactionName(selectedHex.battlefieldState?.controlFaction) }} 
-            <span v-if="hexForces.length > 0">({{ hexForces.length }} 支部队)</span>
-          </span>
-        </div>
-      </div>
-      <div class="info-content empty-info" v-else>
-        <div class="empty-message">未选中六角格</div>
-      </div>
-    </div>
 
-    <!-- 中间：六角格部队列表 -->
-    <div class="hex-forces-section">
-      <div class="section-header">
-        <h4>六角格部队列表</h4>
-      </div>
-      <div class="forces-table" v-if="hexForces.length > 0">
-        <div class="forces-table-header">
-          <div class="column id-column">编号</div>
-          <div class="column name-column">名称</div>
-          <div class="column strength-column">兵力</div>
-          <div class="column action-column">行动力</div>
+      <!-- 中间：六角格部队列表 -->
+      <div class="hex-forces-section">
+        <div class="section-header">
+          <h4>六角格部队列表</h4>
         </div>
-        <div class="forces-table-body">
-          <div 
-            v-for="force in hexForces" 
-            :key="force.forceId"
-            class="forces-table-row"
-            :class="{'selected-row': isForceSelected(force.forceId)}"
-            @click="toggleForceSelection(force.forceId)"
-          >
-            <div class="column id-column">{{ getForceNumber(force.forceId) }}</div>
-            <div class="column name-column">{{ force.forceName }}</div>
-            <div class="column strength-column">{{ force.troopStrength }}</div>
-            <div class="column action-column">{{ force.actionPoints }}</div>
+        <div class="forces-table" v-if="hexForces.length > 0">
+          <div class="forces-table-header">
+            <div class="column id-column">编号</div>
+            <div class="column name-column">名称</div>
+            <div class="column strength-column">兵力</div>
+            <div class="column action-column">行动力</div>
           </div>
-        </div>
-      </div>
-      <div class="empty-forces" v-else>
-        <div class="empty-message">该六角格中没有部队</div>
-      </div>
-    </div>
-
-    <!-- 右侧：部队详细信息 -->
-    <div class="force-detail-section">
-      <div class="section-header">
-        <h4>部队详细信息</h4>
-      </div>
-      
-      <div class="force-detail-tabs" v-if="selectedForce">
-        <!-- 标签切换 -->
-        <div class="tabs-header">
-          <div 
-            class="tab-item" 
-            :class="{'active': activeTab === 'attributes'}"
-            @click="activeTab = 'attributes'"
-          >
-            属性
-          </div>
-          <div 
-            class="tab-item"
-            :class="{'active': activeTab === 'composition'}"
-            @click="activeTab = 'composition'"
-          >
-            兵种组成
-          </div>
-        </div>
-        
-        <!-- 属性标签内容 -->
-        <div class="tab-content attributes-content" v-show="activeTab === 'attributes'">
-          <div class="attr-row">
-            <span class="attr-label">战斗机会数:</span>
-            <span class="attr-value">{{ selectedForce.combatChance }}</span>
-          </div>
-          <div class="attr-row">
-            <span class="attr-label">进攻/防御火力值:</span>
-            <span class="attr-value">{{ selectedForce.attackFirepower || 0 }} / {{ selectedForce.defenseFirepower || 0 }}</span>
-          </div>
-          <div class="attr-row">
-            <span class="attr-label">兵力回复速率:</span>
-            <span class="attr-value">{{ selectedForce.recoveryRate || 0 }}</span>
-          </div>
-          <div class="attr-row">
-            <span class="attr-label">士气值:</span>
-            <span class="attr-value">{{ selectedForce.morale || 0 }}</span>
-          </div>
-          <div class="attr-row">
-            <span class="attr-label">疲劳系数:</span>
-            <span class="attr-value">{{ selectedForce.fatigueFactor || 0 }}</span>
-          </div>
-          <div class="attr-row">
-            <span class="attr-label">指挥能力:</span>
-            <span class="attr-value">{{ selectedForce.commandCapability || 0 }}</span>
-          </div>
-          <div class="attr-row">
-            <span class="attr-label">指挥范围:</span>
-            <span class="attr-value">{{ selectedForce.commandRange || 0 }}</span>
-          </div>
-          <div class="attr-row">
-            <span class="attr-label">可视范围:</span>
-            <span class="attr-value">{{ selectedForce.visibilityRadius || 0 }}</span>
-          </div>
-        </div>
-        
-        <!-- 兵种组成标签内容 -->
-        <div class="tab-content composition-content" v-show="activeTab === 'composition'">
-          <div class="units-table" v-if="forceUnits.length > 0">
-            <div class="units-row header">
-              <div class="unit-type">兵种</div>
-              <div class="unit-count">数量</div>
+          <div class="forces-table-body">
+            <div 
+              v-for="force in hexForces" 
+              :key="force.forceId"
+              class="forces-table-row"
+              :class="{'selected-row': isForceSelected(force.forceId)}"
+              @click="toggleForceSelection(force.forceId)"
+            >
+              <div class="column id-column">{{ getForceNumber(force.forceId) }}</div>
+              <div class="column name-column" :title="force.forceName">{{ force.forceName }}</div>
+              <div class="column strength-column">{{ force.troopStrength }}</div>
+              <div class="column action-column">{{ force.actionPoints }}</div>
             </div>
-            <div class="units-table-body">
-              <div class="units-row" v-for="unit in forceUnits" :key="unit.unitId">
-                <div class="unit-type">{{ unit.name }}</div>
-                <div class="unit-count">{{ unit.count }}</div>
+          </div>
+        </div>
+        <div class="empty-forces" v-else>
+          <div class="empty-message">该六角格中没有部队</div>
+        </div>
+      </div>
+
+      <!-- 右侧：部队详细信息 -->
+      <div class="force-detail-section">
+        <div class="section-header">
+          <h4>部队详细信息</h4>
+        </div>
+        
+        <div class="force-detail-content" v-if="selectedForce">
+          <!-- 三栏布局：火力值、属性和兵种组成 -->
+          <div class="detail-columns">
+            <!-- 第一栏：火力值表格 -->
+            <div class="detail-column firepower-column">
+              <div class="column-header">火力值</div>
+              <table class="firepower-table">
+                <tr class="firepower-header">
+                  <th class="col-empty"></th>
+                  <th class="col-header">进攻</th>
+                  <th class="col-header">防御</th>
+                </tr>
+                <!-- 陆地火力行 -->
+                <tr class="firepower-row land-row">
+                  <td class="row-header">陆</td>
+                  <td class="col-value">{{ getFirepowerValue('attack', 'land') }}</td>
+                  <td class="col-value">{{ getFirepowerValue('defense', 'land') }}</td>
+                </tr>
+                <!-- 海洋火力行 -->
+                <tr class="firepower-row sea-row">
+                  <td class="row-header">海</td>
+                  <td class="col-value">{{ getFirepowerValue('attack', 'sea') }}</td>
+                  <td class="col-value">{{ getFirepowerValue('defense', 'sea') }}</td>
+                </tr>
+                <!-- 空中火力行 -->
+                <tr class="firepower-row air-row">
+                  <td class="row-header">空</td>
+                  <td class="col-value">{{ getFirepowerValue('attack', 'air') }}</td>
+                  <td class="col-value">{{ getFirepowerValue('defense', 'air') }}</td>
+                </tr>
+              </table>
+            </div>
+            
+            <!-- 第二栏：部队属性 -->
+            <div class="detail-column attributes-column">
+              <div class="column-header">属性</div>
+              <div class="attr-groups-container">
+                <!-- 第一组：战斗机会数、士气值 -->
+                <div class="attr-group">
+                  <div class="attr-row">
+                    <span class="attr-label">战斗机会数:</span>
+                    <span class="attr-value">{{ selectedForce.combatChance }}</span>
+                  </div>
+                  <div class="attr-row">
+                    <span class="attr-label">士气值:</span>
+                    <span class="attr-value">{{ selectedForce.morale || 0 }}</span>
+                  </div>
+                </div>
+                
+                <div class="attr-divider"></div>
+                
+                <!-- 第二组：兵力回复速率、疲劳系数 -->
+                <div class="attr-group">
+                  <div class="attr-row">
+                    <span class="attr-label">兵力回复速率:</span>
+                    <span class="attr-value">{{ selectedForce.recoveryRate || 0 }}</span>
+                  </div>
+                  <div class="attr-row">
+                    <span class="attr-label">疲劳系数:</span>
+                    <span class="attr-value">{{ selectedForce.fatigueFactor || 0 }}</span>
+                  </div>
+                </div>
+                
+                <div class="attr-divider"></div>
+                
+                <!-- 第三组：指挥能力、指挥范围、可视范围 -->
+                <div class="attr-group">
+                  <div class="attr-row">
+                    <span class="attr-label">指挥能力:</span>
+                    <span class="attr-value">{{ selectedForce.commandCapability || 0 }}</span>
+                  </div>
+                  <div class="attr-row">
+                    <span class="attr-label">指挥范围:</span>
+                    <span class="attr-value">{{ selectedForce.commandRange || 0 }}</span>
+                  </div>
+                  <div class="attr-row">
+                    <span class="attr-label">可视范围:</span>
+                    <span class="attr-value">{{ selectedForce.visibilityRadius || 0 }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 第三栏：兵种组成 -->
+            <div class="detail-column composition-column">
+              <div class="composition-header">部队组成</div>
+              <div class="units-table" v-if="forceUnits.length > 0">
+                <div class="units-row header">
+                  <div class="unit-type">兵种</div>
+                  <div class="unit-count">基数</div>
+                </div>
+                <div class="units-table-body">
+                  <div class="units-row" v-for="unit in forceUnits" :key="unit.unitId" 
+                      :title="getUnitDetailsTooltip(unit)">
+                    <div class="unit-type">{{ unit.name }}</div>
+                    <div class="unit-count">{{ unit.count }}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="empty-units" v-else>
+                <div class="empty-message">未获取到兵种数据</div>
               </div>
             </div>
           </div>
-          <div class="empty-units" v-else>
-            <div class="empty-message">未获取到兵种数据</div>
-          </div>
+        </div>
+        <div class="empty-force" v-else>
+          <div class="empty-message">未选中部队</div>
         </div>
       </div>
-      <div class="empty-force" v-else>
-        <div class="empty-message">未选中部队</div>
-      </div>
-    </div>
 
-    <!-- 最右侧：战斗命令按钮栏 -->
-    <div class="command-buttons-section">
-      <div class="command-button move-button" 
-           :class="{'disabled': isButtonDisabled('MOVE')}"
-           @click="executeCommand('MOVE')">
-        <el-tooltip content="移动部队" placement="left">
-          <i class="el-icon-position"></i>
-        </el-tooltip>
-      </div>
-      <div class="command-button attack-button" 
-           :class="{'disabled': isButtonDisabled('ATTACK')}"
-           @click="executeCommand('ATTACK')">
-        <el-tooltip content="进攻" placement="left">
-          <i class="el-icon-aim"></i>
-        </el-tooltip>
-      </div>
-      <div class="command-button force-manage-button" 
-           :class="{'disabled': isButtonDisabled('MANAGE_FORCE')}"
-           @click="executeCommand('MANAGE_FORCE')">
-        <el-tooltip content="部队管理" placement="left">
-          <i class="el-icon-data-analysis"></i>
-        </el-tooltip>
-      </div>
-      <div class="command-button unit-manage-button" 
-           :class="{'disabled': isButtonDisabled('MANAGE_UNIT')}"
-           @click="executeCommand('MANAGE_UNIT')">
-        <el-tooltip content="兵种管理" placement="left">
-          <i class="el-icon-edit-outline"></i>
-        </el-tooltip>
+      <!-- 最右侧：战斗命令按钮栏 -->
+      <div class="command-buttons-section">
+        <!-- 移动按钮 -->
+        <div class="command-button" 
+             :class="{
+               'disabled': isButtonDisabled(GameButtons.MOVE),
+               'cancel': inMoveMode
+             }"
+             @click="handleMoveButtonClick"
+             :title="inMoveMode ? '取消移动' : '移动部队'">
+          <img :src="inMoveMode ? '/assets/icons/cancel.png' : '/assets/icons/march.png'" alt="移动" />
+        </div>
+        
+        <!-- 攻击按钮 -->
+        <div class="command-button" 
+             :class="{
+               'disabled': isButtonDisabled(GameButtons.ATTACK),
+               'cancel': inAttackMode
+             }"
+             @click="handleAttackButtonClick"
+             :title="inAttackMode ? '取消攻击' : '发起进攻'">
+          <img :src="inAttackMode ? '/assets/icons/cancel.png' : '/assets/icons/attack.png'" alt="攻击" />
+        </div>
+        
+        <!-- 部队管理按钮 -->
+        <div class="command-button" 
+             :class="{'disabled': isButtonDisabled(GameButtons.MANAGE_FORCE)}"
+             @click="openForceManagement"
+             title="部队管理">
+          <img src="/assets/icons/force.png" alt="部队管理" />
+        </div>
+        
+        <!-- 兵种管理按钮 -->
+        <div class="command-button" 
+             :class="{'disabled': isButtonDisabled(GameButtons.MANAGE_UNIT)}"
+             @click="openUnitManagement"
+             title="兵种管理">
+          <img src="/assets/icons/unit.png" alt="兵种管理" />
+        </div>
       </div>
     </div>
-  </div>
+  </teleport>
+  
+  <!-- 使用单独的teleport将确认按钮放在body上 -->
+  <teleport to="body">
+    <div class="floating-confirm move-confirm" v-if="inMoveMode" @click="executeCommand(CommandType.MOVE)">
+      <img src="/assets/icons/confirm.png" alt="确认" />
+      <span>发起移动</span>
+    </div>
+    
+    <div class="floating-confirm attack-confirm" v-if="inAttackMode" @click="executeCommand(CommandType.ATTACK)">
+      <img src="/assets/icons/confirm.png" alt="确认" />
+      <span>发起进攻</span>
+    </div>
+  </teleport>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { computed, watch, ref, onMounted } from 'vue';
 import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { showWarning } from '@/layers/interaction-layer/utils/MessageBox';
+import { CommandType } from '@/config/CommandConfig';
+import { GameButtons, GameMode } from '@/config/GameModeConfig';
+import { gameModeService } from '@/layers/interaction-layer/GameModeManager';
 
 // 状态管理
 const store = openGameStore();
-const activeTab = ref('attributes'); // 默认显示属性标签
+
+// 模式管理
+const inMoveMode = ref(false); 
+const inAttackMode = ref(false);
+
+// 监听游戏模式变化
+watch(() => gameModeService.getCurrentMode(), (newMode) => {
+  console.log('游戏模式变化:', newMode);
+  inMoveMode.value = newMode === GameMode.MOVE_PREPARE;
+  inAttackMode.value = newMode === GameMode.ATTACK_PREPARE;
+}, { immediate: true });
+
+// 初始化模式状态
+onMounted(() => {
+  const currentMode = gameModeService.getCurrentMode();
+  inMoveMode.value = currentMode === GameMode.MOVE_PREPARE;
+  inAttackMode.value = currentMode === GameMode.ATTACK_PREPARE;
+});
 
 // 计算属性：获取所选六角格信息
 const selectedHex = computed(() => {
-  // 获取第一个选中的六角格
+  // 获取最后一个选中的六角格
   const hexIds = Array.from(store.selectedHexIds);
   if (hexIds.length === 0) return null;
   
-  const hex = store.getHexCellById(hexIds[0]);
-  return hex;
+  return store.getHexCellById(hexIds[hexIds.length - 1]);
+});
+
+// 计算属性：获取六角格中心点
+const selectedHexCenter = computed(() => {
+  if (!selectedHex.value || !selectedHex.value.position || !selectedHex.value.position.points || selectedHex.value.position.points.length === 0) {
+    return null;
+  }
+  return selectedHex.value.position.points[0];
 });
 
 // 计算属性：获取六角格中的部队
@@ -233,8 +318,8 @@ const selectedForce = computed(() => {
   const forceIds = Array.from(store.selectedForceIds);
   if (forceIds.length === 0) return null;
   
-  // 获取第一个选中的部队
-  return store.getForceById(forceIds[0]);
+  // 获取最后一个选中的部队
+  return store.getForceById(forceIds[forceIds.length - 1]);
 });
 
 // 计算属性：获取当前选中部队的兵种组成
@@ -297,19 +382,73 @@ function getTerrainType(hex) {
 
 // 辅助函数：获取可通行军种
 function getPassableTypes(hex) {
-  if (!hex || !hex.terrainAttributes) return '无';
+  if (!hex || !hex.terrainAttributes || !hex.terrainAttributes.passability) return '无';
   
-  const terrainType = hex.terrainAttributes.terrainType;
+  const passability = hex.terrainAttributes.passability;
+  const types = [];
   
-  if (terrainType === 'water') {
-    return '海军';
-  } else if (terrainType === 'mountain') {
-    return '空军';
-  } else if (terrainType === 'hill' || terrainType === 'plain') {
-    return '陆军、空军';
+  if (passability.land) types.push('陆军');
+  if (passability.naval) types.push('海军');
+  if (passability.air) types.push('空军');
+  
+  return types.length > 0 ? types.join('、') : '无';
+}
+
+// 辅助函数：获取火力值
+function getFirepowerValue(type, dimension) {
+  if (!selectedForce.value) return 'N/A';
+  
+  try {
+    // 根据图片所示，火力值数据结构是一个对象字符串
+    // 进攻火力值获取
+    if (type === 'attack') {
+      if (!selectedForce.value.attackFirepower) return '0';
+      
+      // 从字符串解析或直接获取对象
+      let attackData;
+      if (typeof selectedForce.value.attackFirepower === 'string') {
+        try {
+          attackData = JSON.parse(selectedForce.value.attackFirepower);
+        } catch (e) {
+          return '0';
+        }
+      } else if (typeof selectedForce.value.attackFirepower === 'object') {
+        attackData = selectedForce.value.attackFirepower;
+      }
+      
+      // 返回对应维度的值
+      if (dimension === 'land') return attackData?.land || '0';
+      if (dimension === 'sea') return attackData?.sea || '0';
+      if (dimension === 'air') return attackData?.air || '0';
+    }
+    
+    // 防御火力值获取
+    if (type === 'defense') {
+      if (!selectedForce.value.defenseFirepower) return '0';
+      
+      // 从字符串解析或直接获取对象
+      let defenseData;
+      if (typeof selectedForce.value.defenseFirepower === 'string') {
+        try {
+          defenseData = JSON.parse(selectedForce.value.defenseFirepower);
+        } catch (e) {
+          return '0';
+        }
+      } else if (typeof selectedForce.value.defenseFirepower === 'object') {
+        defenseData = selectedForce.value.defenseFirepower;
+      }
+      
+      // 返回对应维度的值
+      if (dimension === 'land') return defenseData?.land || '0';
+      if (dimension === 'sea') return defenseData?.sea || '0';
+      if (dimension === 'air') return defenseData?.air || '0';
+    }
+    
+    return '0';
+  } catch (error) {
+    console.error('获取火力值出错:', error);
+    return 'Error';
   }
-  
-  return '未知';
 }
 
 // 辅助函数：获取阵营名称
@@ -319,67 +458,180 @@ function getFactionName(faction) {
 }
 
 // 按钮禁用状态检查
-function isButtonDisabled(commandType) {
-  // 没有选中部队时禁用所有部队相关按钮
-  if (!selectedForce.value) {
+function isButtonDisabled(buttonType) {
+  // 没有选中部队时禁用移动和进攻按钮
+  if (!selectedForce.value && (buttonType === GameButtons.MOVE || buttonType === GameButtons.ATTACK)) {
     return true;
   }
-  
-  // 如果部队不属于当前玩家阵营，禁用按钮
-  if (selectedForce.value.faction !== store.currentFaction) {
+
+  // 没有选中六角格时禁用创建部队按钮
+  if (!selectedHex.value && buttonType === GameButtons.CREATE_FORCE) {
     return true;
   }
-  
+
   // 命令执行中禁用所有按钮
   if (store.isExecuting) {
     return true;
   }
-  
-  // MOVE按钮特殊处理：检查部队是否有行动点数
-  if (commandType === 'MOVE' && selectedForce.value.actionPoints <= 0) {
+
+  // 游戏模式禁用的按钮
+  if (store.disabledButtons.has(buttonType)) {
     return true;
   }
-  
-  // ATTACK按钮特殊处理：检查部队是否有战斗机会
-  if (commandType === 'ATTACK' && selectedForce.value.combatChance <= 0) {
-    return true;
-  }
-  
+
   return false;
 }
 
-// 执行命令
-function executeCommand(commandType) {
-  // 检查按钮是否被禁用
-  if (isButtonDisabled(commandType)) {
+// 处理移动按钮点击
+function handleMoveButtonClick() {
+  if (isButtonDisabled(GameButtons.MOVE)) {
+    console.log('移动按钮被禁用');
     return;
   }
   
+  if (inMoveMode.value) {
+    console.log('已在移动准备模式，取消移动');
+    // 已经在移动准备模式，点击取消
+    executeCommand(CommandType.MOVE_PREPARE, { forceId: selectedForce.value.forceId });
+  } else {
+    console.log('进入移动准备模式');
+    // 进入移动准备模式
+    executeCommand(CommandType.MOVE_PREPARE, { forceId: selectedForce.value.forceId });
+  }
+}
+
+// 处理攻击按钮点击
+function handleAttackButtonClick() {
+  if (isButtonDisabled(GameButtons.ATTACK)) {
+    console.log('攻击按钮被禁用');
+    return;
+  }
+  
+  if (inAttackMode.value) {
+    console.log('已在攻击准备模式，取消攻击');
+    // 已经在攻击准备模式，点击取消
+    executeCommand(CommandType.ATTACK_PREPARE, { forceId: selectedForce.value.forceId });
+  } else {
+    console.log('进入攻击准备模式');
+    // 进入攻击准备模式
+    executeCommand(CommandType.ATTACK_PREPARE, { forceId: selectedForce.value.forceId });
+  }
+}
+
+// 打开部队管理模态框
+function openForceManagement() {
+  if (isButtonDisabled(GameButtons.MANAGE_FORCE)) {
+    return;
+  }
+  
+  showWarning('部队管理功能尚未实现');
+  // TODO: 实现部队管理模态框
+  // 可以使用 showModal 或其他方式显示模态框
+}
+
+// 打开兵种管理模态框
+function openUnitManagement() {
+  if (isButtonDisabled(GameButtons.MANAGE_UNIT)) {
+    return;
+  }
+  
+  showWarning('兵种管理功能尚未实现');
+  // TODO: 实现兵种管理模态框
+  // 可以使用 showModal 或其他方式显示模态框
+}
+
+// 执行命令
+function executeCommand(commandType, params = {}) {
+  console.log('执行命令:', commandType, params);
+  
+  // 如果没有选中部队且不是准备类命令，则不执行
+  if (!selectedForce.value && 
+      commandType !== CommandType.MOVE_PREPARE && 
+      commandType !== CommandType.ATTACK_PREPARE) {
+    console.warn('未选中部队，无法执行命令');
+    return;
+  }
+  
+  // 默认使用选中的部队ID
+  if (!params.forceId && selectedForce.value) {
+    params.forceId = selectedForce.value.forceId;
+  }
+  
+  // 根据命令类型执行对应操作
   switch (commandType) {
-    case 'MOVE':
-      CommandService.executeCommandFromUI('MOVE_PREPARE', { 
-        forceId: selectedForce.value.forceId 
+    case CommandType.MOVE_PREPARE:
+      CommandService.executeCommandFromUI(commandType, params)
+        .then(() => {
+          console.log('移动准备命令已发送');
+        })
+        .catch(error => {
+          console.error('移动准备失败:', error);
+          showWarning(`无法准备移动: ${error.message}`);
+        });
+      break;
+      
+    case CommandType.ATTACK_PREPARE:
+      CommandService.executeCommandFromUI(commandType, params)
+        .then(() => {
+          console.log('攻击准备命令已发送');
+        })
+        .catch(error => {
+          console.error('攻击准备失败:', error);
+          showWarning(`无法准备攻击: ${error.message}`);
+        });
+      break;
+      
+    case CommandType.MOVE: {
+      // 移动命令需要路径参数
+      if (!store.selectedHexIds || store.selectedHexIds.size < 2) {
+        showWarning('请先选择移动路径');
+        return;
+      }
+      
+      // 提取选中的六角格作为路径
+      const path = Array.from(store.selectedHexIds);
+      console.log('执行移动，路径:', path);
+      
+      CommandService.executeCommandFromUI(commandType, { 
+        forceId: params.forceId,
+        path: path
+      }).then(() => {
+        console.log('移动命令已执行');
+        inMoveMode.value = false; // 执行完成后重置模式
       }).catch(error => {
-        showWarning(`无法准备移动: ${error.message}`);
+        console.error('移动失败:', error);
+        showWarning(`无法执行移动: ${error.message}`);
       });
       break;
-    case 'ATTACK':
-      CommandService.executeCommandFromUI('ATTACK_PREPARE', { 
-        forceId: selectedForce.value.forceId 
+    }
+      
+    case CommandType.ATTACK: {
+      // 攻击命令需要目标六角格
+      if (!store.selectedHexIds || store.selectedHexIds.size < 1) {
+        showWarning('请先选择攻击目标');
+        return;
+      }
+      
+      // 获取选中的最后一个六角格作为目标
+      const hexIds = Array.from(store.selectedHexIds);
+      const targetHex = hexIds[hexIds.length - 1];
+      console.log('执行攻击，目标:', targetHex);
+      
+      CommandService.executeCommandFromUI(commandType, { 
+        commandForceId: params.forceId,
+        targetHex: targetHex,
+        supportForceIds: [] // 暂时不支持支援部队
+      }).then(() => {
+        console.log('攻击命令已执行');
+        inAttackMode.value = false; // 执行完成后重置模式
       }).catch(error => {
-        showWarning(`无法准备攻击: ${error.message}`);
+        console.error('攻击失败:', error);
+        showWarning(`无法执行攻击: ${error.message}`);
       });
       break;
-    case 'MANAGE_FORCE':
-      // 打开部队管理面板
-      // 此处仅为示例，实际实现可能需要根据项目需求调整
-      showWarning('部队管理功能尚未实现');
-      break;
-    case 'MANAGE_UNIT':
-      // 打开兵种管理面板
-      // 此处仅为示例，实际实现可能需要根据项目需求调整
-      showWarning('兵种管理功能尚未实现');
-      break;
+    }
+      
+    // 其他命令类型...
   }
 }
 
@@ -389,30 +641,87 @@ watch(() => store.selectedHexIds.size, (newSize) => {
     store.clearSelectedForceIds();
   }
 });
+
+// 添加getUnitDetailsTooltip函数
+function getUnitDetailsTooltip(unit) {
+  if (!unit || !unit.unitId) return '';
+  
+  const unitObj = store.getUnitById(unit.unitId);
+  if (!unitObj) return unit.name;
+  
+  let tooltip = `${unitObj.unitName || '未知兵种'}\n`;
+  tooltip += `军种: ${serviceMap[unitObj.service] || '未知'}\n`;
+  tooltip += `类型: ${unitObj.category || '未知'}\n`;
+  
+  const attackPower = unitObj.getAttackPower();
+  const defensePower = unitObj.getDefensePower();
+  if (unitObj.attackPowerComposition) {
+    tooltip += `攻击力(陆/海/空): ${attackPower.land || 0}/${attackPower.sea || 0}/${attackPower.air || 0}\n`;
+  }
+  
+  if (unitObj.defensePowerComposition) {
+    tooltip += `防御力(陆/海/空): ${defensePower.land || 0}/${defensePower.sea || 0}/${defensePower.air || 0}\n`;
+  }
+
+  tooltip += `在该格的行动力消耗: ${unitObj.getActionPointCost() || 0}\n`;
+  tooltip += `恢复速率: ${unitObj.recoveryRate || 0}\n`;
+  tooltip += `指挥能力: ${unitObj.commandCapability || 0}\n`;
+  tooltip += `指挥范围: ${unitObj.commandRange || 0}\n`;
+  tooltip += `可视范围: ${unitObj.visibilityRadius || 0}\n`;
+  
+  return tooltip;
+}
+
+// 军种名称映射
+const serviceMap = {
+  'land': '陆军',
+  'sea': '海军',
+  'air': '空军'
+}
 </script>
 
 <style scoped>
 .detail-info-panel {
   display: flex;
-  width: 100%;
-  height: 240px;
+  width: auto;
+  min-width: 1000px;
+  max-width: 1200px;
+  height: 220px;
   background-color: rgba(169, 140, 102, 0.9);
   color: #f0f0f0;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  position: relative;
+  border: 2px solid rgba(80, 60, 40, 0.8);
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  position: fixed;
+  left: 50%;
+  bottom: 0px;
+  transform: translateX(-50%);
+  z-index: 90;
+  overflow: hidden;
+}
+
+/* 太窄了就隐藏面板 */
+@media screen and (max-width: 1280px) {
+  .detail-info-panel {
+    display: none;
+  }
 }
 
 /* 公共样式 */
 .section-header {
-  background-color: rgba(0, 0, 0, 0.2);
-  padding: 8px 12px;
+  background-color: rgba(80, 60, 40, 0.5);
+  padding: 8px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
 }
 
 .section-header h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: bold;
+  text-align: center;
+  color: #f0eadd;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .empty-message {
@@ -426,7 +735,8 @@ watch(() => store.selectedHexIds.size, (newSize) => {
 
 /* 六角格详细信息区 */
 .hex-info-section {
-  width: 260px;
+  width: 220px;
+  flex-shrink: 0;
   height: 100%;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -435,20 +745,21 @@ watch(() => store.selectedHexIds.size, (newSize) => {
 }
 
 .info-content {
-  padding: 10px;
+  padding: 8px;
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: space-around;
+  font-size: 12px;
 }
 
 .info-row {
   display: flex;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
 }
 
 .info-label {
-  width: 90px;
+  width: 80px;
   color: rgba(255, 255, 255, 0.7);
 }
 
@@ -471,6 +782,8 @@ watch(() => store.selectedHexIds.size, (newSize) => {
 /* 六角格部队列表区 */
 .hex-forces-section {
   flex: 1;
+  min-width: 280px;
+  max-width: none;
   height: 100%;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
@@ -482,13 +795,14 @@ watch(() => store.selectedHexIds.size, (newSize) => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  font-size: 12px;
 }
 
 .forces-table-header {
   display: flex;
   background-color: rgba(0, 0, 0, 0.3);
   font-weight: bold;
-  padding: 8px 0;
+  padding: 6px 0;
 }
 
 .forces-table-body {
@@ -498,7 +812,7 @@ watch(() => store.selectedHexIds.size, (newSize) => {
 
 .forces-table-row {
   display: flex;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   cursor: pointer;
   transition: background-color 0.2s;
@@ -513,23 +827,27 @@ watch(() => store.selectedHexIds.size, (newSize) => {
 }
 
 .column {
-  padding: 0 10px;
+  padding: 0 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .id-column {
-  width: 70px;
+  width: 25px;
 }
 
 .name-column {
   flex: 1;
 }
 
-.strength-column, .action-column {
-  width: 70px;
-  text-align: right;
+.strength-column {
+  width: 25px;
+}
+
+.action-column {
+  width: 40px;
 }
 
 .empty-forces {
@@ -541,7 +859,8 @@ watch(() => store.selectedHexIds.size, (newSize) => {
 
 /* 部队详细信息区 */
 .force-detail-section {
-  width: 350px;
+  width: 450px;
+  flex-shrink: 0;
   height: 100%;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
@@ -556,114 +875,225 @@ watch(() => store.selectedHexIds.size, (newSize) => {
   align-items: center;
 }
 
-.force-detail-tabs {
+.force-detail-content {
   flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
-.tabs-header {
+.detail-columns {
+  flex: 1;
   display: flex;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  height: 100%;
+  overflow: hidden;
+  width: 100%;
 }
 
-.tab-item {
-  padding: 10px 20px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+.detail-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  padding: 5px;
+  box-sizing: border-box;
 }
 
-.tab-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+.firepower-column {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.tab-item.active {
-  border-bottom: 2px solid #4a90e2;
-  background-color: rgba(74, 144, 226, 0.1);
+.attributes-column {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.tab-content {
+.composition-column {
   flex: 1;
   overflow-y: auto;
-  padding: 10px;
 }
 
-.attributes-content {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
+.firepower-table {
+  width: 100%;
+  height: calc(100% - 26px);
+  border-collapse: collapse;
+  table-layout: fixed;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  margin: 0;
+}
+
+.firepower-header {
+  background-color: rgba(0, 0, 0, 0.2);
+  height: 20px;
+}
+
+.land-row, .sea-row, .air-row {
+  height: calc((100% - 20px) / 3);
+}
+
+.land-row {
+  background-color: rgba(74, 226, 74, 0.15); /* 陆地绿色 */
+}
+
+.sea-row {
+  background-color: rgba(74, 144, 226, 0.15); /* 海洋蓝色 */
+}
+
+.air-row {
+  background-color: rgba(226, 74, 74, 0.15); /* 空中红色 */
+}
+
+.firepower-row td {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.attr-groups-container {
+  justify-content: center;
+  height: calc(100% - 26px);
+  width: 100%;
+  padding: 6px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.attr-group {
+  margin: 0 0 3px 0;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.attr-divider {
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.15);
+  margin: 3px 0;
+  display: block;
+  width: 100%;
 }
 
 .attr-row {
   display: flex;
-  margin-bottom: 5px;
+  margin-bottom: 2px;
+  height: 15px;
+  line-height: 15px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .attr-label {
-  width: 140px;
+  min-width: 90px;
+  max-width: 90px;
   color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attr-value {
   flex: 1;
+  font-size: 11px;
+  text-align: right;
+  padding-right: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.column-header, .composition-header {
+  font-weight: bold;
+  background-color: rgba(80, 60, 40, 0.4);
+  padding: 4px 8px;
+  border-radius: 3px;
+  margin-bottom: 4px;
+  text-align: center;
+  font-size: 13px;
+  color: #f0eadd;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .units-table {
-  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  height: calc(100% - 26px);
+}
+
+.units-table-body {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .units-row {
   display: flex;
-  padding: 5px 0;
+  padding: 3px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.units-row:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .units-row.header {
   font-weight: bold;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .unit-type {
-  flex: 1;
-  padding: 0 10px;
+  flex: 2;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
 }
 
 .unit-count {
-  width: 60px;
+  flex: 1;
+  min-width: 40px;
   text-align: right;
-  padding: 0 10px;
-}
-
-.units-table-body {
-  max-height: 180px;
-  overflow-y: auto;
+  padding: 0 8px;
+  font-size: 11px;
 }
 
 /* 命令按钮区 */
 .command-buttons-section {
-  width: 60px;
+  width: 50px;
+  flex-shrink: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
+  justify-content: center;
   align-items: center;
-  padding: 10px 0;
 }
 
 .command-button {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: rgba(251, 233, 184, 0.915);
   display: flex;
   justify-content: center;
   align-items: center;
   cursor: pointer;
   transition: all 0.2s;
+  margin: 7px 0;
 }
 
 .command-button:hover {
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: rgba(251, 233, 184, 0.6);
+  transform: scale(1.1);
 }
 
 .command-button.disabled {
@@ -672,30 +1102,76 @@ watch(() => store.selectedHexIds.size, (newSize) => {
   pointer-events: none;
 }
 
-.command-button i {
-  font-size: 20px;
+.command-button.cancel {
+  background-color: rgba(255, 200, 21, 0.8);
+}
+
+.command-button img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+/* 悬浮确认按钮 */
+.floating-confirm {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  background-color: rgba(60, 179, 113, 0.9);
+  border-radius: 16px;
+  padding: 8px 12px 8px 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  white-space: nowrap;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+}
+
+.floating-confirm:hover {
+  background-color: rgba(60, 179, 113, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
+}
+
+.floating-confirm img {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+}
+
+.floating-confirm span {
+  font-size: 14px;
   color: white;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-.move-button {
-  background-color: #4a90e2;
+.move-confirm {
+  bottom: 300px;
+  right: 30px;
 }
 
-.attack-button {
-  background-color: #e24a4a;
+.attack-confirm {
+  bottom: 300px;
+  right: 30px;
 }
 
-.force-manage-button {
-  background-color: #e2a14a;
-}
-
-.unit-manage-button {
-  background-color: #4ae24a;
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* 滚动条样式 */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -709,5 +1185,20 @@ watch(() => store.selectedHexIds.size, (newSize) => {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
+}
+
+.col-empty, .col-header, .row-header {
+  text-align: center;
+  font-weight: bold;
+  font-size: 12px;
+  padding: 6px 4px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.col-value {
+  text-align: center;
+  font-size: 12px;
+  padding: 2px 2px;
+  color: rgba(255, 255, 255, 0.85);
 }
 </style>

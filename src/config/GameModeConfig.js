@@ -13,7 +13,7 @@ export const GameMode = {
   AUTO: 'AUTO',                 // 自动模式
 };
 
-// TODO: 面板名称需要重新整理
+// 面板名称
 export const GamePanels = {
   FORMATION_LIST: 'formation-list', // 编队列表
   COMMAND_PANEL: 'command-panel',   // 命令面板
@@ -23,17 +23,18 @@ export const GamePanels = {
   OVERVIEW_PANEL: 'overview-panel'    // 总览面板
 };
 
-// TODO: 按钮名称需要重新整理
+// 按钮名称
 export const GameButtons = {
   PANORAMA: 'panorama', // 俯瞰全景
   ORBIT: 'orbit', // 环绕按钮
+  RESET_CAMERA: 'reset-camera', // 复位按钮
   STATISTICS: 'statistics', // 统计按钮
   TOGGLE_LAYER: 'toggle-layer', // 图层切换按钮
   NEXT_FACTION: 'next-faction', // 下一阵营按钮
   MOVE: 'move',     // 移动按钮
   ATTACK: 'attack', // 攻击按钮
   MANAGE_FORCE: 'manage-force', // 管理部队按钮
-  MANAGE_UNIT: 'manage-unit', // 管理单位按钮
+  MANAGE_UNIT: 'manage-unit', // 管理兵种按钮
   AUTO_MODE: 'auto-mode', // 自动模式按钮
 };
 
@@ -122,7 +123,7 @@ export const ModesConfig = {
         GamePanels.HEX_FORCE_LIST,
         GamePanels.OVERVIEW_PANEL
       ],
-      disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER),
+      disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER && btn !== GameButtons.MOVE),
     },
     interaction: {
       cameraControl: true,
@@ -160,7 +161,7 @@ export const ModesConfig = {
         GamePanels.HEX_FORCE_LIST,
         GamePanels.OVERVIEW_PANEL
       ],
-      disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER),
+      disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER && btn !== GameButtons.ATTACK),
     },
     interaction: {
       cameraControl: true,
@@ -188,7 +189,7 @@ export const ModesConfig = {
   [GameMode.STATISTICS]: {
     ui: {
       visiblePanels: Object.values(GamePanels).filter(panel => panel !== GamePanels.COMMAND_PANEL),
-      disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER),
+      disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER && btn !== GameButtons.STATISTICS),
     },
     interaction: {
       cameraControl: true,

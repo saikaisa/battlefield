@@ -193,7 +193,7 @@ export class Force {
   get visibilityRadius() { return this._maxUnitAttr('visibilityRadius'); }
 
   // 兵力值恢复速率
-  get recoveryRate() { return this._sumUnitAttr('recoveryRate') * this.fatigueFactor; }
+  get recoveryRate() { return Math.round(this._weightedAvgUnitAttr('recoveryRate') * this.fatigueFactor); }
 
   // 指挥能力
   get commandCapability() { return this._maxUnitAttr('commandCapability'); }
@@ -296,13 +296,15 @@ export class Force {
     return max;
   }
 
-  // 求所有兵种某字段的和
-  _sumUnitAttr(attrName) {
+  // 求所有兵种某字段的加权平均值
+  _weightedAvgUnitAttr(attrName) {
     let sum = 0;
+    let totalCount = 0;
     this._forEachUnit((unitRef, unitCount) => {
       sum += (unitRef[attrName] ?? 0) * unitCount;
+      totalCount += unitCount;
     });
-    return sum;
+    return totalCount > 0 ? Math.round(sum / totalCount) : 0;
   }
 
   // 计算部队的火力值

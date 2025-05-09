@@ -63,7 +63,9 @@ export const HexVisualStyles = {
     type: 'factionBlue',
     priority: 0,
     fillColor: Cesium.Color.BLUE.withAlpha(0.1),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
+    showBorder: true
   },
   // 红方阵营标记
   factionRed: {
@@ -71,7 +73,9 @@ export const HexVisualStyles = {
     type: 'factionRed',
     priority: 0,
     fillColor: Cesium.Color.RED.withAlpha(0.1),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
+    showBorder: true
   },
   // 不可见遮罩
   invisible: {
@@ -79,7 +83,9 @@ export const HexVisualStyles = {
     type: 'invisible',
     priority: 1,
     fillColor: Cesium.Color.BLACK.withAlpha(0.5),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
+    showBorder: true
   },
   // =========================== 交互层 ===========================
   // 选中高亮：默认黄色
@@ -88,7 +94,9 @@ export const HexVisualStyles = {
     type: 'selected',
     priority: 2,
     fillColor: Cesium.Color.YELLOW.withAlpha(0.3),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
+    showBorder: true
   },
   // 选中高亮：蓝色
   selectedBlue: {
@@ -96,7 +104,9 @@ export const HexVisualStyles = {
     type: 'selected',
     priority: 2,
     fillColor: Cesium.Color.BLUE.withAlpha(0.3),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
+    showBorder: true
   },
   // 选中高亮：红色
   selectedRed: {
@@ -104,7 +114,9 @@ export const HexVisualStyles = {
     type: 'selected',
     priority: 2,
     fillColor: Cesium.Color.RED.withAlpha(0.3),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
+    showBorder: true
   },
   // 选中高亮：绿色
   selectedGreen: {
@@ -112,7 +124,9 @@ export const HexVisualStyles = {
     type: 'selected',
     priority: 2,
     fillColor: Cesium.Color.GREEN.withAlpha(0.3),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
+    showBorder: true
   },
   // 提示不合法的高亮
   invalid: {
@@ -120,7 +134,9 @@ export const HexVisualStyles = {
     type: 'invalid',
     priority: 3,
     fillColor: Cesium.Color.RED.withAlpha(0.6),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
+    showBorder: true
   },
   // 鼠标悬浮灰块
   hovered: {
@@ -128,6 +144,8 @@ export const HexVisualStyles = {
     type: 'hovered',
     priority: 1,
     fillColor: Cesium.Color.GRAY.withAlpha(0.5),
+    borderColor: null,
     showFill: true,
+    showBorder: false
   },
 };

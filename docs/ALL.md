@@ -25,12 +25,11 @@
 - **主地形类型 (`terrain_type`)**
 
   - 表示该六角格内占比最大的地形种类，如 `plain`（平原）、`mountain`（山地）、`urban`（城市）、`water`（水域）、`forest`（森林）、`desert`（沙漠）。该属性决定默认的行动力消耗和战斗修正。
-- **地形组合结构 (`terrain_composition`)**（暂未使用）
-
-  - 记录该六角格中各种地形分布的比例（例如“平原70%、森林30%”），用于未来的精细计算。
+  
 - **高度 (`elevation`)**
 
   - 通过采样该格内多个点进行加权平均计算得到的代表性高度值，用于影响模型渲染和战斗判断，可与 `position.height` 相近。
+  
 - **可通行性 (`passability`)**
 
   - 一个对象，表示该六角格对不同军种的通行状况，例如：
@@ -97,10 +96,6 @@
   },
   "terrain_attributes": {
     "terrain_type": "plain",
-    "terrain_composition": {
-      "plain": 0.8,
-      "forest": 0.2
-    },
     "elevation": 50,
     "passability": {
       "land": true,

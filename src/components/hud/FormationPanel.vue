@@ -173,10 +173,11 @@ import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { showSuccess, showWarning, showError } from '@/layers/interaction-layer/utils/MessageBox';
 import draggable from 'vuedraggable';
-// 导入Element Plus图标
 import { Plus, Delete, ArrowDown, ArrowRight, ArrowUp } from '@element-plus/icons-vue';
 import { gameModeService } from '@/layers/interaction-layer/GameModeManager';
 import { GameMode } from '@/config/GameModeConfig';
+import { CommandType } from '@/config/CommandConfig';
+
 // 状态管理
 const store = openGameStore();
 const expandedFormations = ref(new Set()); // 已展开的编队ID集合
@@ -373,7 +374,7 @@ function focusForce(force) {
 
   try {
     // 使用命令系统聚焦到部队
-    CommandService.executeCommandFromUI('FOCUS_FORCE', {
+    CommandService.executeCommandFromUI(CommandType.FOCUS_FORCE, {
       forceId: force.forceId,
       hexId: force.hexId
     }).catch(error => {
@@ -419,7 +420,7 @@ function createFormation() {
   }
   
   // 调用命令服务创建编队
-  CommandService.executeCommandFromUI('CREATE_FORMATION', {
+  CommandService.executeCommandFromUI(CommandType.CREATE_FORMATION, {
     name: formationForm.value.name,
     faction: currentFaction.value  // 确保添加到当前阵营
   }).then(() => {
@@ -454,7 +455,7 @@ function confirmDeleteFormation() {
   if (!selectedFormationId.value) return;
   
   // 调用命令服务删除编队
-  CommandService.executeCommandFromUI('DELETE_FORMATION', {
+  CommandService.executeCommandFromUI(CommandType.DELETE_FORMATION, {
     formationId: selectedFormationId.value
   }).then(() => {
     showSuccess('编队已删除');
@@ -681,7 +682,7 @@ function handleForceDragEnd(evt) {
     console.log(`部队 ${forceId} 将从编队 ${sourceFormationId} 移动到编队 ${targetFormationId}`);
     
     // 调用命令将部队加入目标编队
-    CommandService.executeCommandFromUI('ADD_FORCE_TO_FORMATION', {
+    CommandService.executeCommandFromUI(CommandType.ADD_FORCE_TO_FORMATION, {
       forceId: forceId,
       formationId: targetFormationId
     }).then(() => {

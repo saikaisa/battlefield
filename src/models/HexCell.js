@@ -16,44 +16,86 @@ export class HexCell {
     visibility,
     additionalInfo,
   } = {}) {
-    // 基础标识
+    /** 六角格ID */
     this.hexId = hexId ?? '';
 
-    // 空间位置：保证 points、row、col 三个字段都已初始化
+    /**
+     * 位置信息
+     * 
+     * position: {
+     *   points: [{ longitude: number, latitude: number, height: number }], // 点位数组，第一个是中心点，后面6个是顶点
+     *   row: number,     // 六角格所在行
+     *   col: number      // 六角格所在列
+     * }
+     */
     this.position = {
       points: Array.isArray(position?.points) ? position.points : [],
       row:    position?.row    ?? 0,
       col:    position?.col    ?? 0,
     };
 
-    // 地形属性：保证每个子字段都有默认值
+    /**
+     * 地形属性
+     * 
+     * terrainAttributes: {
+     *   terrainType: string,       // 地形类型（平原、山地、水域等）
+     *   elevation: number,         // 海拔高度（米）
+     *   passability: {             // 通行能力
+     *     land: boolean,           // 陆地单位是否可通行
+     *     naval: boolean,          // 海军单位是否可通行
+     *     air: boolean             // 空军单位是否可通行
+     *   }
+     * }
+     */
     this.terrainAttributes = {
       terrainType:        terrainAttributes?.terrainType        ?? 'default',
-      terrainComposition: terrainAttributes?.terrainComposition ?? {},
       elevation:          terrainAttributes?.elevation          ?? 0,
       passability:        terrainAttributes?.passability        ?? { land: true, naval: false, air: true },
     };
 
-    // 战场状态：controlFaction 必须有默认
+    /**
+     * 战场状态
+     * 
+     * battlefieldState: {
+     *   controlFaction: string     // 控制该六角格的阵营（blue、red、neutral）
+     * }
+     */
     this.battlefieldState = {
-      // this.forceIds = updated from HexForceMapper;
       controlFaction: battlefieldState?.controlFaction ?? 'neutral',
     };
 
-    // 可视状态：visualStyles 和 visibleTo 都要初始化
+    // this.forceIds = updated from HexForceMapper;
+
+    /**
+     * 可视状态
+     * 
+     * visibility: {
+     *   visualStyles: HexVisualStyles[],  // 视觉样式列表，属性见HexVisualStyles常量
+     *   visibleTo: {               // 对不同阵营的可见性
+     *     blue: boolean,           // 蓝方是否可见
+     *     red: boolean             // 红方是否可见
+     *   }
+     * }
+     */
     this.visibility = {
       visualStyles: Array.isArray(visibility?.visualStyles) ? visibility.visualStyles : [],
       visibleTo: visibility?.visibleTo ?? { blue: true, red: true },
     };
 
-    // 附加信息：isObjectivePoint、resource
+    // 附加信息(暂时未用)：isObjectivePoint、resource
+    /**
+     * additionalInfo: {
+     *   isObjectivePoint: boolean, // 是否为战略目标点
+     *   resource: Object           // 资源信息
+     * }
+     */
     this.additionalInfo = {
       isObjectivePoint: additionalInfo?.isObjectivePoint ?? false,
       resource:         additionalInfo?.resource         ?? null,
     };
   }
 
-  // 六角格包含部队
+  /** 六角格包含部队 */
   get forcesIds() { return HexForceMapper.getForcesByHexId(this.hexId); }
 
   /**

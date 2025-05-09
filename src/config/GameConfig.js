@@ -36,26 +36,36 @@ export const CesiumConfig = {
 export const LocationConfig = {
   // 珠穆朗玛峰
   mountEverest: {
+    name: '珠穆朗玛峰',
     lon: 86.9250,
     lat: 27.9881,
   },
   // 乞力马扎罗山
   kilimanjaro: {
+    name: '乞力马扎罗山',
     lon: 37.3506,
     lat: -3.0769,
   },
   // 东非大裂谷
   greatRiftValley: {
+    name: '东非大裂谷',
     lon: 36.8065,
     lat: -3.9372,
   },
+  // 青县
+  qingXian: {
+    name: '青县',
+    lon: 116.80,
+    lat: 38.58,
+  }
 };
 
 /** 战场相关配置 */ 
 export const BattleConfig = {
+  locationName: LocationConfig.qingXian.name,
   center: {
-    lon: LocationConfig.kilimanjaro.lon,
-    lat: LocationConfig.kilimanjaro.lat,
+    lon: LocationConfig.qingXian.lon,
+    lat: LocationConfig.qingXian.lat,
     offset: 0.1
   },
 };

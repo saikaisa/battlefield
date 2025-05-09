@@ -31,8 +31,8 @@ export class GameModeManager {
     this.store = openGameStore();
 
     // 保存选中六角格和部队id
-    this.lastSelectedHexIds = [];
-    this.selectedForceIds = [];
+    this._lastSelectedHexIds = [];
+    this._lastSelectedForceIds = [];
 
     // 初始化为自由模式
     this.setMode(GameMode.FREE);
@@ -81,16 +81,16 @@ export class GameModeManager {
    * 保存选中六角格和部队id
    */
   saveSelectedHexIds() {
-    this.lastSelectedHexIds = this.store.getSelectedHexIds();
-    this.lastSelectedForceIds = this.store.getSelectedForceIds();
+    this._lastSelectedHexIds = Array.from(this.store.getSelectedHexIds());
+    this._lastSelectedForceIds = Array.from(this.store.getSelectedForceIds());
   }
 
   /**
    * 恢复选中六角格和部队id
    */
   restoreSelectedHexIds() {
-    this.store.setSelectedHexIds(this.lastSelectedHexIds);
-    this.store.setSelectedForceIds(this.lastSelectedForceIds);
+    this.store.setSelectedHexIds(this._lastSelectedHexIds);
+    this.store.setSelectedForceIds(this._lastSelectedForceIds);
   }
   
   // ==================== 私有辅助方法 ====================

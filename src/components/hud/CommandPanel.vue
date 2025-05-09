@@ -22,7 +22,7 @@
           <el-switch
             v-model="autoMode"
             :active-text="autoMode ? '自动模式' : '手动模式'"
-            :disabled="isButtonDisabled('auto-mode')"
+            :disabled="isButtonDisabled(GameButtons.AUTO_MODE)"
             size="small"
           />
           <!-- 清空列表链接 -->
@@ -349,8 +349,7 @@ import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { showSuccess, showError, showWarning } from '@/layers/interaction-layer/utils/MessageBox';
 import draggable from 'vuedraggable';
 import { CommandLimit, CommandType, CommandName, CommandSource, CommandStatus, ApiConfig } from '@/config/CommandConfig';
-import { GameMode } from '@/config/GameModeConfig';
-// 导入Element Plus图标
+import { GameButtons } from '@/config/GameModeConfig';
 import { ArrowLeft, ArrowRight, ArrowDown, Menu } from '@element-plus/icons-vue';
 
 // 表单状态
@@ -442,29 +441,19 @@ const draggedQueueCommands = computed({
 
 // 按钮禁用状态检查
 function isButtonDisabled(buttonId) {
-  // 如果队列为空，禁用执行按钮
-  if (commandQueue.value.length === 0) {
-    return buttonId === 'execute';
-  }
-  
   // 自动模式下禁用的按钮
   if (store.autoMode && 
-      (buttonId === 'edit' || buttonId === 'delete' || buttonId === 'add' || buttonId === 'clear-list')) {
+      (buttonId === 'execute' || buttonId === 'edit' || buttonId === 'delete' || 
+       buttonId === 'add' || buttonId === 'clear-list')) {
     return true;
   }
 
-  // 如果在当前游戏模式下被禁用
-  if (store.gameMode !== GameMode.FREE && store.disabledButtons.has(buttonId)) {
+  // 检查当前游戏模式定义的禁用按钮
+  if (store.disabledButtons.has(buttonId)) {
     return true;
   }
   
-  // 历史标签页时禁用编辑和执行按钮
-  if (activeTab.value === 'history' && 
-      (buttonId === 'execute' || buttonId === 'edit' || buttonId === 'delete')) {
-    return true;
-  }
-  
-  // 命令执行中禁用的按钮
+  // 命令执行中，未在游戏模式中定义禁用的小按钮
   if (store.isExecuting && !store.autoMode && 
       (buttonId === 'execute' || buttonId === 'edit' || buttonId === 'delete' || 
        buttonId === 'add' || buttonId === 'clear-list')) {
@@ -876,7 +865,7 @@ watch(commandEditorVisible, (visible) => {
   max-height: 500px;
   position: fixed;
   left: 20px;
-  bottom: 20px;
+  bottom: 10px;
   z-index: 100;
   transition: all 0.3s ease;
 }
@@ -888,15 +877,16 @@ watch(commandEditorVisible, (visible) => {
   height: 500px;
   display: flex;
   flex-direction: column;
+  border-radius: 4px 4px 4px 0;
 }
 
 /* 面板折叠/展开按钮 */
 .toggle-panel-button {
   position: absolute;
-  left: -30px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 30px;
+  left: -20px;
+  top: 100%;
+  transform: translateY(-100%);
+  width: 20px;
   height: 60px;
   background-color: rgba(169, 140, 102, 0.9);
   color: white;
@@ -904,14 +894,14 @@ watch(commandEditorVisible, (visible) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-radius: 4px 0 0 4px;
   z-index: 10;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
 }
 
 /* 折叠状态的面板 */
 .command-panel.collapsed .toggle-panel-button {
-  left: 0;
+  left: -20px;
+  border-radius: 0 4px 4px 0;
 }
 
 /* 面板标题样式 */

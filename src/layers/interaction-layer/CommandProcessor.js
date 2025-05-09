@@ -87,10 +87,10 @@ export class CommandProcessor {
       // 设置相机俯瞰视角
       if (enabled) {
         // 启用俯瞰模式
-        this.cameraController.setTopDownView();
+        await this.cameraController.setTopDownView();
       } else {
         // 禁用俯瞰模式，并恢复上次视角
-        this.cameraController.focusOnLocation(null, 2.0, false);
+        await this.cameraController.focusOnLocation(null, 2.0, false);
       }  
 
       return {
@@ -124,7 +124,7 @@ export class CommandProcessor {
 
     try {
       // 切换相机控制
-      this.cameraController.setOrbitMode(enabled);
+      await this.cameraController.setOrbitMode(enabled);
 
       return {
         status: CommandStatus.FINISHED,
@@ -149,7 +149,7 @@ export class CommandProcessor {
     gameModeService.setMode(GameMode.FREE);
 
     try {
-      this.cameraController.resetToDefaultView();
+      await this.cameraController.resetToDefaultView();
       return {
         status: CommandStatus.FINISHED,
         message: "相机已重置",
@@ -193,7 +193,7 @@ export class CommandProcessor {
       }
 
       // 聚焦到部队所在的六角格
-      this.cameraController.focusOnHex(force.hexId);
+      await this.cameraController.focusOnHex(force.hexId);
 
       return {
         status: CommandStatus.FINISHED,
@@ -297,8 +297,48 @@ export class CommandProcessor {
         gameModeService.saveSelectedHexIds();
         gameModeService.setMode(GameMode.STATISTICS);
 
-        // TODO: 统计模式下，需要根据当前选中的六角格，在总览文本框中实时显示统计信息
-        // 包括双方部队数量、双方兵力值和战斗力等
+        
+
+        // 统计模式下，根据当前选中的部队，在总览文本框中实时显示统计信息
+        const selectedForceIds = this.store.selectedForceIds;
+        const selectedHexIds = this.store.selectedHexIds;
+        if (selectedHexIds && selectedHexIds.size > 0) {
+          // 获取选中的部队
+          const selectedForces = Array.from(selectedForceIds).map(id => this.store.getForceById(id));
+          
+          // 计算双方部队数量、兵力值和战斗力
+          const factionStats = {};
+          selectedForces.forEach(force => {
+            if (!force) return;
+            
+            const faction = force.faction;
+            if (!factionStats[faction]) {
+              factionStats[faction] = {
+                totalHexCount: 0,
+                totalForceCount: 0,
+                service: {
+                  land: 0,
+                  air: 0,
+                  sea: 0,
+                },
+                totalAttackPower: 0,
+                totalDefensePower: 0,
+              };
+            }
+            
+            factionStats[faction].forceCount++;
+            factionStats[faction].troopStrength += force.troopStrength || 0;
+            factionStats[faction].combatPower += force.combatPower || 0;
+          });
+          
+          // 在控制台显示统计信息
+          const OverviewConsole = this.store.getOverviewConsole();
+          OverviewConsole.log('===== 部队统计信息 =====');
+          Object.keys(factionStats).forEach(faction => {
+            const stats = factionStats[faction];
+            OverviewConsole.log(`${faction}方：部队数量 ${stats.forceCount}，总兵力 ${stats.troopStrength}，总战斗力 ${stats.combatPower}`);
+          });
+        }
 
       } else {
         // TODO: 退出统计模式时，清空总览文本框中的内容
@@ -330,9 +370,20 @@ export class CommandProcessor {
    * @returns {Object} 命令执行结果
    */
   async movePrepare(forceId) {
-    // 仅能在自由模式下进行移动准备
-    if (gameModeService.getCurrentMode() !== GameMode.FREE) {
-      throw new CommandError("仅能在自由模式下执行移动准备", "move");
+    // 仅能在自由模式或移动准备模式下切换移动准备
+    const currentMode = gameModeService.getCurrentMode();
+    if (currentMode !== GameMode.FREE && currentMode !== GameMode.MOVE_PREPARE) {
+      throw new CommandError("仅能在自由模式或移动准备模式下切换移动准备", "move");
+    }
+
+    if (currentMode === GameMode.MOVE_PREPARE) {
+      // 如果当前处于移动准备模式，则回到自由模式
+      gameModeService.setMode(GameMode.FREE);
+      gameModeService.restoreSelectedHexIds();
+      return {
+        status: CommandStatus.FINISHED,
+        message: "从移动准备模式回到自由模式",
+      };
     }
 
     try {
@@ -359,7 +410,7 @@ export class CommandProcessor {
       // 发生错误时恢复状态
       gameModeService.setMode(GameMode.FREE);
       gameModeService.restoreSelectedHexIds();
-      throw new CommandError(`进入移动准备模式失败: ${error.message}`, "move");
+      throw new CommandError(`切换移动准备模式失败: ${error.message}`, "move");
     }
   }
 
@@ -484,7 +535,7 @@ export class CommandProcessor {
 
   // ================ 攻击命令 ================
   /**
-   * 攻击准备
+   * 攻击准备切换
    * - 初始模式：自由模式
    * - 目标模式：攻击准备模式
    * - Fallback模式：自由模式
@@ -493,9 +544,20 @@ export class CommandProcessor {
    */
   async attackPrepare(forceId) {
     try {
-      // 仅能在自由模式下进行攻击准备
-      if (gameModeService.getCurrentMode() !== GameMode.FREE) {
-        throw new CommandError("仅能在自由模式下进行攻击准备", "attack");
+      // 仅能在自由模式或攻击准备模式下切换攻击准备
+      const currendMode = gameModeService.getCurrentMode();
+      if (currendMode !== GameMode.FREE && currendMode !== GameMode.ATTACK_PREPARE) {
+        throw new CommandError("仅能在自由模式或攻击准备模式下切换攻击准备", "attack");
+      }
+
+      if (currendMode === GameMode.ATTACK_PREPARE) {
+        // 如果当前处于攻击准备模式，则回到自由模式
+        gameModeService.setMode(GameMode.FREE);
+        gameModeService.restoreSelectedHexIds();
+        return {
+          status: CommandStatus.FINISHED,
+          message: "从攻击准备模式回到自由模式",
+        };
       }
 
       // 先保存当前选择状态
@@ -524,7 +586,7 @@ export class CommandProcessor {
       // 发生错误时恢复状态
       gameModeService.setMode(GameMode.FREE);
       gameModeService.restoreSelectedHexIds();
-      throw new CommandError(`进入攻击准备模式失败: ${error.message}`, "attack");
+      throw new CommandError(`切换攻击准备模式失败: ${error.message}`, "attack");
     }
   }
 

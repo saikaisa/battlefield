@@ -6,9 +6,9 @@
     <!-- Viewer 初始化完成后再渲染面板 -->
     <div v-if="gameReady">
       <OverviewPanel /> <!-- 概览面板 -->
-      <DetailInfoPanel /> <!-- 详情信息面板 -->
       <FormationPanel /> <!-- 编队列表 -->
       <CommandPanel /> <!-- 命令管理面板 -->
+      <DetailInfoPanel /> <!-- 详情信息面板 -->
     </div>
 
     <div v-else class="loading">
