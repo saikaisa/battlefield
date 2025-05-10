@@ -10,7 +10,7 @@
       </div>
 
       <!-- 主面板卡片 -->
-      <el-card v-show="!isPanelCollapsed" class="command-panel-card">
+      <el-card v-show="!isPanelCollapsed" class="command-panel-card" :class="{ 'disabled': isPanelDisabled }">
         <!-- 面板标题 -->
         <div class="panel-title">
           <h3>命令管理面板</h3>
@@ -22,7 +22,8 @@
           <el-switch
             v-model="autoMode"
             :active-text="autoMode ? '自动模式' : '手动模式'"
-            :disabled="isButtonDisabled(GameButtons.AUTO_MODE)"
+            :title="autoMode ? '终止命令自动执行' : '按序执行当前筛选来源下的所有命令'"
+            :disabled="isButtonDisabled(GameButtons.AUTO_MODE) || filteredQueueCommands.length === 0"
             size="small"
           />
           <!-- 清空列表链接 -->
@@ -79,16 +80,19 @@
               </div>
               
               <!-- 内容区域（固定高度可滚动区域） -->
-              <div class="tab-content-area">
+              <div class="tab-content-area command-table-container">
                 <!-- 空队列提示 -->
-                <el-empty v-if="filteredQueueCommands.length === 0" description="暂无待执行命令" :image-size="60">
+                <el-empty v-if="filteredQueueCommands.length === 0" 
+                         description="暂无待执行命令" 
+                         :image-size="60"
+                         class="empty-container queue-empty-container">
                   <el-button type="primary" size="small" @click="handleAddCommand('manual')" :disabled="autoMode || isExecuting">
                     添加命令
                   </el-button>
                 </el-empty>
                 
                 <!-- 命令表格 -->
-                <div v-else class="command-table-container" :class="{'command-table-container-queue': activeTab === 'queue'}">
+                <div v-else>
                   <!-- 表格头部 -->
                   <div class="command-table-header">
                     <div class="column type-column">类型</div>
@@ -104,7 +108,7 @@
                     handle=".drag-handle"
                     ghost-class="ghost"
                     :disabled="autoMode || isExecuting"
-                    class="command-table-body"
+                    class="command-table-body queue-table-body"
                     :animation="150"
                   >
                     <template #item="{ element }">
@@ -163,16 +167,19 @@
               </div>
               
               <!-- 内容区域（固定高度可滚动区域） -->
-              <div class="tab-content-area">
+              <div class="tab-content-area command-table-container">
                 <!-- 空历史提示 -->
-                <el-empty v-if="filteredHistoryCommands.length === 0" description="暂无命令历史" :image-size="60">
+                <el-empty v-if="filteredHistoryCommands.length === 0" 
+                         description="暂无命令历史" 
+                         :image-size="60" 
+                         class="empty-container history-empty-container">
                   <el-button v-if="store.commandQueue.length > 0" type="primary" size="small" @click="activeTab = 'queue'">
                     查看命令队列
                   </el-button>
                 </el-empty>
                 
                 <!-- 历史命令表格 -->
-                <div v-else class="command-table-container" :class="{'command-table-container-history': activeTab === 'history'}">
+                <div v-else>
                   <!-- 表格头部 -->
                   <div class="command-table-header">
                     <div class="column type-column">类型</div>
@@ -182,7 +189,7 @@
                   </div>
                 
                   <!-- 历史命令列表 -->
-                  <div class="command-table-body">
+                  <div class="command-table-body history-table-body">
                     <div 
                       v-for="item in filteredHistoryCommands" 
                       :key="item.command.id"
@@ -253,6 +260,7 @@
             <el-button 
               type="success" 
               size="small"
+              style="transform: translateY(2px);"
               :disabled="isButtonDisabled('add')">
               新增<el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
@@ -349,7 +357,7 @@ import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { showSuccess, showError, showWarning } from '@/layers/interaction-layer/utils/MessageBox';
 import draggable from 'vuedraggable';
 import { CommandLimit, CommandType, CommandName, CommandSource, CommandStatus, ApiConfig } from '@/config/CommandConfig';
-import { GameButtons } from '@/config/GameModeConfig';
+import { GameButtons, GamePanels } from '@/config/GameModeConfig';
 import { ArrowLeft, ArrowRight, ArrowDown, Menu } from '@element-plus/icons-vue';
 
 // 表单状态
@@ -370,6 +378,10 @@ const fileInput = ref(null);
 const activeTab = ref('queue');  // 默认显示命令队列标签页
 const selectedCommandId = ref(null);  // 当前选中的命令ID
 const isPanelCollapsed = ref(false); // 面板是否折叠
+// 检查当前游戏模式下编队列表面板是否应该禁用
+const isPanelDisabled = computed(() => {
+  return store.isPanelDisabled(GamePanels.COMMAND_PANEL);
+});
 // 防抖控制
 const isSubmitting = ref(false); // 是否正在提交命令，防止重复提交
 
@@ -862,39 +874,43 @@ watch(commandEditorVisible, (visible) => {
 /* 命令面板样式 - 整体容器 */
 .command-panel {
   width: 320px;
-  max-height: 500px;
+  max-height: 450px;
   position: fixed;
   left: 20px;
-  bottom: 10px;
-  z-index: 100;
+  top: 20px;
+  z-index: 200;
   transition: all 0.3s ease;
 }
 
 /* 面板卡片样式 */
 .command-panel-card {
   background-color: rgba(169, 140, 102, 0.9) !important;
-  border: none !important;
-  height: 500px;
+  height: 450px;
   display: flex;
   flex-direction: column;
-  border-radius: 4px 4px 4px 0;
+  border: 6px solid rgba(80, 60, 40, 0.8);
+  border-radius: 0 4px 4px 4px;
+}
+
+.command-panel-card.disabled {
+  pointer-events: none;
+  filter: grayscale(50%);
 }
 
 /* 面板折叠/展开按钮 */
 .toggle-panel-button {
   position: absolute;
   left: -20px;
-  top: 100%;
-  transform: translateY(-100%);
+  top: 0%;
   width: 20px;
   height: 60px;
-  background-color: rgba(169, 140, 102, 0.9);
+  background-color: rgba(80, 60, 40, 1);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 10;
+  z-index: 100;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
 }
 
@@ -1013,19 +1029,20 @@ watch(commandEditorVisible, (visible) => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 280px;
 }
 
 /* 过滤器容器 */
 .filter-container {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
   font-size: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   flex-shrink: 0;
+  overflow-x: hidden;
+  white-space: nowrap;
 }
 
 /* 记录数量显示 */
@@ -1035,13 +1052,13 @@ watch(commandEditorVisible, (visible) => {
   background-color: rgba(0, 0, 0, 0.2);
   padding: 2px 6px;
   border-radius: 10px;
-  margin-left: 5px;
+  margin-left: 2px;
 }
 
 /* 历史过滤器 */
 .history-filters {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   justify-content: center;
 }
 
@@ -1049,21 +1066,10 @@ watch(commandEditorVisible, (visible) => {
 .command-table-container {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
-  overflow: hidden;
   background-color: rgba(0, 0, 0, 0.1);
-  flex: 1;
   display: flex;
   flex-direction: column;
-}
-
-.command-table-container-queue {
-  min-height: 280px;
-  max-height: 280px;
-}
-
-.command-table-container-history {
-  min-height: 320px;
-  max-height: 320px;
+  box-sizing: border-box; /* 确保盒模型计算一致 */
 }
 
 /* 表格头部样式 */
@@ -1075,14 +1081,95 @@ watch(commandEditorVisible, (visible) => {
   color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   flex-shrink: 0;
+  position: sticky; /* 让表头固定 */
+  top: 0; /* 固定在容器顶部 */
+  z-index: 1; /* 确保表头在内容之上 */
+  padding-right: 6px; /* 为滚动条预留空间 */
+  height: 32px; /* 明确设置表头高度 */
+  box-sizing: border-box; /* 确保盒模型计算一致 */
+  display: flex;
+  align-items: center; /* 垂直居中内容 */
 }
 
 /* 命令表格体 */
 .command-table-body {
-  overflow-y: auto;
-  flex: 1;
   font-size: 12px;
-  min-height: 200px;
+  overflow-y: auto; /* 改为auto，仅在需要时显示滚动条 */
+  margin-right: 1px; /* 轻微右边距，补偿滚动条占位 */
+  padding-right: 1px; /* 轻微内边距，保持内容不会太贴近边缘 */
+  box-sizing: border-box; /* 确保盒模型计算一致 */
+}
+
+/* 美化命令表格体的滚动条 */
+::-webkit-scrollbar {
+  width: 0;
+  display: none;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: transparent;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* 命令队列表格高度 */
+.queue-table-body {
+  height: 200px; /* 队列表格较矮 */
+}
+
+/* 历史记录表格高度 */
+.history-table-body {
+  height: 240px; /* 历史记录表格较高 */
+}
+
+/* 空状态容器样式 */
+.empty-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.05);
+  box-sizing: border-box; /* 确保盒模型计算一致 */
+  padding: 0; /* 移除可能的内边距 */
+  margin: 0; /* 移除可能的外边距 */
+}
+
+/* 队列空状态容器高度 */
+.queue-empty-container {
+  height: 233px; /* 精确匹配表格+表头高度 */
+}
+
+/* 历史记录空状态容器高度 */
+.history-empty-container {
+  height: 273px; /* 精确匹配表格+表头高度 */
+}
+
+/* 调整el-empty组件样式，使居中更美观 */
+:deep(.el-empty) {
+  padding: 0; /* 移除Element UI可能添加的内边距 */
+  margin: 0; /* 移除Element UI可能添加的外边距 */
+}
+
+:deep(.el-empty__image) {
+  margin-bottom: 10px;
+}
+
+:deep(.el-empty__description) {
+  margin-top: 0;
+  margin-bottom: 15px; /* 调整文字和按钮之间的间距 */
 }
 
 /* 表格行样式 */
@@ -1162,6 +1249,7 @@ watch(commandEditorVisible, (visible) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-right: 7px; /* 增加右侧内边距，补偿滚动条占位 */
 }
 
 /* 拖拽手柄样式 - 用于拖动排序 */
@@ -1180,14 +1268,6 @@ watch(commandEditorVisible, (visible) => {
   opacity: 1;
 }
 
-/* 命令来源色块样式 */
-.source-color-block {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  display: inline-block;
-}
-
 /* 底部操作按钮容器样式 */
 .action-buttons {
   display: flex;
@@ -1197,48 +1277,10 @@ watch(commandEditorVisible, (visible) => {
   flex-shrink: 0;
 }
 
-/* 游戏模式信息显示 */
-.game-mode-info {
-  margin-top: 6px;
-  font-size: 11px;
-  padding: 3px 6px;
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-.mode-label {
-  opacity: 0.7;
-}
-
-.mode-value {
-  font-weight: bold;
-  margin-left: 4px;
-}
-
 /* 拖拽时的占位元素样式 */
 .ghost {
   opacity: 0.5;
   background: rgba(64, 158, 255, 0.2);
-}
-
-/* 滚动条样式美化 */
-.command-table-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.command-table-body::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-}
-
-.command-table-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
-}
-
-.command-table-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
 }
 
 /* 修改Element组件样式 */
@@ -1270,11 +1312,6 @@ watch(commandEditorVisible, (visible) => {
 :deep(.el-button--small) {
   font-size: 12px;
   padding: 6px 10px;
-}
-
-/* 空状态小一点 */
-:deep(.el-empty__description p) {
-  font-size: 12px;
 }
 
 /* 响应式布局 - 移动设备适配 */

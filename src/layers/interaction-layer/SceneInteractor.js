@@ -34,12 +34,10 @@ export class SceneInteractor {
   /**
    * 私有构造函数
    * @param {Cesium.Viewer} viewer - Cesium Viewer 实例
-   * @param {Object} options
-   * @param {boolean} [options.enabled=true] - 是否启用鼠标交互，包括悬浮、点击
-   * @param {boolean} [options.multiSelect=false] - 是否多选
+   * @param {boolean} [enabled=true] - 是否启用鼠标交互，包括悬浮、点击
    * @private
    */
-  constructor(viewer, options = {}) {
+  constructor(viewer, enabled=true) {
     if (SceneInteractor.#instance) {
       throw new Error('SceneInteractor 是单例类，请使用 getInstance() 方法获取实例');
     }
@@ -48,41 +46,28 @@ export class SceneInteractor {
     this.hexGridRenderer = HexGridRenderer.getInstance(viewer);
     this.store = openGameStore();
 
-    // 基本交互设置
-    this.enabled = options.enabled !== undefined ? options.enabled : true;
-    this.multiSelect = options.multiSelect !== undefined ? options.multiSelect : false;
+    // 是否启用鼠标交互
+    this.enabled = enabled;
 
     // 记录当前悬浮的 hexId 和 primitive（只能有一个）
     this.hoveredHexId = null;
     this.hoverPrimitive = null;
 
-    // 监听 layerIndex，全局图层切换时自动启停交互
+    // 监听 layerIndex 和 mouseInteract 的组合状态
     watch(
-      () => this.store.layerIndex, // 侦听全局图层
-      (newLayer) => {
-        if (newLayer === 3) {
+      [() => this.store.layerIndex, () => this.store.mouseInteract],
+      ([layerIndex, mouseInteract]) => {
+        // 处理交互状态
+        if (layerIndex === 3 || !mouseInteract) {
+          // 如果是隐藏图层或鼠标交互被禁用
           this._hideHover();
           this.enabled = false;
         } else {
+          // 其他情况下启用交互
           this.enabled = true;
         }
       },
-      { immediate: true }   // 首次立即触发一次，以设置 enabled
-    );
-
-    // 监听hexSelectMode变化，更新鼠标交互状态
-    watch(
-      () => this.store.hexSelectMode,
-      (mode) => {
-        if (mode === 'none') {
-          this.enabled = false;
-          this._hideHover();
-        } else {
-          this.enabled = true;
-          this.multiSelect = mode === 'multi';
-        }
-      },
-      { immediate: true }
+      { immediate: true } // 首次立即触发一次，以设置初始状态
     );
 
     // Hover 降频调度
@@ -175,27 +160,11 @@ export class SceneInteractor {
 
     const selectedIds = this.store.getSelectedHexIds();
     const isSelected = selectedIds.has(hexId);
-
-    if (!this.multiSelect) {
-      // ================== 单选模式 ==================
-      if (isSelected) {
-        // 如果已经选中，则移除
-          this.store.removeSelectedHexId(hexId);
-      } else {
-        // 没选中 => 先清空，再选中
-        this.store.clearSelectedHexIds();
-        this.store.addSelectedHexId(hexId);
-        // 打印选中六角格的最后一个
-        console.log(`单选模式: 选中 ${this.store.getSelectedHexIds().values().next().value}`);
-      }
+    // 切换选中
+    if (isSelected) {
+      this.store.removeSelectedHexId(hexId);
     } else {
-      // ================== 多选模式 ==================
-      if (isSelected) {
-        this.store.removeSelectedHexId(hexId);
-      } else {
-        // 新增选中
-        this.store.addSelectedHexId(hexId);
-      }
+      this.store.addSelectedHexId(hexId);
     }
   }
 

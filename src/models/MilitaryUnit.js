@@ -82,9 +82,9 @@ export class Unit {
     const { baseAttackPower, domainFactor, terrainFactor } = this.attackPowerComposition;
     const tf = terrainFactor[terrain] ?? 1;
     return {
-      land: baseAttackPower * domainFactor.land * tf,
-      sea : baseAttackPower * domainFactor.sea  * tf,
-      air : baseAttackPower * domainFactor.air  * tf,
+      land: Math.round(baseAttackPower * domainFactor.land * tf),
+      sea : Math.round(baseAttackPower * domainFactor.sea  * tf),
+      air : Math.round(baseAttackPower * domainFactor.air  * tf),
     };
   }
 
@@ -92,15 +92,15 @@ export class Unit {
     const { baseDefensePower, domainFactor, terrainFactor } = this.defensePowerComposition;
     const tf = terrainFactor[terrain] ?? 1;
     return {
-      land: baseDefensePower * domainFactor.land * tf,
-      sea : baseDefensePower * domainFactor.sea  * tf,
-      air : baseDefensePower * domainFactor.air  * tf,
+      land: Math.round(baseDefensePower * domainFactor.land * tf),
+      sea : Math.round(baseDefensePower * domainFactor.sea  * tf),
+      air : Math.round(baseDefensePower * domainFactor.air  * tf),
     };
   }
 
   getActionPointCost(terrain) {
-    const { baseActionPointCost, terrainFactor } = this.actionPointCostComposition;
-    return baseActionPointCost * (terrainFactor[terrain] ?? 1);
+    const { baseActionPointCost, terrainFactor } = this.actionPointCostComposition;Math.round()
+    return Math.round(baseActionPointCost * (terrainFactor[terrain] ?? 1));
   }
 
   /* ======================== 序列化 =========================== */
@@ -321,9 +321,9 @@ export class Force {
     });
     const k = this.morale / 100;
     return {
-      land: total.land * k,
-      sea:  total.sea  * k,
-      air:  total.air  * k
+      land: Math.round(total.land * k),
+      sea:  Math.round(total.sea  * k),
+      air:  Math.round(total.air  * k)
     };
   }
 

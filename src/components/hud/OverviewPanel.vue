@@ -2,7 +2,7 @@
   总览面板，显示游戏状态和消息
 -->
 <template>
-  <div class="overview-container">
+  <div class="overview-container" :class="{ 'disabled': isPanelDisabled }">
     <!-- 左侧：圆形按钮栏 -->
     <div class="side-buttons">
       <!-- 复位视角按钮 -->
@@ -95,13 +95,15 @@
         </div>
         <div class="console-wrapper">
           <div class="console-container" ref="consoleContainerRef">
-            <div v-for="(line, index) in consoleLines" :key="index" 
-                class="console-line" 
-                :class="line.type">
-              {{ line.content }}
-            </div>
-            <div v-if="consoleLines.length === 0" class="console-empty">
-              暂无信息
+            <div class="console-content">
+              <div v-for="(line, index) in consoleLines" :key="index" 
+                  class="console-line" 
+                  :class="line.type">
+                {{ line.content }}
+              </div>
+              <div v-if="consoleLines.length === 0" class="console-empty">
+                暂无信息
+              </div>
             </div>
           </div>
         </div>
@@ -114,7 +116,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
-import { GameMode, GameModeNames, GameButtons } from '@/config/GameModeConfig';
+import { GameMode, GameModeNames, GameButtons, GamePanels } from '@/config/GameModeConfig';
 import { CommandType } from '@/config/CommandConfig';
 import { showWarning } from '@/layers/interaction-layer/utils/MessageBox';
 import { OverviewConsole } from '@/layers/interaction-layer/utils/OverviewConsole';
@@ -140,6 +142,9 @@ const currentRound = computed(() => store.currentRound || 1);
 const currentFaction = computed(() => store.currentFaction || 'blue');
 const currentGameModeName = computed(() => GameModeNames[store.gameMode] || '自由模式');
 const currentLayerName = computed(() => layerNames[currentLayerIndex.value] || '未知图层');
+const isPanelDisabled = computed(() => {
+  return store.isPanelDisabled(GamePanels.OVERVIEW_PANEL);
+});
 
 // 辅助函数：获取阵营名称
 function getFactionName(faction) {
@@ -223,12 +228,17 @@ function clearConsole() {
 // 监听控制台内容变化，自动滚动到底部
 watch(() => OverviewConsole.getLines().length, () => {
   consoleLines.value = OverviewConsole.getLines();
+  scrollToBottom();
+});
+
+// 滚动控制台到底部
+function scrollToBottom() {
   nextTick(() => {
     if (consoleContainerRef.value) {
       consoleContainerRef.value.scrollTop = consoleContainerRef.value.scrollHeight;
     }
   });
-});
+}
 
 // 初始化时插入示例信息
 onMounted(() => {
@@ -236,7 +246,27 @@ onMounted(() => {
     OverviewConsole.log('欢迎进入战场指挥系统!');
     OverviewConsole.success('系统初始化完成，可以开始操作');
     OverviewConsole.log(`当前战场位置: ${BattleConfig.locationName} (${BattleConfig.center.lon}°, ${BattleConfig.center.lat}°)`);
+    OverviewConsole.warning('警告：检测到敌方侦察无人机活动，请注意隐蔽行动');
+    OverviewConsole.error('通信干扰：北部区域信号遭受敌方电子战设备干扰，通信链路不稳定');
+    OverviewConsole.log('战场态势：友军已在东南方向展开防御阵地，敌方主力预计将从西北方向发起进攻');
+    OverviewConsole.stat('兵力统计 - 我方：装甲部队18辆，步兵156人，支援火力6门；敌方（估计）：装甲部队22-27辆，步兵200-250人，支援火力8-10门');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
+    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
   }
+  
+  // 确保初始化后滚动到底部
+  scrollToBottom();
 });
 </script>
 
@@ -248,6 +278,11 @@ onMounted(() => {
   display: flex;
   align-items: flex-end;
   z-index: 100;
+}
+
+.overview-container.disabled {
+  pointer-events: none;
+  filter: grayscale(50%);
 }
 
 /* 左侧按钮栏样式 */
@@ -305,10 +340,10 @@ onMounted(() => {
 
 /* 总览面板样式 */
 .overview-panel {
-  width: 360px;
+  width: 350px;
   height: 400px;
   background-color: rgba(169, 140, 102, 0.9);
-  border: 2px solid rgba(80, 60, 40, 0.8);
+  border: 6px solid rgba(80, 60, 40, 0.8);
   color: #f0f0f0;
   border-radius: 4px 0 0 0;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.3);
@@ -329,6 +364,8 @@ onMounted(() => {
 
 .header-left {
   display: flex;
+  min-width: 200px;
+  flex-shrink: 0;
   align-items: center;
   gap: 10px;
 }
@@ -460,6 +497,7 @@ onMounted(() => {
 .console-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px;
   font-family: 'Courier New', monospace;
   font-size: 13px;
@@ -470,8 +508,8 @@ onMounted(() => {
   border-radius: 4px;
   box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
   position: relative;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(169, 140, 102, 0.5) rgba(0, 0, 0, 0.2);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .console-container::before {
@@ -498,10 +536,17 @@ onMounted(() => {
   z-index: 1;
 }
 
+.console-content {
+  width: 100%;
+  min-height: 100%;
+}
+
 .console-line {
   margin-bottom: 6px;
   white-space: pre-wrap;
-  word-break: break-word;
+  word-break: break-all;
+  word-wrap: break-word;
+  max-width: 100%;
 }
 
 .console-line.info {
@@ -535,21 +580,19 @@ onMounted(() => {
 
 /* 自定义滚动条样式 */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 0;
+  display: none;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(169, 140, 102, 0.5);
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(169, 140, 102, 0.7);
+  background: transparent;
 }
 </style>

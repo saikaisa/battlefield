@@ -35,6 +35,7 @@ export const openGameStore = defineStore("gameStore", () => {
   /* 4. 选中状态 */
   const selectedHexIds   = reactive(new Set());
   const selectedForceIds = reactive(new Set());
+  const lockedSelection = reactive({ hexIds: new Set(), forceIds: new Set() });
 
   /* 5. 命令系统相关状态 */
   const isExecuting = ref(false);      // 是否有命令正在执行
@@ -55,8 +56,9 @@ export const openGameStore = defineStore("gameStore", () => {
   const disabledButtons = reactive(new Set()); // 禁用的按钮ID集合
   
   // 交互控制
-  const hexSelectMode = ref('single');      // 鼠标选择模式：'single', 'multi', 'none'
-  const forceSelectMode = ref('linked');      // 部队选择模式：'linked', 'independent'
+  const mouseInteract = ref(true);     // 是否允许鼠标在地图上进行选中交互
+  const selectMode = ref('single');    // 部队与六角格选择模式：'single', 'multi'
+  const linkMode = ref('linked');      // 部队与六角格关联模式：'linked', 'independent'
   const cameraControlEnabled = ref(true);      // 是否允许相机控制
 
   /* ========================= 方法定义 ========================= */
@@ -196,103 +198,150 @@ export const openGameStore = defineStore("gameStore", () => {
   }
 
   // -------------------- 选中状态操作 --------------------
-  // 监听selectedHexIds的变化，自动同步selectedForceIds
-  watch(selectedHexIds, () => {
+  // 监听selectedHexIds和selectedForceIds的变化，自动同步
+  watch([selectedHexIds, selectedForceIds], () => {
     // 仅当选择模式需要强制保持部队在六角格内时同步
-    if (forceSelectMode.value === 'linked') {
-      syncSelectedForceWithHex();
+    if (linkMode.value === 'linked') {
+      syncForcesInSelectedHex();
     }
   });
 
-  /**
-   * 同步选中部队与选中六角格
-   * 
-   * 确保selectedForceIds中的部队都在selectedHexIds中
-   * 如果一个部队所在的六角格不在selectedHexIds中，将从selectedForceIds中移除该部队
+  /** 
+   * 同步选中六角格与部队的关系
+   * 仅在linkMode为'linked'时生效
    */
-  function syncSelectedForceWithHex() {
-    // 获取当前选中的六角格ID集合
-    const hexIds = Array.from(selectedHexIds);
-    // 获取这些六角格中所有的部队ID
-    const validForceIds = new Set();
-    hexIds.forEach(hexId => {
-      const cell = hexCellMap.get(hexId);
-      if (cell && cell.forcesIds) {
-        cell.forcesIds.forEach(forceId => validForceIds.add(forceId));
+  function syncForcesInSelectedHex() {
+    // 仅在linked模式下执行，独立模式不处理部队选择
+    if (linkMode.value !== 'linked') return;
+    
+    // 遍历所有选中部队，移除不在当前选中六角格中的部队ID
+    for (const forceId of selectedForceIds) {
+      // 不移除锁定选中的部队
+      if (lockedSelection.forceIds.has(forceId)) {
+        continue;
       }
-    });
-    // 移除不在选中六角格中的部队
-    const currentSelectedForceIds = Array.from(selectedForceIds);
-    currentSelectedForceIds.forEach(forceId => {
-      if (!validForceIds.has(forceId)) {
+      const force = getForceById(forceId);
+      // 移除不在选中六角格中的部队
+      if (!force || !force.hexId || !selectedHexIds.has(force.hexId)) {
         selectedForceIds.delete(forceId);
       }
-    });
+    }
+  }
+
+  // ================== 锁定选中 ==================
+  /** 添加锁定选中六角格 */
+  const addLockedHexId = id => lockedSelection.hexIds.add(id);
+  /** 添加锁定选中部队 */
+  const addLockedForceId = id => lockedSelection.forceIds.add(id);
+  /** 移除锁定选中六角格 */
+  const removeLockedHexId = id => lockedSelection.hexIds.delete(id);
+  /** 移除锁定选中部队 */
+  const removeLockedForceId = id => lockedSelection.forceIds.delete(id);
+  /** 获取锁定选中六角格 */
+  const getLockedHexIds = () => Array.from(lockedSelection.hexIds);
+  /** 获取锁定选中部队 */
+  const getLockedForceIds = () => Array.from(lockedSelection.forceIds);
+  /** 批量设置锁定选中 */
+  const setLockedSelection = (hexIds, forceIds) => {
+    clearLockedSelection();
+    hexIds.forEach(id => addLockedHexId(id));
+    forceIds.forEach(id => addLockedForceId(id));
+  }
+  /** 清空锁定选中 */
+  const clearLockedSelection = () => {
+    lockedSelection.hexIds.clear();
+    lockedSelection.forceIds.clear();
   }
 
   // ================== 选中六角格 ==================
-  /** 添加选中六角格 */
+  /** 添加选中六角格，支持单选/多选模式 */
   const addSelectedHexId = id => {
+    // 如果这个六角格在选中列表中，则先确保其在最后一位
+    if (selectedHexIds.has(id)) {
+      selectedHexIds.delete(id);
+      selectedHexIds.add(id);
+    }
+
+    if (lockedSelection.hexIds.has(id)) {
+      return;
+    }
+
     // 检查当前模式下是否允许多选，如果不允许则先清空
-    if (hexSelectMode.value === 'single' && selectedHexIds.size > 0) {
+    if (selectMode.value === 'single' && selectedHexIds.size > 0) {
       selectedHexIds.clear();
     }
+    
+    // 添加新的选中ID
     selectedHexIds.add(id);
   };
-  
-  /** 移除选中六角格 */
+
+  /** 移除除锁定六角格以外的选中六角格 */
   const removeSelectedHexId = id => {
+    if (lockedSelection.hexIds.has(id)) {
+      return;
+    }
     selectedHexIds.delete(id);
   };
-  
-  /** 清空选中六角格 */
-  const clearSelectedHexIds = () => {
-    selectedHexIds.clear();
-  };
-  
+
   /** 获取选中六角格 */
   const getSelectedHexIds = () => selectedHexIds;
-  
-  /** 设置选中六角格数组 */
-  const setSelectedHexIds = hexIds => {
-    selectedHexIds.clear();
-    if (Array.isArray(hexIds)) {
-      hexIds.forEach(id => selectedHexIds.add(id));
+
+  /** 清空除了锁定六角格以外的选中六角格 */
+  const clearSelectedHexIds = () => {
+    for (const id of selectedHexIds) {
+      removeSelectedHexId(id);
     }
   };
 
+  /** 设置选中六角格数组，根据当前选择模式应用规则 */
+  const setSelectedHexIds = hexIds => {
+    clearSelectedHexIds();
+    hexIds.forEach(id => addSelectedHexId(id));
+  }
+
   // ================== 选中部队 ==================
-  /** 添加选中部队 */
+  /** 添加选中部队，自动处理与六角格的关联 */
   const addSelectedForceId = id => {
     const force = getForceById(id);
     if (!force) return;
-    // 在linked模式下，选择部队时会同时选中其所在六角格
-    if (forceSelectMode.value === 'linked') {
-      if (!selectedHexIds.has(force.hexId)) {
-        if (hexSelectMode.value === 'single') {
-          selectedHexIds.clear();
-        }
-        selectedHexIds.add(force.hexId);
-      }
+
+    if (lockedSelection.forceIds.has(id)) {
+      return;
     }
+
+    // 单选模式下只能选中一个部队
+    if (selectMode.value === 'single') {
+      selectedForceIds.clear();
+    }
+
+    // 添加部队所在的六角格，会自动根据单选/多选模式选中，以及linked同步
+    addSelectedHexId(force.hexId);
+    // 再添加部队，以防出现先添加部队但未添加六角格而又被linked模式移除的情况
     selectedForceIds.add(id);
   };
-  
+
   /** 移除选中部队 */
-  const removeSelectedForceId = id => selectedForceIds.delete(id);
-  
-  /** 清空选中部队 */
-  const clearSelectedForceIds = () => selectedForceIds.clear();
-  
+  const removeSelectedForceId = id => {
+    if (lockedSelection.forceIds.has(id)) {
+      return;
+    }
+    selectedForceIds.delete(id);
+  };
+
   /** 获取选中部队 */
   const getSelectedForceIds = () => selectedForceIds;
-  
-  /** 设置选中部队数组 */
-  const setSelectedForceIds = forceIds => {
-    selectedForceIds.clear();
-    if (Array.isArray(forceIds)) {
-      forceIds.forEach(id => selectedForceIds.add(id));
+
+  /** 清空选中部队 */
+  const clearSelectedForceIds = () => {
+    for (const id of selectedForceIds) {
+      removeSelectedForceId(id);
     }
+  };
+
+  /** 设置选中部队数组，处理与六角格的关联 */
+  const setSelectedForceIds = forceIds => {
+    clearSelectedForceIds();
+    forceIds.forEach(id => addSelectedForceId(id));
   };
 
   // -------------------- 命令系统操作 --------------------
@@ -419,14 +468,19 @@ export const openGameStore = defineStore("gameStore", () => {
     }
   }
   
-  /** 设置六角格选择模式 */
-  function setHexSelectMode(mode) {
-    hexSelectMode.value = mode;
+  /** 设置是否启用鼠标交互 */
+  function setMouseInteract(enabled) {
+    mouseInteract.value = enabled;
+  }
+
+  /** 设置六角格和部队选择模式 */
+  function setSelectMode(mode) {
+    selectMode.value = mode;
   }
 
   /** 设置部队选择模式 */
-  function setForceSelectMode(mode) {
-    forceSelectMode.value = mode;
+  function setLinkMode(mode) {
+    linkMode.value = mode;
   }
   
   /** 设置相机控制启用状态 */
@@ -458,6 +512,7 @@ export const openGameStore = defineStore("gameStore", () => {
     formationMap,
     selectedHexIds,
     selectedForceIds,
+    lockedSelection,
     
     // 命令系统状态
     autoMode,
@@ -472,8 +527,9 @@ export const openGameStore = defineStore("gameStore", () => {
     gameMode,
     disabledPanels,
     disabledButtons,
-    hexSelectMode,
-    forceSelectMode,
+    mouseInteract,
+    selectMode,
+    linkMode,
     cameraControlEnabled,
 
     // 方法导出
@@ -532,6 +588,16 @@ export const openGameStore = defineStore("gameStore", () => {
     clearSelectedForceIds,
     getSelectedForceIds,
     setSelectedForceIds,
+
+    // 锁定选中方法
+    addLockedHexId,
+    addLockedForceId,
+    removeLockedHexId,
+    removeLockedForceId,
+    getLockedHexIds,
+    getLockedForceIds,
+    setLockedSelection,
+    clearLockedSelection,
     
     // 命令系统方法
     setAutoMode,
@@ -549,8 +615,9 @@ export const openGameStore = defineStore("gameStore", () => {
     setGameMode,
     setDisabledPanels,
     setDisabledButtons,
-    setHexSelectMode,
-    setForceSelectMode,
+    setMouseInteract,
+    setSelectMode,
+    setLinkMode,
     setCameraControlEnabled,
     isPanelDisabled,
     isButtonDisabled,

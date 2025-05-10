@@ -5,7 +5,7 @@ import { HexVisualStyles } from '@/config/HexVisualStyles';
 // eslint-disable-next-line no-unused-vars
 import { HexCell } from '@/models/HexCell';
 import { computed, watch } from "vue";
-import { HexRendererConfig } from "@/config/GameConfig";
+import { HexRendererConfig, HexConfig } from "@/config/GameConfig";
 import { HexHeightCache } from './HexHeightCache';
 
 // 缓存：每个六角格几何 (fillGeom, borderGeom)
@@ -100,11 +100,32 @@ export class HexGridRenderer {
       [1, 2].forEach(idx => {
         const primCollection = new Cesium.PrimitiveCollection();
          
-        // 渲染挤压多边形
+        // 使用基于相机距离的LOD策略获取相机位置
+        const camera = this.viewer.camera;
+        const cameraPosition = camera.position;
+        const center = this.viewer.scene.globe.ellipsoid.cartographicToCartesian(
+          Cesium.Cartographic.fromDegrees(
+            (HexConfig.bounds.maxLon + HexConfig.bounds.minLon) / 2,
+            (HexConfig.bounds.maxLat + HexConfig.bounds.minLat) / 2
+          )
+        );
+        const distance = Cesium.Cartesian3.distance(cameraPosition, center);
+        
+        // 根据距离调整细节级别
+        let granularityMultiplier = 1.0;
+        if (distance > 10000) {
+          granularityMultiplier = 2.0; // 远距离使用更低的细节
+        }
+        if (distance > 20000) {
+          granularityMultiplier = 4.0; // 更远距离使用最低细节
+        }
+        
+        // 渲染挤压多边形 - 使用优化的批处理渲染
         this._renderExtrudedLayer(hexCells, primCollection, {
           layerIdx: idx,
           styleType: 'base',
-          borderWidth: 2.0
+          borderWidth: 2.0,
+          granularityMultiplier: granularityMultiplier
         });
          
         // 显隐控制
@@ -123,7 +144,7 @@ export class HexGridRenderer {
 
   /**
    * 渲染六角格标记图层 (阵营标记等)
-   * 只在layerIndex=1时渲染
+   * 只在layerIndex=1时渲染，使用批处理提高性能
    */
   renderMarkGrid(indexChange = false) {
     if (this.markGridPrimitives) {
@@ -140,20 +161,25 @@ export class HexGridRenderer {
     this.markGridPrimitives = new Cesium.PrimitiveCollection();
     const hexCells = this.store.getHexCells();
     
-    // 渲染标记层
+    // 获取LOD级别
+    const { granularity } = this._getLodLevel();
+    
+    // 渲染标记层 - 使用批处理提高性能
     this._renderExtrudedLayer(hexCells, this.markGridPrimitives, {
       styleType: 'mark',
       heightOffset: 1.0, // 略高于base层
-      borderWidth: 2.0
+      borderWidth: 2.0,
+      granularity: granularity
     });
 
     this.viewer.scene.primitives.add(this.markGridPrimitives);
+    this.markGridPrimitives.show = (this.layerIndex.value === 1);
   }
 
   /**
    * 渲染六角格交互图层
    *  - 处理所有交互样式，包括选中和其他交互标记
-   *  - 为每个六角格单独创建primitive，避免闪烁
+   *  - 使用批处理减少绘制调用
    */
   renderInteractGrid(indexChange = false) {
     // 首次初始化或切换图层
@@ -203,9 +229,6 @@ export class HexGridRenderer {
     });
     
     // 计算需要移除的格子（在primitiveMap中，但已经没有interaction样式）
-    // 注：如果interaction样式已经改变，则不会发生变化！
-    //    所以最好不要改变interaction样式，一定要改的话，
-    //    得先将interaction样式移除，再重新添加
     const hexIdsToRemove = [];
     for (const hexId of this.hexPrimitiveMap.keys()) {
       if (!hexIdsToRender.has(hexId)) {
@@ -230,16 +253,137 @@ export class HexGridRenderer {
       }
     }
     
-    // 添加新的primitive
-    for (const hexId of hexIdsToAdd) {
-      const hexCell = this.store.getHexCellById(hexId);
-      if (hexCell) {
-        const primitive = this._createHexPrimitive(hexCell, 'interaction', 2.0, 4.0, true);
-        if (primitive) {
-          this.interactGridPrimitives.add(primitive);
-          this.hexPrimitiveMap.set(hexId, primitive);
+    // 使用批处理方式添加新的primitive
+    if (hexIdsToAdd.length > 0) {
+      // 按照填充颜色和边框颜色分组收集实例
+      const fillInstancesByColor = new Map();
+      const borderInstancesByColor = new Map();
+      
+      // 收集需要添加的六角格实例，按颜色分组
+      for (const hexId of hexIdsToAdd) {
+        const hexCell = this.store.getHexCellById(hexId);
+        if (!hexCell) continue;
+        
+        const visual = hexCell.getTopVisualStyle('interaction');
+        if (!visual) continue;
+        
+        // 填充部分
+        if (visual.showFill) {
+          const positions = this.heightCache.getHex3DPositions(hexCell, false, 2.0);
+          if (positions.length === 0) continue;
+          
+          // 获取六角格地形陡峭程度，用于动态调整挤压高度
+          const hexCache = this.heightCache.hexHeightCache.get(hexCell.hexId);
+          // 计算挤压高度 - 额外挤压高度 + 基础高度偏移
+          const extrusionHeight = -(hexCache.heightOffset + HexRendererConfig.extrusionHeight);
+          
+          const fillColor = visual.fillColor || Cesium.Color.WHITE.withAlpha(0.1);
+          const colorKey = fillColor.toString();
+          
+          const fillInstance = new Cesium.GeometryInstance({
+            geometry: new Cesium.PolygonGeometry({
+              polygonHierarchy: new Cesium.PolygonHierarchy(positions),
+              perPositionHeight: true,
+              vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+              extrudedHeight: extrusionHeight,
+              granularity: Cesium.Math.RADIANS_PER_DEGREE * 2,
+              closeTop: true,
+              closeBottom: true
+            }),
+            attributes: {
+              color: Cesium.ColorGeometryInstanceAttribute.fromColor(fillColor)
+            },
+            id: hexId + "_fill"
+          });
+          
+          if (!fillInstancesByColor.has(colorKey)) {
+            fillInstancesByColor.set(colorKey, []);
+          }
+          fillInstancesByColor.get(colorKey).push(fillInstance);
         }
+        
+        // 边框部分
+        if (visual.showBorder) {
+          const positions = this.heightCache.getHex3DPositions(hexCell, true, 2.0);
+          if (positions.length === 0) continue;
+          
+          positions.push(positions[0]); // 闭合轮廓
+          
+          const borderColor = visual.borderColor || Cesium.Color.RED.withAlpha(0.1);
+          const colorKey = borderColor.toString() + (visual.dashPattern ? "_dash" : "");
+          
+          const borderInstance = new Cesium.GeometryInstance({
+            geometry: new Cesium.PolylineGeometry({
+              positions: positions,
+              width: 4.0,
+              vertexFormat: visual.dashPattern ? 
+                Cesium.PolylineMaterialAppearance.VERTEX_FORMAT : 
+                Cesium.PolylineColorAppearance.VERTEX_FORMAT
+            }),
+            attributes: {
+              color: Cesium.ColorGeometryInstanceAttribute.fromColor(borderColor)
+            },
+            id: hexId + "_border"
+          });
+          
+          if (!borderInstancesByColor.has(colorKey)) {
+            borderInstancesByColor.set(colorKey, []);
+          }
+          borderInstancesByColor.get(colorKey).push(borderInstance);
+        }
+        
+        // 创建一个空集合表示这个hexCell已经被处理，供后续查询用
+        this.hexPrimitiveMap.set(hexId, new Cesium.PrimitiveCollection());
       }
+      
+      // 批量创建填充primitive
+      fillInstancesByColor.forEach((instances) => {
+        if (instances.length > 0) {
+          const primitive = new Cesium.Primitive({
+            geometryInstances: instances,
+            appearance: new Cesium.PerInstanceColorAppearance({
+              flat: true,
+              translucent: true,
+              closed: true
+            }),
+            asynchronous: true,
+            allowPicking: true,
+            releaseGeometryInstances: true
+          });
+          
+          this.interactGridPrimitives.add(primitive);
+        }
+      });
+      
+      // 批量创建边框primitive
+      borderInstancesByColor.forEach((instances) => {
+        if (instances.length > 0) {
+          const isDashed = instances[0].id.endsWith("_dash");
+          let appearance;
+          
+          if (isDashed) {
+            appearance = new Cesium.PolylineMaterialAppearance({
+              material: Cesium.Material.fromType('PolylineDash', {
+                color: Cesium.Color.WHITE,
+                dashLength: 16.0,
+                dashPattern: 255
+              })
+            });
+          } else {
+            appearance = new Cesium.PolylineColorAppearance();
+          }
+          
+          const primitive = new Cesium.Primitive({
+            geometryInstances: instances,
+            appearance: appearance,
+            asynchronous: true,
+            allowPicking: false,
+            releaseGeometryInstances: true
+          });
+          
+          this.interactGridPrimitives.add(primitive);
+        }
+      });
     }
   }
    
@@ -370,11 +514,13 @@ export class HexGridRenderer {
       styleType = 'base',
       heightOffset = 0,
       borderWidth = 2.0,
-      borderPattern = false
+      borderPattern = false,
+      granularityMultiplier = 1.0
     } = options;
     
-    const borderInstances = [];
-    const fillInstances = [];
+    // 按颜色分组管理实例，减少绘制批次
+    const fillInstancesByColor = new Map();
+    const borderInstancesByColor = new Map();
           
     hexCells.forEach((hexCell) => {
       // 选择对应样式 - 根据不同条件获取样式
@@ -410,6 +556,7 @@ export class HexGridRenderer {
             perPositionHeight: true,
             vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
             extrudedHeight: extrusionHeight, // 动态计算挤压高度
+            granularity: Cesium.Math.RADIANS_PER_DEGREE * granularityMultiplier,
             closeTop: true,
             closeBottom: true
           }),
@@ -418,7 +565,13 @@ export class HexGridRenderer {
           },
           id: hexCell.hexId + "_fill"
         });
-        fillInstances.push(fillInstance);
+        
+        // 按颜色分组
+        const colorKey = visual.fillColor ? visual.fillColor.toString() : 'default';
+        if (!fillInstancesByColor.has(colorKey)) {
+          fillInstancesByColor.set(colorKey, []);
+        }
+        fillInstancesByColor.get(colorKey).push(fillInstance);
       }
       
       if (visual.showBorder) {
@@ -451,49 +604,70 @@ export class HexGridRenderer {
           id: hexCell.hexId + "_border"
         });
         
-        borderInstances.push(borderInstance);
+        // 按颜色分组
+        const colorKey = borderColor.toString();
+        if (!borderInstancesByColor.has(colorKey)) {
+          borderInstancesByColor.set(colorKey, []);
+        }
+        borderInstancesByColor.get(colorKey).push(borderInstance);
       }
     });
 
-    // 添加填充实例
-    if (fillInstances.length > 0) {
-      primCollection.add(new Cesium.Primitive({
-        geometryInstances: fillInstances,
-        appearance: new Cesium.PerInstanceColorAppearance({
-          flat: true,
-          translucent: true,
-          closed: true
-        }),
-        asynchronous: true,
-        allowPicking: true,
-        releaseGeometryInstances: true
-      }));
-    }
-
-    // 添加边界线实例
-    if (borderInstances.length > 0) {
-      // 如果是虚线边框，使用材质外观
-      let appearance;
-      if (borderPattern) {
-        appearance = new Cesium.PolylineMaterialAppearance({
-          material: Cesium.Material.fromType('PolylineDash', {
-            color: Cesium.Color.WHITE,
-            dashLength: 16.0,
-            dashPattern: 255 // 0b11111111
-          })
-        });
-      } else {
-        appearance = new Cesium.PolylineColorAppearance();
+    // 根据颜色批量添加填充实例，减少绘制调用
+    fillInstancesByColor.forEach((instances) => {
+      if (instances.length > 0) {
+        // 根据不同批次大小分组创建primitive
+        const batchSize = 500; // 每个批次最大实例数
+        for (let i = 0; i < instances.length; i += batchSize) {
+          const batchInstances = instances.slice(i, i + batchSize);
+          
+          primCollection.add(new Cesium.Primitive({
+            geometryInstances: batchInstances,
+            appearance: new Cesium.PerInstanceColorAppearance({
+              flat: true,
+              translucent: true,
+              closed: true
+            }),
+            asynchronous: true,
+            allowPicking: true,
+            releaseGeometryInstances: true
+          }));
+        }
       }
-      
-      primCollection.add(new Cesium.Primitive({
-        geometryInstances: borderInstances,
-        appearance: appearance,
-        asynchronous: true,
-        allowPicking: false,
-        releaseGeometryInstances: true
-      }));
-    }
+    });
+
+    // 根据颜色批量添加边界线实例
+    borderInstancesByColor.forEach((instances) => {
+      if (instances.length > 0) {
+        // 根据不同批次大小分组创建primitive
+        const batchSize = 500; // 每个批次最大实例数
+        for (let i = 0; i < instances.length; i += batchSize) {
+          const batchInstances = instances.slice(i, i + batchSize);
+          
+          // 如果是虚线边框，使用材质外观
+          let appearance;
+          if (borderPattern) {
+            appearance = new Cesium.PolylineMaterialAppearance({
+              material: Cesium.Material.fromType('PolylineDash', {
+                color: Cesium.Color.WHITE,
+                dashLength: 16.0,
+                dashPattern: 255 // 0b11111111
+              })
+            });
+          } else {
+            appearance = new Cesium.PolylineColorAppearance();
+          }
+          
+          primCollection.add(new Cesium.Primitive({
+            geometryInstances: batchInstances,
+            appearance: appearance,
+            asynchronous: true,
+            allowPicking: false,
+            releaseGeometryInstances: true
+          }));
+        }
+      }
+    });
   }
 
   /**
@@ -592,12 +766,54 @@ export class HexGridRenderer {
   }
 
   /**
+   * 获取基于相机距离的LOD级别
+   * @returns {{granularity: number, detail: number}} 返回包含几何体质量参数的对象
+   * @private
+   */
+  _getLodLevel() {
+    // 获取相机位置和中心点位置
+    const camera = this.viewer.camera;
+    const cameraPosition = camera.position;
+    const center = this.viewer.scene.globe.ellipsoid.cartographicToCartesian(
+      Cesium.Cartographic.fromDegrees(
+        (HexConfig.bounds.maxLon + HexConfig.bounds.minLon) / 2,
+        (HexConfig.bounds.maxLat + HexConfig.bounds.minLat) / 2
+      )
+    );
+    
+    // 计算距离
+    const distance = Cesium.Cartesian3.distance(cameraPosition, center);
+    
+    // 根据距离确定LOD级别
+    let granularity = Cesium.Math.RADIANS_PER_DEGREE;
+    let detail = 1.0;
+    
+    if (distance > 10000) {
+      granularity = Cesium.Math.RADIANS_PER_DEGREE * 2;
+      detail = 0.7;
+    }
+    if (distance > 20000) {
+      granularity = Cesium.Math.RADIANS_PER_DEGREE * 4;
+      detail = 0.5;
+    }
+    if (distance > 30000) {
+      granularity = Cesium.Math.RADIANS_PER_DEGREE * 8;
+      detail = 0.3;
+    }
+    
+    return { granularity, detail };
+  }
+
+  /**
    * 创建悬停Primitive
    * @param {HexCell} cell 六角格单元
    * @param {Cesium.Color} hoverColor 悬停颜色
    * @returns {Cesium.Primitive} 悬停Primitive
    */
   createHoverPrimitive(cell, hoverColor) {
+    // 获取LOD级别
+    const { granularity } = this._getLodLevel();
+    
     // 使用HexHeightCache获取3D位置，hover显示在所有层之上
     const positions = this.heightCache.getHex3DPositions(cell, false, 3.0);
     if (positions.length === 0) return null; // 无法获取位置
@@ -609,13 +825,14 @@ export class HexGridRenderer {
       Math.min(HexRendererConfig.extrusionHeight, -hexCache.steepness * 1.5) : 
       HexRendererConfig.extrusionHeight;
     
-    // 使用挤压多边形确保没有缝隙
+    // 使用挤压多边形确保没有缝隙，降低生成几何体的精度
     const inst = new Cesium.GeometryInstance({
       geometry: new Cesium.PolygonGeometry({
         polygonHierarchy: new Cesium.PolygonHierarchy(positions),
         perPositionHeight: true,
         vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
         extrudedHeight: dynamicExtrusionHeight, // 动态计算挤压高度
+        granularity: granularity, // 使用LOD级别的精度
         closeTop: true,
         closeBottom: true
       }),
@@ -633,7 +850,8 @@ export class HexGridRenderer {
         closed: true
       }),
       asynchronous: true,
-      allowPicking: true
+      allowPicking: true,
+      releaseGeometryInstances: true // 释放内存
     });
   }
 }

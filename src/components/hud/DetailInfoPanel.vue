@@ -6,7 +6,7 @@
 -->
 <template>
   <teleport to="body">
-    <div class="detail-info-panel">
+    <div class="detail-info-panel" :class="{ 'disabled': isPanelDisabled }">
       <!-- 左侧：六角格详细信息 -->
       <div class="hex-info-section">
         <div class="section-header">
@@ -57,7 +57,7 @@
             <div class="column strength-column">兵力</div>
             <div class="column action-column">行动力</div>
           </div>
-          <div class="forces-table-body">
+          <div class="forces-table-body custom-scrollbar">
             <div 
               v-for="force in hexForces" 
               :key="force.forceId"
@@ -90,29 +90,33 @@
             <div class="detail-column firepower-column">
               <div class="column-header">火力值</div>
               <table class="firepower-table">
-                <tr class="firepower-header">
-                  <th class="col-empty"></th>
-                  <th class="col-header">进攻</th>
-                  <th class="col-header">防御</th>
-                </tr>
-                <!-- 陆地火力行 -->
-                <tr class="firepower-row land-row">
-                  <td class="row-header">陆</td>
-                  <td class="col-value">{{ getFirepowerValue('attack', 'land') }}</td>
-                  <td class="col-value">{{ getFirepowerValue('defense', 'land') }}</td>
-                </tr>
-                <!-- 海洋火力行 -->
-                <tr class="firepower-row sea-row">
-                  <td class="row-header">海</td>
-                  <td class="col-value">{{ getFirepowerValue('attack', 'sea') }}</td>
-                  <td class="col-value">{{ getFirepowerValue('defense', 'sea') }}</td>
-                </tr>
-                <!-- 空中火力行 -->
-                <tr class="firepower-row air-row">
-                  <td class="row-header">空</td>
-                  <td class="col-value">{{ getFirepowerValue('attack', 'air') }}</td>
-                  <td class="col-value">{{ getFirepowerValue('defense', 'air') }}</td>
-                </tr>
+                <thead>
+                  <tr class="firepower-header">
+                    <th class="col-empty"></th>
+                    <th class="col-header">进攻</th>
+                    <th class="col-header">防御</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- 陆地火力行 -->
+                  <tr class="firepower-row land-row">
+                    <td class="row-header">陆</td>
+                    <td class="col-value">{{ getFirepowerValue('attack', 'land') }}</td>
+                    <td class="col-value">{{ getFirepowerValue('defense', 'land') }}</td>
+                  </tr>
+                  <!-- 海洋火力行 -->
+                  <tr class="firepower-row sea-row">
+                    <td class="row-header">海</td>
+                    <td class="col-value">{{ getFirepowerValue('attack', 'sea') }}</td>
+                    <td class="col-value">{{ getFirepowerValue('defense', 'sea') }}</td>
+                  </tr>
+                  <!-- 空中火力行 -->
+                  <tr class="firepower-row air-row">
+                    <td class="row-header">空</td>
+                    <td class="col-value">{{ getFirepowerValue('attack', 'air') }}</td>
+                    <td class="col-value">{{ getFirepowerValue('defense', 'air') }}</td>
+                  </tr>
+                </tbody>
               </table>
             </div>
             
@@ -174,7 +178,7 @@
                   <div class="unit-type">兵种</div>
                   <div class="unit-count">基数</div>
                 </div>
-                <div class="units-table-body">
+                <div class="units-table-body custom-scrollbar">
                   <div class="units-row" v-for="unit in forceUnits" :key="unit.unitId" 
                       :title="getUnitDetailsTooltip(unit)">
                     <div class="unit-type">{{ unit.name }}</div>
@@ -256,11 +260,16 @@ import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { showWarning } from '@/layers/interaction-layer/utils/MessageBox';
 import { CommandType } from '@/config/CommandConfig';
-import { GameButtons, GameMode } from '@/config/GameModeConfig';
+import { GameButtons, GameMode, GamePanels } from '@/config/GameModeConfig';
 import { gameModeService } from '@/layers/interaction-layer/GameModeManager';
 
 // 状态管理
 const store = openGameStore();
+
+// 检查当前游戏模式下详细信息面板是否应该禁用
+const isPanelDisabled = computed(() => {
+  return store.isPanelDisabled(GamePanels.DETAIL_INFO_PANEL);
+});
 
 // 模式管理
 const inMoveMode = ref(false); 
@@ -358,7 +367,7 @@ function isForceSelected(forceId) {
 
 // 辅助函数：切换部队选择状态
 function toggleForceSelection(forceId) {
-  if (store.selectedForceIds.has(forceId)) {
+  if (isForceSelected(forceId)) {
     store.removeSelectedForceId(forceId);
   } else {
     store.addSelectedForceId(forceId);
@@ -399,7 +408,6 @@ function getFirepowerValue(type, dimension) {
   if (!selectedForce.value) return 'N/A';
   
   try {
-    // 根据图片所示，火力值数据结构是一个对象字符串
     // 进攻火力值获取
     if (type === 'attack') {
       if (!selectedForce.value.attackFirepower) return '0';
@@ -459,14 +467,18 @@ function getFactionName(faction) {
 
 // 按钮禁用状态检查
 function isButtonDisabled(buttonType) {
-  // 没有选中部队时禁用移动和进攻按钮
-  if (!selectedForce.value && (buttonType === GameButtons.MOVE || buttonType === GameButtons.ATTACK)) {
-    return true;
+  // 没有选中部队，或者选中的是敌方部队时禁用移动和进攻按钮
+  if (buttonType === GameButtons.MOVE || buttonType === GameButtons.ATTACK) {
+    if (!selectedForce.value || selectedForce.value.faction !== store.currentFaction) {
+      return true;
+    }
   }
 
-  // 没有选中六角格时禁用创建部队按钮
-  if (!selectedHex.value && buttonType === GameButtons.CREATE_FORCE) {
-    return true;
+  // 没有选中六角格，或者选中的六角格是敌方阵营时禁用创建部队按钮
+  if (buttonType === GameButtons.MANAGE_FORCE) {
+    if (!selectedHex.value || (selectedHex.value.battlefieldState.controlFaction !== store.currentFaction && selectedHex.value.battlefieldState.controlFaction !== 'neutral')) {
+      return true;
+    }
   }
 
   // 命令执行中禁用所有按钮
@@ -689,15 +701,20 @@ const serviceMap = {
   height: 220px;
   background-color: rgba(169, 140, 102, 0.9);
   color: #f0f0f0;
-  border: 2px solid rgba(80, 60, 40, 0.8);
+  border: 6px solid rgba(80, 60, 40, 0.8);
   border-radius: 4px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   position: fixed;
   left: 50%;
   bottom: 0px;
   transform: translateX(-50%);
-  z-index: 90;
+  z-index: 101;
   overflow: hidden;
+}
+
+.detail-info-panel.disabled {
+  pointer-events: none;
+  filter: grayscale(50%);
 }
 
 /* 太窄了就隐藏面板 */
@@ -796,6 +813,8 @@ const serviceMap = {
   display: flex;
   flex-direction: column;
   font-size: 12px;
+  height: calc(100% - 30px);
+  overflow: hidden;
 }
 
 .forces-table-header {
@@ -803,11 +822,18 @@ const serviceMap = {
   background-color: rgba(0, 0, 0, 0.3);
   font-weight: bold;
   padding: 6px 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .forces-table-body {
   flex: 1;
   overflow-y: auto;
+  max-height: calc(100% - 30px);
+  box-sizing: border-box;
+  padding-right: 0;
+  margin-right: 0;
 }
 
 .forces-table-row {
@@ -855,6 +881,8 @@ const serviceMap = {
   display: flex;
   justify-content: center;
   align-items: center;
+  height: calc(100% - 30px);
+  border-radius: 3px;
 }
 
 /* 部队详细信息区 */
@@ -1030,6 +1058,8 @@ const serviceMap = {
 .units-table-body {
   flex: 1;
   overflow-y: auto;
+  padding-right: 0;
+  margin-right: 0;
 }
 
 .units-row {
@@ -1126,6 +1156,8 @@ const serviceMap = {
   z-index: 1000;
   white-space: nowrap;
   border: 2px solid rgba(255, 255, 255, 0.7);
+  bottom: 420px;
+  right: 20px;
 }
 
 .floating-confirm:hover {
@@ -1147,16 +1179,6 @@ const serviceMap = {
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-.move-confirm {
-  bottom: 300px;
-  right: 30px;
-}
-
-.attack-confirm {
-  bottom: 300px;
-  right: 30px;
-}
-
 @keyframes pulse {
   0% {
     transform: scale(1);
@@ -1171,20 +1193,45 @@ const serviceMap = {
 
 /* 滚动条样式 */
 ::-webkit-scrollbar {
-  width: 5px;
+  width: 0;
+  display: none;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: transparent;
+}
+
+/* 自定义滚动条样式 */
+.custom-scrollbar {
+  scrollbar-width: none; /* 针对Firefox */
+  -ms-overflow-style: none; /* 针对IE和Edge */
+  padding-right: 0;
+  margin-right: 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 0; /* 对Webkit浏览器隐藏滚动条 */
+  display: none; /* 完全隐藏滚动条 */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: transparent;
 }
 
 .col-empty, .col-header, .row-header {
@@ -1200,5 +1247,15 @@ const serviceMap = {
   font-size: 12px;
   padding: 2px 2px;
   color: rgba(255, 255, 255, 0.85);
+}
+
+.empty-units {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: calc(100% - 26px);
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
 }
 </style>

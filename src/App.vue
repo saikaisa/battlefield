@@ -79,7 +79,7 @@ function startDebug() {
   
   console.log('[Debug] 开始创建测试用例...');
   
-  // 创建两个测试兵种
+  // 创建多个测试兵种
   const infantry = {
     unitId: null,  // 自动生成ID
     unitName: '普通步兵',
@@ -134,6 +134,278 @@ function startDebug() {
     renderingKey: "missiletank"
   };
   
+  // 新增兵种类型
+  const helicopter = {
+    unitId: null,
+    unitName: '武装直升机',
+    service: ['land'],
+    category: '直升机',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 35,
+      domainFactor: { land: 1.0, sea: 0.8, air: 1.2 },
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 20,
+      domainFactor: { land: 0.5, sea: 0.5, air: 1.0 },
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    visibilityRadius: 4,
+    actionPointCostComposition: {
+      baseActionPointCost: 8,
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    recoveryRate: 8,
+    commandCapability: 1.8,
+    commandRange: 4,
+    renderingKey: "helicopter1"
+  };
+  
+  const artillery = {
+    unitId: null,
+    unitName: '野战炮兵',
+    service: ['land'],
+    category: '炮兵',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 50,
+      domainFactor: { land: 1.2, sea: 0.6, air: 0.3 },
+      terrainFactor: { plain: 1.0, hill: 0.9, mountain: 0.7, water: 0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 15,
+      domainFactor: { land: 1.0, sea: 0.1, air: 0.2 },
+      terrainFactor: { plain: 1.0, hill: 1.1, mountain: 1.3, water: 0 }
+    },
+    visibilityRadius: 3,
+    actionPointCostComposition: {
+      baseActionPointCost: 12,
+      terrainFactor: { plain: 1.0, hill: 1.6, mountain: 2.5, water: 10.0 }
+    },
+    recoveryRate: 6,
+    commandCapability: 1.0,
+    commandRange: 5,
+    renderingKey: "tank"
+  };
+  
+  const warship = {
+    unitId: null,
+    unitName: '巡洋舰',
+    service: ['land'],
+    category: '舰艇',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 60,
+      domainFactor: { land: 0.7, sea: 1.0, air: 0.8 },
+      terrainFactor: { plain: 0, hill: 0, mountain: 0, water: 1.0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 45,
+      domainFactor: { land: 0.5, sea: 1.0, air: 0.7 },
+      terrainFactor: { plain: 0, hill: 0, mountain: 0, water: 1.0 }
+    },
+    visibilityRadius: 5,
+    actionPointCostComposition: {
+      baseActionPointCost: 20,
+      terrainFactor: { plain: 10.0, hill: 10.0, mountain: 10.0, water: 1.0 }
+    },
+    recoveryRate: 4,
+    commandCapability: 2.0,
+    commandRange: 6,
+    renderingKey: "warship"
+  };
+  
+  const jet = {
+    unitId: null,
+    unitName: '战斗机',
+    service: ['land'],
+    category: '战机',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 45,
+      domainFactor: { land: 0.8, sea: 0.8, air: 1.5 },
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 25,
+      domainFactor: { land: 0.3, sea: 0.3, air: 1.2 },
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    visibilityRadius: 6,
+    actionPointCostComposition: {
+      baseActionPointCost: 10,
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    recoveryRate: 7,
+    commandCapability: 1.6,
+    commandRange: 5,
+    renderingKey: "jet"
+  };
+  
+  const spyDrone = {
+    unitId: null,
+    unitName: '侦察无人机',
+    service: ['land'],
+    category: '无人机',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 10,
+      domainFactor: { land: 0.5, sea: 0.5, air: 0.5 },
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 10,
+      domainFactor: { land: 0.3, sea: 0.3, air: 0.8 },
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    visibilityRadius: 8,
+    actionPointCostComposition: {
+      baseActionPointCost: 5,
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    recoveryRate: 10,
+    commandCapability: 1.2,
+    commandRange: 3,
+    renderingKey: "spydrone"
+  };
+  
+  // 添加更多兵种以测试滚动条
+  const specialForces = {
+    unitId: null,
+    unitName: '特种部队',
+    service: ['land'],
+    category: '特种兵',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 30,
+      domainFactor: { land: 1.2, sea: 0.6, air: 0.5 },
+      terrainFactor: { plain: 1.0, hill: 1.1, mountain: 1.2, water: 0.3 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 20,
+      domainFactor: { land: 1.1, sea: 0.4, air: 0.5 },
+      terrainFactor: { plain: 1.0, hill: 1.2, mountain: 1.3, water: 0.3 }
+    },
+    visibilityRadius: 3,
+    actionPointCostComposition: {
+      baseActionPointCost: 8,
+      terrainFactor: { plain: 1.0, hill: 1.1, mountain: 1.2, water: 3.0 }
+    },
+    recoveryRate: 12,
+    commandCapability: 1.3,
+    commandRange: 2,
+    renderingKey: "soldier"
+  };
+  
+  const motorcycleTroop = {
+    unitId: null,
+    unitName: '摩托化步兵',
+    service: ['land'],
+    category: '摩托兵',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 25,
+      domainFactor: { land: 1.1, sea: 0.2, air: 0.4 },
+      terrainFactor: { plain: 1.2, hill: 0.9, mountain: 0.5, water: 0.0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 18,
+      domainFactor: { land: 1.0, sea: 0.2, air: 0.4 },
+      terrainFactor: { plain: 1.1, hill: 0.9, mountain: 0.6, water: 0.0 }
+    },
+    visibilityRadius: 3,
+    actionPointCostComposition: {
+      baseActionPointCost: 7,
+      terrainFactor: { plain: 0.8, hill: 1.3, mountain: 2.0, water: 10.0 }
+    },
+    recoveryRate: 9,
+    commandCapability: 1.1,
+    commandRange: 2,
+    renderingKey: "soldier"
+  };
+  
+  const rocketArtillery = {
+    unitId: null,
+    unitName: '火箭炮兵',
+    service: ['land'],
+    category: '火炮',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 55,
+      domainFactor: { land: 1.3, sea: 0.7, air: 0.4 },
+      terrainFactor: { plain: 1.0, hill: 0.9, mountain: 0.6, water: 0.0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 12,
+      domainFactor: { land: 0.9, sea: 0.1, air: 0.2 },
+      terrainFactor: { plain: 0.9, hill: 1.0, mountain: 1.1, water: 0.0 }
+    },
+    visibilityRadius: 3,
+    actionPointCostComposition: {
+      baseActionPointCost: 14,
+      terrainFactor: { plain: 1.0, hill: 1.7, mountain: 2.8, water: 10.0 }
+    },
+    recoveryRate: 5,
+    commandCapability: 0.9,
+    commandRange: 6,
+    renderingKey: "tank"
+  };
+  
+  const submarine = {
+    unitId: null,
+    unitName: '潜艇',
+    service: ['land'],
+    category: '潜艇',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 50,
+      domainFactor: { land: 0.0, sea: 1.5, air: 0.3 },
+      terrainFactor: { plain: 0, hill: 0, mountain: 0, water: 1.0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 35,
+      domainFactor: { land: 0.0, sea: 1.2, air: 0.5 },
+      terrainFactor: { plain: 0, hill: 0, mountain: 0, water: 1.0 }
+    },
+    visibilityRadius: 4,
+    actionPointCostComposition: {
+      baseActionPointCost: 18,
+      terrainFactor: { plain: 10.0, hill: 10.0, mountain: 10.0, water: 1.0 }
+    },
+    recoveryRate: 3,
+    commandCapability: 1.8,
+    commandRange: 4,
+    renderingKey: "warship"
+  };
+  
+  const attackHelicopter = {
+    unitId: null,
+    unitName: '武装攻击直升机',
+    service: ['land'],
+    category: '攻击机',
+    factionAvailability: ['red', 'blue'],
+    attackPowerComposition: {
+      baseAttackPower: 40,
+      domainFactor: { land: 1.2, sea: 0.9, air: 1.0 },
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    defensePowerComposition: {
+      baseDefensePower: 22,
+      domainFactor: { land: 0.6, sea: 0.6, air: 1.1 },
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    visibilityRadius: 5,
+    actionPointCostComposition: {
+      baseActionPointCost: 9,
+      terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
+    },
+    recoveryRate: 7,
+    commandCapability: 1.7,
+    commandRange: 4,
+    renderingKey: "helicopter2"
+  };
+  
   // 查找六角格网中心位置
   const hexCells = store.getHexCells();
   if (hexCells.length === 0) {
@@ -167,8 +439,8 @@ function startDebug() {
 
   console.log(`[Debug] 找到中心六角格: ${centerHexId}`);
   
-  // 查找相邻六角格
-  let neighborHex = null;
+  // 查找多个相邻六角格
+  const neighborHexes = [];
   const { row, col } = centerHex.getRowCol();
   
   // 根据行号奇偶尝试获取相邻六角格
@@ -183,123 +455,276 @@ function startDebug() {
     const hex = store.getHexCellById(neighborId);
     
     if (hex) {
-      neighborHex = hex;
+      neighborHexes.push(hex);
       console.log(`[Debug] 找到邻近六角格: ${neighborId}`);
-      break;
     }
   }
   
-  if (!neighborHex) {
+  if (neighborHexes.length === 0) {
     console.error('[Debug] 没有找到邻近六角格');
     return;
   }
   
-  // 依次创建两个兵种
+  // 按顺序创建兵种和部队
   createUnitAndForces();
   
   // 异步创建兵种和部队（确保按顺序执行）
   async function createUnitAndForces() {
     try {
-      // 1. 创建步兵兵种
-      console.log('[Debug] 开始创建步兵兵种...');
+      // 1. 创建所有兵种
+      console.log('[Debug] 开始创建兵种...');
+      
       const infantryResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: infantry });
       const infantryId = infantryResult.result.data.unitId;
       console.log(`[Debug] 步兵兵种创建成功，ID: ${infantryId}`);
       
-      // 2. 创建坦克兵种
-      console.log('[Debug] 开始创建坦克兵种...');
       const tankResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: tank });
       const tankId = tankResult.result.data.unitId;
       console.log(`[Debug] 坦克兵种创建成功，ID: ${tankId}`);
       
-      // 3. 创建红方部队（在中心六角格）
+      const helicopterResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: helicopter });
+      const helicopterId = helicopterResult.result.data.unitId;
+      console.log(`[Debug] 直升机兵种创建成功，ID: ${helicopterId}`);
+      
+      const artilleryResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: artillery });
+      const artilleryId = artilleryResult.result.data.unitId;
+      console.log(`[Debug] 炮兵兵种创建成功，ID: ${artilleryId}`);
+      
+      const warshipResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: warship });
+      const warshipId = warshipResult.result.data.unitId;
+      console.log(`[Debug] 巡洋舰兵种创建成功，ID: ${warshipId}`);
+      
+      const jetResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: jet });
+      const jetId = jetResult.result.data.unitId;
+      console.log(`[Debug] 战斗机兵种创建成功，ID: ${jetId}`);
+      
+      const spyDroneResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: spyDrone });
+      const spyDroneId = spyDroneResult.result.data.unitId;
+      console.log(`[Debug] 侦察无人机兵种创建成功，ID: ${spyDroneId}`);
+      
+      // 创建额外的兵种
+      const specialForcesResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: specialForces });
+      const specialForcesId = specialForcesResult.result.data.unitId;
+      console.log(`[Debug] 特种部队兵种创建成功，ID: ${specialForcesId}`);
+      
+      const motorcycleTroopResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: motorcycleTroop });
+      const motorcycleTroopId = motorcycleTroopResult.result.data.unitId;
+      console.log(`[Debug] 摩托化步兵兵种创建成功，ID: ${motorcycleTroopId}`);
+      
+      const rocketArtilleryResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: rocketArtillery });
+      const rocketArtilleryId = rocketArtilleryResult.result.data.unitId;
+      console.log(`[Debug] 火箭炮兵兵种创建成功，ID: ${rocketArtilleryId}`);
+      
+      const submarineResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: submarine });
+      const submarineId = submarineResult.result.data.unitId;
+      console.log(`[Debug] 潜艇兵种创建成功，ID: ${submarineId}`);
+      
+      const attackHelicopterResult = await commandDispatcher.executeCommandFromUI(CommandType.EDIT_UNIT, { unitData: attackHelicopter });
+      const attackHelicopterId = attackHelicopterResult.result.data.unitId;
+      console.log(`[Debug] 武装攻击直升机兵种创建成功，ID: ${attackHelicopterId}`);
+      
+      // 2. 在中心六角格创建8支红方部队
       console.log('[Debug] 开始创建红方部队...');
-      const redForceData = {
-        forceName: '红方测试部队',
+      
+      // 创建包含8个兵种的红方部队
+      const redMultiUnitForceData = {
+        forceName: '红方联合特遣队',
         faction: 'red',
         service: 'land',
         hexId: centerHex.hexId,
         composition: [
           { unitId: infantryId, unitCount: 100 },
-          { unitId: tankId, unitCount: 50 }
+          { unitId: tankId, unitCount: 60 },
+          { unitId: artilleryId, unitCount: 40 },
+          { unitId: specialForcesId, unitCount: 20 },
+          { unitId: motorcycleTroopId, unitCount: 50 },
+          { unitId: helicopterId, unitCount: 15 },
+          { unitId: rocketArtilleryId, unitCount: 30 },
+          { unitId: spyDroneId, unitCount: 25 }
         ],
         troopStrength: 100,
         combatChance: 1,
         actionPoints: 100
       };
       
-      const redForceResult = await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
-        forceData: redForceData,
+      // 创建其他7支红方部队
+      const redForces = [
+        {
+          forceName: '红方步兵第一师',
+          faction: 'red',
+          service: 'land',
+          hexId: centerHex.hexId,
+          composition: [
+            { unitId: infantryId, unitCount: 100 },
+            { unitId: artilleryId, unitCount: 30 }
+          ],
+          troopStrength: 100,
+          combatChance: 1,
+          actionPoints: 100
+        },
+        {
+          forceName: '红方装甲第二师',
+          faction: 'red',
+          service: 'land',
+          hexId: centerHex.hexId,
+          composition: [
+            { unitId: tankId, unitCount: 80 },
+            { unitId: infantryId, unitCount: 40 }
+          ],
+          troopStrength: 100,
+          combatChance: 1,
+          actionPoints: 100
+        },
+        {
+          forceName: '红方空军第一航空队',
+          faction: 'red',
+          service: 'land',
+          hexId: centerHex.hexId,
+          composition: [
+            { unitId: helicopterId, unitCount: 20 },
+            { unitId: jetId, unitCount: 15 },
+            { unitId: spyDroneId, unitCount: 30 }
+          ],
+          troopStrength: 100,
+          combatChance: 1,
+          actionPoints: 100
+        },
+        {
+          forceName: '红方特种部队A组',
+          faction: 'red',
+          service: 'land',
+          hexId: centerHex.hexId,
+          composition: [
+            { unitId: specialForcesId, unitCount: 40 },
+            { unitId: helicopterId, unitCount: 10 }
+          ],
+          troopStrength: 100,
+          combatChance: 1,
+          actionPoints: 100
+        },
+        {
+          forceName: '红方机动部队',
+          faction: 'red',
+          service: 'land',
+          hexId: centerHex.hexId,
+          composition: [
+            { unitId: motorcycleTroopId, unitCount: 70 },
+            { unitId: tankId, unitCount: 30 }
+          ],
+          troopStrength: 100,
+          combatChance: 1,
+          actionPoints: 100
+        },
+        {
+          forceName: '红方火箭炮团',
+          faction: 'red',
+          service: 'land',
+          hexId: centerHex.hexId,
+          composition: [
+            { unitId: rocketArtilleryId, unitCount: 50 },
+            { unitId: infantryId, unitCount: 30 }
+          ],
+          troopStrength: 100,
+          combatChance: 1,
+          actionPoints: 100
+        },
+        {
+          forceName: '红方海军陆战队',
+          faction: 'red',
+          service: 'land',
+          hexId: centerHex.hexId,
+          composition: [
+            { unitId: infantryId, unitCount: 60 },
+            { unitId: specialForcesId, unitCount: 40 }
+          ],
+          troopStrength: 100,
+          combatChance: 1,
+          actionPoints: 100
+        }
+      ];
+      
+      // 首先创建包含8个兵种的部队
+      await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
+        forceData: redMultiUnitForceData,
         formationId: 'FM_red_default'
       });
-      const store = openGameStore();
-      console.log(`[Debug] 红方部队创建成功，ID: ${store.getForceById(redForceResult.result.data.forceId).forceId}`);
       
-      // 4. 创建蓝方部队（在邻近六角格）
+      // 然后创建其他7支部队
+      for (const forceData of redForces) {
+        await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
+          forceData: forceData,
+          formationId: 'FM_red_default'
+        });
+      }
+      
+      console.log(`[Debug] 红方部队创建成功`);
+      
+      // 在相邻六角格创建多个蓝方部队
       console.log('[Debug] 开始创建蓝方部队...');
-      const blueForceData = {
-        forceName: '蓝方测试部队',
-        faction: 'blue',
-        service: 'land',
-        hexId: neighborHex.hexId,
-        composition: [
-          { unitId: infantryId, unitCount: 80 },
-          { unitId: tankId, unitCount: 40 }
-        ],
-        troopStrength: 100,
-        combatChance: 1,
-        actionPoints: 100
-      };
       
-      const blueForceResult = await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
-        forceData: blueForceData,
-        formationId: 'FM_blue_default'
-      });
-      console.log(`[Debug] 蓝方部队创建成功，ID: ${store.getForceById(blueForceResult.result.data.forceId).forceId}`);
+      for (let i = 0; i < Math.min(neighborHexes.length, 6); i++) {
+        const neighborHex = neighborHexes[i];
+        
+        // 创建不同类型的部队
+        let forceData;
+        
+        if (i % 3 === 0) {
+          // 陆军部队
+          forceData = {
+            forceName: `蓝方陆军第${i+1}师`,
+            faction: 'blue',
+            service: 'land',
+            hexId: neighborHex.hexId,
+            composition: [
+              { unitId: infantryId, unitCount: 80 - (i * 10) },
+              { unitId: tankId, unitCount: 40 - (i * 5) },
+              { unitId: artilleryId, unitCount: 20 + (i * 2) }
+            ],
+            troopStrength: 100,
+            combatChance: 1,
+            actionPoints: 100
+          };
+        } else if (i % 3 === 1) {
+          // 空军部队
+          forceData = {
+            forceName: `蓝方空军第${i+1}航空队`,
+            faction: 'blue',
+            service: 'land',
+            hexId: neighborHex.hexId,
+            composition: [
+              { unitId: helicopterId, unitCount: 15 + (i * 2) },
+              { unitId: jetId, unitCount: 10 + i },
+              { unitId: spyDroneId, unitCount: 25 - i }
+            ],
+            troopStrength: 100,
+            combatChance: 1,
+            actionPoints: 100
+          };
+        } else {
+          // 海军部队
+          forceData = {
+            forceName: `蓝方海军第${i+1}舰队`,
+            faction: 'blue',
+            service: 'land',
+            hexId: neighborHex.hexId,
+            composition: [
+              { unitId: warshipId, unitCount: 10 + i },
+              { unitId: submarineId, unitCount: 8 + (i * 2) }
+            ],
+            troopStrength: 100,
+            combatChance: 1,
+            actionPoints: 100
+          };
+        }
+        
+        await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
+          forceData: forceData,
+          formationId: 'FM_blue_default'
+        });
+      }
       
+      console.log(`[Debug] 蓝方部队创建成功`);
       console.log('[Debug] 测试用例创建完成');
-
-      // const mr = MilitaryInstanceRenderer.getInstance(viewerRef.value);
-      // mr.updateForceInstance();
-
-      // // 等待5秒聚焦到红方部队
-      // await new Promise(resolve => setTimeout(resolve, 5000));
-      // const result = await commandDispatcher.executeCommandFromUI(CommandType.FOCUS_FORCE, { forceId: redForceResult.result.data.forceId });
-      // console.log(`[Debug] 聚焦到红方部队，结果: ${result.result.message}`);
-      
-      // // 等待10秒后移动红方部队
-      // await new Promise(resolve => setTimeout(resolve, 10000));
-      // const moveResult = await commandDispatcher.executeCommandFromUI(CommandType.MOVE, { 
-      //   forceId: redForceResult.result.data.forceId, 
-      //   path: [
-      //     `H_${centerRow}_${centerCol}`, 
-      //     `H_${centerRow}_${centerCol + 1}`,
-      //     `H_${centerRow + 1}_${centerCol + 1}`,
-      //     `H_${centerRow + 1}_${centerCol}`,
-      //     `H_${centerRow + 1}_${centerCol - 1}`,
-      //     `H_${centerRow}_${centerCol - 1}`,
-      //   ] 
-      // });
-      // console.log(`[Debug] 移动红方部队，结果: ${moveResult.result.message}`);
-
-      // // 等待5秒后设置H_0_0六角格对双方不可见
-      // await new Promise(resolve => setTimeout(resolve, 5000));
-      // const hex = store.getHexCellById('H_0_0');
-      // hex.setVisibleTo({ blue: false, red: false });
-      // console.log(`[Debug] 设置H_0_0六角格对双方不可见`);
-      // // 等待5秒后设置所有六角格对双方不可见
-      // await new Promise(resolve => setTimeout(resolve, 5000));
-      // hexCells.forEach(cell => {
-      //   cell.setVisibleTo({ blue: false, red: false });
-      // });
-      // console.log(`[Debug] 设置所有六角格对双方不可见`);
-      // //等待5秒后设置所有六角格对双方可见
-      // await new Promise(resolve => setTimeout(resolve, 5000));
-      // hexCells.forEach(cell => {
-      //   cell.setVisibleTo({ blue: true, red: true });
-      // });
-      // console.log(`[Debug] 设置所有六角格对双方可见`);
-
     } catch (error) {
       console.error('[Debug] 创建测试用例失败:', error);
     }

@@ -17,9 +17,7 @@ export const GameMode = {
 export const GamePanels = {
   FORMATION_LIST: 'formation-list', // 编队列表
   COMMAND_PANEL: 'command-panel',   // 命令面板
-  HEX_DETAIL: 'hex-detail',         // 六角格详细信息
-  HEX_FORCE_LIST: 'hex-force-list', // 六角格部队列表
-  FORCE_DETAIL: 'force-detail',     // 部队详细信息
+  DETAIL_INFO_PANEL: 'detail-info-panel', // 详细信息面板
   OVERVIEW_PANEL: 'overview-panel'    // 总览面板
 };
 
@@ -43,25 +41,27 @@ export const GameButtons = {
  * 
  * 每个模式包含以下配置：
  * - ui: UI界面控制
- *   - visiblePanels: 可见面板列表
+ *   - enabledPanels: 可见面板列表
  *   - disabledButtons: 禁用的按钮列表
  * - interaction: 交互控制
  *   - cameraControl: 是否允许相机控制
- *   - hexSelectMode: 六角格选择模式 ('single'单选, 'multi'多选, 'none'禁止选择)
- *   - forceSelectMode: 部队选择模式 ('linked'关联六角格, 'independent'独立选择)
+ *   - mouseInteract: 是否允许鼠标交互
+ *   - selectMode: 六角格和部队选择模式 ('single'单选, 'multi'多选)
+ *   - linkMode: 部队与六角格的关联模式 ('linked'关联六角格, 'independent'独立选择)
  *   - validator: 验证器函数名，用于验证当前操作是否有效
  */
 export const ModesConfig = {
   // 自动模式
   [GameMode.AUTO]: {
     ui: {
-      visiblePanels: [GamePanels.OVERVIEW_PANEL, GamePanels.COMMAND_PANEL],
+      enabledPanels: [GamePanels.OVERVIEW_PANEL, GamePanels.COMMAND_PANEL],
       disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.AUTO_MODE),
     },
     interaction: {
       cameraControl: true,
-      hexSelectMode: 'none',
-      forceSelectMode: 'independent',
+      mouseInteract: false,
+      selectMode: 'multi',
+      linkMode: 'independent',
       validator: null
     }
   },
@@ -69,14 +69,15 @@ export const ModesConfig = {
   [GameMode.FREE]: {
     // UI 控制
     ui: {
-      visiblePanels: Object.values(GamePanels),
+      enabledPanels: Object.values(GamePanels),
       disabledButtons: [],
     },
     // 交互控制
     interaction: {
       cameraControl: true,
-      hexSelectMode: 'single',
-      forceSelectMode: 'linked',
+      mouseInteract: true,
+      selectMode: 'single',
+      linkMode: 'linked',
       validator: null
     }
   },
@@ -84,13 +85,14 @@ export const ModesConfig = {
   // 俯瞰模式
   [GameMode.PANORAMA]: {
     ui: {
-      visiblePanels: [GamePanels.OVERVIEW_PANEL],
+      enabledPanels: [GamePanels.OVERVIEW_PANEL],
       disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.PANORAMA),
     },
     interaction: {
       cameraControl: false,
-      hexSelectMode: 'none',
-      forceSelectMode: 'linked',
+      mouseInteract: false,
+      selectMode: 'single',
+      linkMode: 'linked',
       validator: null
     }
   },
@@ -98,18 +100,17 @@ export const ModesConfig = {
   // 环绕模式
   [GameMode.ORBIT]: {
     ui: {
-      visiblePanels: [
-        GamePanels.HEX_DETAIL,
-        GamePanels.FORCE_DETAIL,
-        GamePanels.HEX_FORCE_LIST,
+      enabledPanels: [
+        GamePanels.DETAIL_INFO_PANEL,
         GamePanels.OVERVIEW_PANEL
       ],
       disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.ORBIT),
     },
     interaction: {
       cameraControl: true,
-      hexSelectMode: 'none',
-      forceSelectMode: 'linked',
+      mouseInteract: false,
+      selectMode: 'single',
+      linkMode: 'linked',
       validator: null
     }
   },
@@ -117,18 +118,17 @@ export const ModesConfig = {
   // 移动准备模式
   [GameMode.MOVE_PREPARE]: {
     ui: {
-      visiblePanels: [
-        GamePanels.HEX_DETAIL,
-        GamePanels.FORCE_DETAIL,
-        GamePanels.HEX_FORCE_LIST,
+      enabledPanels: [
+        GamePanels.DETAIL_INFO_PANEL,
         GamePanels.OVERVIEW_PANEL
       ],
       disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER && btn !== GameButtons.MOVE),
     },
     interaction: {
       cameraControl: true,
-      hexSelectMode: 'multi',
-      forceSelectMode: 'independent',
+      mouseInteract: true,
+      selectMode: 'multi',
+      linkMode: 'independent',
       validator: 'validateMovePath'
     }
   },
@@ -136,18 +136,17 @@ export const ModesConfig = {
   // 移动执行模式
   [GameMode.MOVE_EXECUTE]: {
     ui: {
-      visiblePanels: [
-        GamePanels.HEX_DETAIL,
-        GamePanels.FORCE_DETAIL,
-        GamePanels.HEX_FORCE_LIST,
+      enabledPanels: [
+        GamePanels.DETAIL_INFO_PANEL,
         GamePanels.OVERVIEW_PANEL
       ],
       disabledButtons: Object.values(GameButtons),
     },
     interaction: {
       cameraControl: true,
-      hexSelectMode: 'none',
-      forceSelectMode: 'independent',
+      mouseInteract: false,
+      selectMode: 'multi',
+      linkMode: 'independent',
       validator: null
     }
   },
@@ -155,18 +154,17 @@ export const ModesConfig = {
   // 攻击准备模式
   [GameMode.ATTACK_PREPARE]: {
     ui: {
-      visiblePanels: [
-        GamePanels.HEX_DETAIL,
-        GamePanels.FORCE_DETAIL,
-        GamePanels.HEX_FORCE_LIST,
+      enabledPanels: [
+        GamePanels.DETAIL_INFO_PANEL,
         GamePanels.OVERVIEW_PANEL
       ],
       disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER && btn !== GameButtons.ATTACK),
     },
     interaction: {
       cameraControl: true,
-      hexSelectMode: 'multi',
-      forceSelectMode: 'linked',
+      mouseInteract: true,
+      selectMode: 'multi',
+      linkMode: 'linked',
       validator: 'validateAttackTarget'
     }
   },
@@ -174,13 +172,14 @@ export const ModesConfig = {
   // 攻击执行模式
   [GameMode.ATTACK_EXECUTE]: {
     ui: {
-      visiblePanels: [GamePanels.OVERVIEW_PANEL],
+      enabledPanels: [GamePanels.OVERVIEW_PANEL],
       disabledButtons: Object.values(GameButtons),
     },
     interaction: {
       cameraControl: true,
-      hexSelectMode: 'none',
-      forceSelectMode: 'independent',
+      mouseInteract: false,
+      selectMode: 'multi',
+      linkMode: 'independent',
       validator: null
     }
   },
@@ -188,13 +187,14 @@ export const ModesConfig = {
   // 统计模式
   [GameMode.STATISTICS]: {
     ui: {
-      visiblePanels: Object.values(GamePanels).filter(panel => panel !== GamePanels.COMMAND_PANEL),
+      enabledPanels: Object.values(GamePanels).filter(panel => panel !== GamePanels.COMMAND_PANEL),
       disabledButtons: Object.values(GameButtons).filter(btn => btn !== GameButtons.TOGGLE_LAYER && btn !== GameButtons.STATISTICS),
     },
     interaction: {
       cameraControl: true,
-      hexSelectMode: 'multi',
-      forceSelectMode: 'linked',
+      mouseInteract: true,
+      selectMode: 'multi',
+      linkMode: 'linked',
       validator: null
     }
   }

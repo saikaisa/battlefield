@@ -92,6 +92,20 @@ export class GameModeManager {
     this.store.setSelectedHexIds(this._lastSelectedHexIds);
     this.store.setSelectedForceIds(this._lastSelectedForceIds);
   }
+
+  /**
+   * 设置锁定选中
+   */
+  setLockedSelection(hexIds, forceIds) {
+    this.store.setLockedSelection(hexIds, forceIds);
+  }
+
+  /**
+   * 清除锁定选中
+   */
+  clearLockedSelection() {
+    this.store.clearLockedSelection();
+  }
   
   // ==================== 私有辅助方法 ====================
   /**
@@ -103,7 +117,7 @@ export class GameModeManager {
     // 1. 设置禁用的面板
     const allPanels = Object.values(GamePanels);
     const disabledPanels = allPanels.filter(panel => 
-      !config.ui.visiblePanels.includes(panel));
+      !config.ui.enabledPanels.includes(panel));
     this.store.setDisabledPanels(disabledPanels);
     
     // 2. 设置禁用的按钮
@@ -126,11 +140,14 @@ export class GameModeManager {
     this.store.setCameraControlEnabled(inter.cameraControl !== undefined ? inter.cameraControl : true);
     
     // 2. 应用选择维护规则
-    if (inter.hexSelectMode) {
-      this.store.setHexSelectMode(inter.hexSelectMode);
+    if (inter.mouseInteract) {
+      this.store.setMouseInteract(inter.mouseInteract);
     }
-    if (inter.forceSelectMode) {
-      this.store.setForceSelectMode(inter.forceSelectMode);
+    if (inter.selectMode) {
+      this.store.setSelectMode(inter.selectMode);
+    }
+    if (inter.linkMode) {
+      this.store.setLinkMode(inter.linkMode);
     }
   }
   
@@ -158,5 +175,13 @@ export const gameModeService = {
 
   restoreSelectedHexIds() {
     return GameModeManager.getInstance().restoreSelectedHexIds();
+  },
+
+  setLockedSelection(hexIds, forceIds) {
+    return GameModeManager.getInstance().setLockedSelection(hexIds, forceIds);
+  },
+
+  clearLockedSelection() {
+    return GameModeManager.getInstance().clearLockedSelection();
   },
 }; 

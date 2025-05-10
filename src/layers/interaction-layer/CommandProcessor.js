@@ -380,6 +380,7 @@ export class CommandProcessor {
       // 如果当前处于移动准备模式，则回到自由模式
       gameModeService.setMode(GameMode.FREE);
       gameModeService.restoreSelectedHexIds();
+      gameModeService.clearLockedSelection();
       return {
         status: CommandStatus.FINISHED,
         message: "从移动准备模式回到自由模式",
@@ -387,20 +388,15 @@ export class CommandProcessor {
     }
 
     try {
-      // 先保存当前选择状态
-      gameModeService.saveSelectedHexIds();
-
-      // 如果提供了部队ID，选中该部队
-      if (forceId) {
-        this.store.setSelectedForceIds([forceId]);
-        const force = this.store.getForceById(forceId);
-        if (force && force.hexId) {
-          this.store.setSelectedHexIds([force.hexId]);
-        }
-      }
-
       // 切换到移动准备模式
       gameModeService.setMode(GameMode.MOVE_PREPARE);
+      // 先保存当前选择状态
+      gameModeService.saveSelectedHexIds();
+      // 锁定当前部队及六角格
+      gameModeService.setLockedSelection(this.store.selectedHexIds, this.store.selectedForceIds);
+      
+
+      
 
       return {
         status: CommandStatus.FINISHED,
@@ -410,6 +406,7 @@ export class CommandProcessor {
       // 发生错误时恢复状态
       gameModeService.setMode(GameMode.FREE);
       gameModeService.restoreSelectedHexIds();
+      gameModeService.clearLockedSelection();
       throw new CommandError(`切换移动准备模式失败: ${error.message}`, "move");
     }
   }
@@ -562,15 +559,6 @@ export class CommandProcessor {
 
       // 先保存当前选择状态
       gameModeService.saveSelectedHexIds();
-
-      // 如果提供了部队ID，选中该部队
-      if (forceId) {
-        this.store.setSelectedForceIds([forceId]);
-        const force = this.store.getForceById(forceId);
-        if (force && force.hexId) {
-          this.store.setSelectedHexIds([force.hexId]);
-        }
-      }
 
       // 切换到攻击准备模式
       gameModeService.setMode(GameMode.ATTACK_PREPARE);

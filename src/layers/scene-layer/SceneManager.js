@@ -110,10 +110,7 @@ export class SceneManager {
       // ---------------- 六角网格渲染结束 ----------------
 
       // ---------------- 屏幕交互器加载开始 ----------------
-      this.screenInteractor = SceneInteractor.getInstance(this.viewer, {
-        enabled: true,
-        multiSelect: false
-      });
+      this.screenInteractor = SceneInteractor.getInstance(this.viewer, true);
       // ---------------- 屏幕交互器加载结束 ----------------
       
       // ---------------- 相机系统加载开始 ----------------

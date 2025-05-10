@@ -3,7 +3,7 @@
 -->
 <template>
   <teleport to="body">
-    <div class="formation-panel">
+    <div class="formation-panel" :class="{ 'disabled': isPanelDisabled }">
       <!-- 面板顶栏 -->
       <div class="panel-header">
         <div class="add-button" @click="showCreateFormationDialog">
@@ -101,14 +101,20 @@
                           class="force-item"
                           :class="{ 'selected': isForceSelected(force.forceId) }"
                           :data-force-id="force.forceId"
-                          @click.stop="selectForce(force.forceId)"
-                          @dblclick.stop="focusForce(force)"
+                          @click.stop="toggleForceSelection(force.forceId)"
                         >
                           <!-- 军种色标识 -->
                           <div class="force-type-indicator" :class="getForceTypeClass(force)"></div>
                           <div class="force-info">
                             <div class="force-name">{{ force.name || force.forceName }}</div>
                             <div class="force-location">{{ force.hexId }}</div>
+                          </div>
+                          <!-- 添加定位图标按钮 -->
+                          <div class="locate-btn" 
+                               @click.stop="focusForce(force)" 
+                               title="定位部队"
+                               :class="{ 'disabled': isDragging || isExecuting }">
+                            <el-icon><Location /></el-icon>
                           </div>
                         </div>
                       </template>
@@ -173,9 +179,9 @@ import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { showSuccess, showWarning, showError } from '@/layers/interaction-layer/utils/MessageBox';
 import draggable from 'vuedraggable';
-import { Plus, Delete, ArrowDown, ArrowRight, ArrowUp } from '@element-plus/icons-vue';
+import { Plus, Delete, ArrowDown, ArrowRight, ArrowUp, Location } from '@element-plus/icons-vue';
 import { gameModeService } from '@/layers/interaction-layer/GameModeManager';
-import { GameMode } from '@/config/GameModeConfig';
+import { GameMode, GamePanels } from '@/config/GameModeConfig';
 import { CommandType } from '@/config/CommandConfig';
 
 // 状态管理
@@ -188,6 +194,10 @@ const isDragging = ref(false); // 是否正在拖拽
 const dragSourceFormationId = ref(null); // 拖拽源编队ID
 const mousePosition = ref({ x: 0, y: 0 }); // 鼠标位置
 const expandedFormationsBeforeDrag = ref(new Set()); // 拖拽前展开的编队状态
+// 检查当前游戏模式下编队列表面板是否应该禁用
+const isPanelDisabled = computed(() => {
+  return store.isPanelDisabled(GamePanels.FORMATION_LIST);
+});
 
 // 编队表单数据
 const formationForm = ref({
@@ -202,6 +212,8 @@ const formationsOrder = ref({
 
 // 计算属性：获取当前阵营
 const currentFaction = computed(() => store.currentFaction);
+// 是否有命令正在执行
+const isExecuting = computed(() => store.isExecuting);
 
 // 计算属性：获取当前阵营的编队（已排序）
 const formationsInOrder = computed({
@@ -339,30 +351,20 @@ function isForceSelected(forceId) {
   return store.selectedForceIds.has(forceId);
 }
 
-// 选择部队（单击）
-function selectForce(forceId) {
+// 切换部队选择状态（单击）
+function toggleForceSelection(forceId) {
   // 如果正在拖拽中，不处理点击事件
   if (isDragging.value) return;
-  
-  // 如果部队已经被选中，不做任何处理
-  if (store.selectedForceIds.has(forceId)) {
-    return;
-  }
-  
-  // 添加部队到选中列表
-  store.addSelectedForceId(forceId);
-  
-  // 自动选中部队所在的编队
-  const force = store.getForceById(forceId);
-  if (force) {
-    const formation = store.getFormationByForceId(forceId);
-    if (formation) {
-      selectedFormationId.value = formation.formationId;
-    }
+  if (isForceSelected(forceId)) {
+    // 若已选中，则取消选中
+    store.removeSelectedForceId(forceId);
+  } else {
+    // 添加部队到选中列表
+    store.addSelectedForceId(forceId);
   }
 }
 
-// 聚焦部队（双击）
+// 聚焦部队（定位功能）
 function focusForce(force) {
   if (!force || !force.forceId || isDragging.value) return;
 
@@ -802,16 +804,22 @@ function moveFormation(formation, direction) {
   display: flex;
   flex-direction: column;
   overflow: visible;
-  border: 2px solid rgba(80, 60, 40, 0.8);
+  border: 6px solid rgba(80, 60, 40, 0.8);
   position: fixed;
   left: 20px;
-  top: 20px;
-  z-index: 9999;
+  bottom: 10px;
+  z-index: 99;
   max-height: 40vh; /* 限制最大高度为视窗高度的40% */
   min-height: 40vh;
   pointer-events: auto;
   border-radius: 4px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* 禁用状态样式 */
+.formation-panel.disabled {
+  pointer-events: none;
+  filter: grayscale(50%);
 }
 
 /* 调试信息 */
@@ -859,7 +867,7 @@ function moveFormation(formation, direction) {
   transform: scale(1.1);
 }
 
-.delete-button.disabled {
+.delete-button.disabled, .add-button.disabled {
   opacity: 0.4;
   cursor: not-allowed;
   pointer-events: none;
@@ -1024,7 +1032,7 @@ function moveFormation(formation, direction) {
   min-width: 0;
   overflow: hidden;
   align-items: center;
-  max-width: 100%;
+  max-width: calc(100% - 30px);
   box-sizing: border-box;
   margin-left: 8px;
 }
@@ -1120,6 +1128,61 @@ function moveFormation(formation, direction) {
   opacity: 0.3;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+/* 美化滚动条样式 */
+.panel-content::-webkit-scrollbar,
+.formation-list::-webkit-scrollbar,
+.forces-list::-webkit-scrollbar {
+  width: 5px; /* 更窄的滚动条 */
+}
+
+.panel-content::-webkit-scrollbar-track,
+.formation-list::-webkit-scrollbar-track,
+.forces-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05); /* 几乎透明的轨道 */
+  margin-right: 2px; /* 让轨道远离边缘 */
+}
+
+.panel-content::-webkit-scrollbar-thumb,
+.formation-list::-webkit-scrollbar-thumb,
+.forces-list::-webkit-scrollbar-thumb {
+  background: rgba(80, 60, 40, 0.3); /* 更匹配主题色的滚动条，低透明度 */
+  border-radius: 3px;
+}
+
+.panel-content::-webkit-scrollbar-thumb:hover,
+.formation-list::-webkit-scrollbar-thumb:hover,
+.forces-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(80, 60, 40, 0.5); /* 悬停时稍微明显一点 */
+}
+
+/* 添加定位按钮样式 */
+.locate-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(169, 140, 102, 0.3);
+  border-radius: 3px;
+  opacity: 0.7;
+  transition: all 0.2s;
+  margin-left: 5px;
+  flex-shrink: 0;
+}
+
+.locate-btn:hover {
+  opacity: 1;
+  background-color: rgba(169, 140, 102, 0.7);
+  transform: scale(1.1);
+}
+
+.locate-btn.disabled{
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
 }
 </style>
   

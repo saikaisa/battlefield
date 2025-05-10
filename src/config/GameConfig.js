@@ -168,7 +168,7 @@ export const MilitaryConfig = {
     // 部队内兵种布局（环形排列）
     unitLayout: {
       maxCount: 6,           // 部队内最多渲染的兵种实例数（六边形布局） 
-      radius: 100,             // 环形布局半径（米）
+      radius: 200,             // 环形布局半径（米）
       heightOffset: 20,       // 模型离地高度（米）
     },
   },
