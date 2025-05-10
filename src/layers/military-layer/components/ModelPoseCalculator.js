@@ -4,7 +4,7 @@ import { HexConfig, MilitaryConfig } from '@/config/GameConfig';
 import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { openGameStore } from "@/store";
-import { GeoMathUtils } from "@/utils/GeoMathUtils";
+import { GeoMathUtils } from "@/layers/scene-layer/utils/GeoMathUtils";
 import { HexHeightCache } from "@/layers/scene-layer/components/HexHeightCache";
 
 /**

@@ -1,6 +1,5 @@
 // eslint-disable-next-line no-unused-vars
 import * as Cesium from "cesium";
-import { reactive } from "vue";
 import { openGameStore } from "@/store";
 // eslint-disable-next-line no-unused-vars
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
@@ -75,7 +74,7 @@ export class MilitaryInstanceGenerator {
     //   offset: { x, y, z }, // 模型相对于兵种实例的偏移
     //   localOffset: { x, y } // 兵种实例在部队内的相对偏移
     // }
-    this.forceInstanceMap = reactive(new Map());
+    this.forceInstanceMap = new Map();
   }
 
   /**
@@ -107,7 +106,6 @@ export class MilitaryInstanceGenerator {
           heading: 0, // 初始朝向为0
         },
       };
-      console.log(`创建部队实例: ${force.forceId}`, forceInstance);
       this.forceInstanceMap.set(force.forceId, forceInstance);
 
       return forceInstance;
@@ -154,7 +152,6 @@ export class MilitaryInstanceGenerator {
       
       // 从映射表中移除该部队实例
       this.forceInstanceMap.delete(forceId);
-      console.log(`已清理部队实例: ${forceId}`);
     }
   }
 
@@ -181,7 +178,6 @@ export class MilitaryInstanceGenerator {
     const loadPromises = [];
     
     for (const [renderingKey, renderCount] of renderingGroups.entries()) {
-      console.log(`[DEBUG] 准备创建兵种实例: renderingKey=${renderingKey}, renderCount=${renderCount}`);
       
       // 为渲染组中每个兵种单位创建实例
       for (let i = 0; i < renderCount; i++) {

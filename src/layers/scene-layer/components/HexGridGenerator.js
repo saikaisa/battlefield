@@ -3,7 +3,7 @@ import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 import { HexConfig } from "@/config/GameConfig";
 import { HexCell } from '@/models/HexCell';
-import { GeoMathUtils } from "@/utils/GeoMathUtils";
+import { GeoMathUtils } from "@/layers/scene-layer/utils/GeoMathUtils";
 import { HexHeightCache } from './HexHeightCache';
 
 /**

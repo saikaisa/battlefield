@@ -471,7 +471,7 @@ export class CommandProcessor {
       // 播放移动动画
       if (forceInstance && forceInstance.unitInstanceMap) {
         forceInstance.unitInstanceMap.forEach(unitInstance => {
-            this.militaryRenderer.addAnimation(unitInstance, 'moving');
+          this.militaryRenderer.addMoveAnimation(unitInstance);
         });
       }
 
@@ -486,10 +486,10 @@ export class CommandProcessor {
           // 检查是否完成
           if (!movementState || movementState.isComplete) {
             clearInterval(checkInterval);
-            // 结束移动动画
+            // 移除移动动画
             if (forceInstance && forceInstance.unitInstanceMap) {
               forceInstance.unitInstanceMap.forEach(unitInstance => {
-                  this.militaryRenderer.addAnimation(unitInstance, 'idle');
+                this.militaryRenderer.removeMoveAnimation(unitInstance);
               });
             }
 

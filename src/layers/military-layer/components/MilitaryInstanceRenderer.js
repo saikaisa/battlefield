@@ -61,32 +61,6 @@ export class MilitaryInstanceRenderer {
     this._lodUpdateInterval = 500;
     // 记录正在创建中的部队ID，避免重复创建
     this._creatingForceInstQueue = new Set();
-    
-    // 💡新增: 场景更新请求
-    this._needsRender = false;
-    
-    // 💡新增: 启用requestRenderMode并添加场景更新监听
-    if (this.viewer.scene.requestRenderMode) {
-      // 添加场景渲染后回调，用于控制下一帧是否需要渲染
-      this.viewer.scene.postRender.addEventListener(() => {
-        if (this._needsRender) {
-          // 如果需要再次渲染，请求下一帧渲染
-          this.viewer.scene.requestRender();
-          this._needsRender = false;
-        }
-      });
-    }
-  }
-
-  /**
-   * 请求渲染下一帧 - 当场景需要更新时调用
-   * @private
-   */
-  _requestRender() {
-    if (this.viewer.scene.requestRenderMode) {
-      this._needsRender = true;
-      this.viewer.scene.requestRender();
-    }
   }
 
   /**
@@ -169,69 +143,34 @@ export class MilitaryInstanceRenderer {
   update() {
     if (this._updateHandle) return;
     
-    // 将LOD更新间隔增加到1000毫秒，减少更新频率
-    this._lodUpdateInterval = 1000;
-    
-    // 添加: 动画更新控制
-    this._animUpdateInterval = 200; // 动画更新间隔(毫秒)
-    this._lastAnimUpdateTime = 0;
-    this._animationUpdateCounter = 0; // 用于控制轮流更新动画
+    // TODO: 调用MilitaryBattleController进行战斗动画渲染
     
     this._updateHandle = this.viewer.scene.postUpdate.addEventListener(() => {
       // 更新所有部队
       const now = Date.now();
       const shouldUpdateLOD = !this._lastLodUpdateTime || (now - this._lastLodUpdateTime) >= this._lodUpdateInterval;
-      const shouldUpdateAnim = !this._lastAnimUpdateTime || (now - this._lastAnimUpdateTime) >= this._animUpdateInterval;
       
-      // 优化: 仅在必要时更新LOD和动画
-      if (shouldUpdateLOD) {
-        // 降低动画处理频率
-        this._lastLodUpdateTime = now;
+      this.forceInstanceMap.forEach((forceInstance, forceId) => {
+        // 首先检查部队是否在移动中
+        const isMoving = this.movementController.movingForces.has(forceId);
         
-        this.forceInstanceMap.forEach((forceInstance, forceId) => {
-          const isMoving = this.movementController.movingForces.has(forceId);
-          
-          if (isMoving) {
-            // 移动中的部队：计算新位置并更新
-            this.movementController.updateMovingForces(forceId);
-          } else {
-            // 静止部队：更新LOD
-            this._updateModelLOD(forceInstance);
-          }
-        });
-      } else if (shouldUpdateAnim) {
-        // 更新动画计数器
-        this._lastAnimUpdateTime = now;
-        
-        // 动画更新 - 每次只更新部分部队的动画（轮流制）
-        // 获取所有正在移动的部队
-        const movingForceIds = Array.from(this.movementController.movingForces.keys());
-        
-        if (movingForceIds.length > 0) {
-          // 只更新一小部分部队的动画，每次循环更新不同的部队
-          const updateCount = Math.max(1, Math.ceil(movingForceIds.length / 4));
-          const startIndex = this._animationUpdateCounter % movingForceIds.length;
-          
-          for (let i = 0; i < updateCount; i++) {
-            const index = (startIndex + i) % movingForceIds.length;
-            const forceId = movingForceIds[index];
-            
-            const forceInstance = this.forceInstanceMap.get(forceId);
-            if (forceInstance) {
-              this.movementController.updateMovingForces(forceId);
-            }
-          }
-          
-          // 更新计数器
-          this._animationUpdateCounter++;
+        if (isMoving) {
+          // 移动中的部队：计算新位置并更新
+          this.movementController.updateMovingForces(forceId);
+        } 
+        else if (shouldUpdateLOD) {
+          // 静止部队：更新LOD
+          this._updateModelLOD(forceInstance);
         }
+      });
+      
+      // 只有当实际执行了LOD更新时才更新时间戳
+      if (shouldUpdateLOD) {
+        this._lastLodUpdateTime = now;
       }
       
       // 清理已完成移动的部队
       this.movementController.cleanupFinishedMovements();
-      
-      // 在上面update方法的批量部队更新后调用（位置约在 this._animationUpdateCounter++ 后）
-      this._requestRender();
     });
   }
 
@@ -332,7 +271,6 @@ export class MilitaryInstanceRenderer {
           this.forceInstanceMap.set(force.forceId, forceInstance);
           // 创建完成后移除标记
           this._creatingForceInstQueue.delete(force.forceId);
-          console.log(`成功创建部队实例: ${force.forceId}`);
         } catch (error) {
           this._creatingForceInstQueue.delete(force.forceId);
           console.error(`创建部队实例时出错: ${force.forceId}`, error);
@@ -393,14 +331,6 @@ export class MilitaryInstanceRenderer {
           // 更新部队实例的可见性
           this.updateHexObjectVisibility();
 
-          console.log(`[MilitaryInstanceRenderer] 渲染实例: ${unitInstanceId}, 初始LOD=${initialLOD}`);
-          
-          // 为特定兵种添加默认idle动画 - 使用非异步方法
-          if (unitInstance.renderingKey === 'soldier' || 
-              unitInstance.renderingKey === 'helicopter1' || 
-              unitInstance.renderingKey === 'helicopter2') {
-            this._addAnimationNonAsync(unitInstance, 'idle');
-          }
         } catch (error) {
           console.error(`[MilitaryInstanceRenderer] 渲染实例失败: ${unitInstanceId}`, error);
         }
@@ -414,12 +344,11 @@ export class MilitaryInstanceRenderer {
   }
 
   /**
-   * 为模型添加动画
+   * 为模型添加移动动画
    * @param {Object} unitInstance 兵种实例
-   * @param {string} status 动画状态 - 'idle': 静止, 'moving': 移动
    * @returns {Promise} 添加动画完成的Promise
    */
-  async addAnimation(unitInstance, status) {
+  async addMoveAnimation(unitInstance) {
     // 如果无效参数，立即返回已解决的Promise
     if (!unitInstance || !unitInstance.activeModel) {
       return Promise.resolve();
@@ -427,10 +356,7 @@ export class MilitaryInstanceRenderer {
     
     try {
       // 首先移除当前动画（如果存在）
-      if (unitInstance.activeAnimation) {
-        unitInstance.activeModel.activeAnimations.remove(unitInstance.activeAnimation);
-        unitInstance.activeAnimation = null;
-      }
+      this.removeMoveAnimation(unitInstance);
       
       // 检查模型是否支持动画
       const modelConfig = MilitaryConfig.models[unitInstance.renderingKey];
@@ -442,14 +368,11 @@ export class MilitaryInstanceRenderer {
       // 加载模型动画配置
       let animConfig;
       
-      // 根据模型类型和状态选择合适的动画
+      // 加载移动动画
       if (unitInstance.renderingKey === 'soldier') {
-        // 士兵有idle和moving两种状态
-        const animationIndex = status === 'moving' ? 1 : 0; // 0是idle, 1是moving
-        animConfig = MilitaryConfig.models[unitInstance.renderingKey].animationList[animationIndex];
+        animConfig = MilitaryConfig.models[unitInstance.renderingKey].animationList[1];
       } 
       else if (unitInstance.renderingKey === 'helicopter1' || unitInstance.renderingKey === 'helicopter2') {
-        // 直升机只有一种动画（旋翼旋转），无论什么状态
         animConfig = MilitaryConfig.models[unitInstance.renderingKey].animationList[0];
       }
       
@@ -457,67 +380,26 @@ export class MilitaryInstanceRenderer {
       if (animConfig) {
         unitInstance.activeAnimation = unitInstance.activeModel.activeAnimations.add({
           name: animConfig.name,
-          loop: animConfig.loop,
-          // 只使用安全的动画参数
-          multiplier: 1.0,
-          delay: 0.0
+          loop: animConfig.loop
         });
-        console.log(`成功添加${status}动画到模型: ${unitInstance.renderingKey}`);
+        console.log(`成功添加移动动画到模型: ${unitInstance.renderingKey}`);
       }
       
       return Promise.resolve();
     } catch (e) {
-      console.warn(`添加动画失败: ${unitInstance.renderingKey}，状态: ${status}`, e);
+      console.warn(`添加移动动画失败: ${unitInstance.renderingKey}`, e);
       return Promise.reject(e);
     }
   }
 
-  /**
-   * 非异步添加动画方法，减少Promise开销
+  /** 
+   * 移除移动动画
    * @param {Object} unitInstance 兵种实例
-   * @param {string} status 动画状态 - 'idle': 静止, 'moving': 移动
    */
-  _addAnimationNonAsync(unitInstance, status) {
-    if (!unitInstance || !unitInstance.activeModel) return;
-    
-    try {
-      // 首先移除当前动画（如果存在）
-      if (unitInstance.activeAnimation) {
-        unitInstance.activeModel.activeAnimations.remove(unitInstance.activeAnimation);
-        unitInstance.activeAnimation = null;
-      }
-      
-      // 检查模型是否支持动画
-      const modelConfig = MilitaryConfig.models[unitInstance.renderingKey];
-      const hasAnimations = modelConfig && modelConfig.animationList && modelConfig.animationList.length > 0;
-      if (!hasAnimations) return; // 不支持动画的模型直接返回
-      
-      // 加载模型动画配置
-      let animConfig;
-      
-      // 根据模型类型和状态选择合适的动画
-      if (unitInstance.renderingKey === 'soldier') {
-        // 士兵有idle和moving两种状态
-        const animationIndex = status === 'moving' ? 1 : 0; // 0是idle, 1是moving
-        animConfig = MilitaryConfig.models[unitInstance.renderingKey].animationList[animationIndex];
-      } 
-      else if (unitInstance.renderingKey === 'helicopter1' || unitInstance.renderingKey === 'helicopter2') {
-        // 直升机只有一种动画（旋翼旋转），无论什么状态
-        animConfig = MilitaryConfig.models[unitInstance.renderingKey].animationList[0];
-      }
-      
-      // 如果找到了动画配置，添加动画
-      if (animConfig) {
-        unitInstance.activeAnimation = unitInstance.activeModel.activeAnimations.add({
-          name: animConfig.name,
-          loop: animConfig.loop,
-          // 只使用安全的动画参数
-          multiplier: 1.0,
-          delay: 0.0
-        });
-      }
-    } catch (e) {
-      console.warn(`添加动画失败: ${unitInstance.renderingKey}，状态: ${status}`, e);
+  removeMoveAnimation(unitInstance) {
+    if (unitInstance.activeAnimation) {
+      unitInstance.activeModel.activeAnimations.remove(unitInstance.activeAnimation);
+      unitInstance.activeAnimation = null;
     }
   }
 
@@ -535,126 +417,91 @@ export class MilitaryInstanceRenderer {
       return;
     }
     
-    // 批量处理而不是创建单独的Promise
-    const unitsToUpdate = [];
-    
-    // 收集需要LOD更新的单元
+    // 创建LOD更新任务
+    const updatePromises = [];
+   
+    // 为所有兵种实例创建异步更新任务
     forceInstance.unitInstanceMap.forEach((unitInstance, unitInstanceId) => {
       // 保存forceId到unitInstance，确保动画状态检测正确
       if (forceInstance.force && forceInstance.force.forceId) {
         unitInstance.forceId = forceInstance.force.forceId;
       }
       
-      // 忽略没有显示模型或无效实例的单元
-      if (!unitInstance.activeModel || unitInstance.activeLOD < 0) return;
-      
-      // 获取当前模型位置
-      const modelPos = new Cesium.Cartesian3();
-      try {
-        Cesium.Matrix4.getTranslation(unitInstance.activeModel.modelMatrix, modelPos);
-        
-        // 计算与相机的距离
-        const distance = Cesium.Cartesian3.distance(cameraPos, modelPos);
-        
-        // 💡 新增: 动画距离控制 - 仅在2000米以内播放动画
-        const ANIMATION_DISTANCE_THRESHOLD = 2000;
-        const shouldPlayAnimation = distance <= ANIMATION_DISTANCE_THRESHOLD;
-        
-        // 如果超过动画距离且当前有动画在播放，停止动画
-        if (!shouldPlayAnimation && unitInstance.activeAnimation) {
-          unitInstance.activeModel.activeAnimations.removeAll();
-          unitInstance.activeAnimation = null;
-        }
-        
-        // 选择当前距离对应的的LOD级别
-        let targetLOD = 0;
-        for (let i = 0; i < unitInstance.lodModels.length; i++) {
-          const lod = unitInstance.lodModels[i]; 
-          if (distance >= lod.distance) {
-            targetLOD = i;
-          }
-        }
-        
-        // 如果需要切换LOD且目标LOD有效
-        if (targetLOD !== unitInstance.activeLOD) {
-          // 获取当前和目标LOD模型配置
-          const currentLodModel = unitInstance.lodModels[unitInstance.activeLOD];
-          const targetLodModel = unitInstance.lodModels[targetLOD];
-          
-          // 获取当前和目标LOD的距离
-          const oldDistance = currentLodModel.distance;
-          const newDistance = targetLodModel.distance;
-          
-          // 扩大LOD切换阈值，避免频繁切换
-          // 距离界限的±15%范围内不进行LOD切换，减少震荡
-          const boundary = Math.max(oldDistance, newDistance);
-          if (distance >= boundary * 0.85 && distance <= boundary * 1.15) {
-            return; // 在阈值内不切换LOD
+      const updatePromise = (async () => {
+        try {
+          // 忽略没有显示模型的实例
+          if (!unitInstance.activeModel || unitInstance.activeLOD < 0) {
+            return;
           }
           
-          // 收集需要更新的单元，并携带动画控制信息
-          unitsToUpdate.push({
-            unitInstance,
-            unitInstanceId,
-            targetLOD,
-            currentLodModel,
-            targetLodModel,
-            shouldPlayAnimation
-          });
-        } else if (shouldPlayAnimation) {
-          // 💡 新增：如果在动画阈值内，但没有动画在播放，且不需要LOD切换，添加动画
-          const isMoving = unitInstance.forceId ? 
-            this.movementController.movingForces.has(unitInstance.forceId) : false;
+          // 获取当前模型位置
+          const modelPos = new Cesium.Cartesian3();
+          try {
+            Cesium.Matrix4.getTranslation(unitInstance.activeModel.modelMatrix, modelPos);
+          } catch (e) {
+            console.warn(`[MilitaryInstanceRenderer] 获取模型位置失败: ${unitInstanceId}`, e);
+            return;
+          }
+          
+          // 计算与相机的距离
+          const distance = Cesium.Cartesian3.distance(cameraPos, modelPos);
+          
+          // 选择当前距离对应的的LOD级别
+          let targetLOD = 0;
+          for (let i = 0; i < unitInstance.lodModels.length; i++) {
+            const lod = unitInstance.lodModels[i]; 
+            if (distance >= lod.distance) {
+              targetLOD = i;
+            }
+          }
+          
+          // 如果需要切换LOD且目标LOD有效
+          if (targetLOD !== unitInstance.activeLOD) {
+            // 获取当前和目标LOD模型配置
+            const currentLodModel = unitInstance.lodModels[unitInstance.activeLOD];
+            const targetLodModel = unitInstance.lodModels[targetLOD];
+            
+            // 获取当前和目标LOD的距离
+            const oldDistance = currentLodModel.distance;
+            const newDistance = targetLodModel.distance;
+            // 位于这个分界线前后则不进行LOD切换，防止LOD切换频繁震荡
+            const boundary = Math.max(oldDistance, newDistance);
+            if (distance >= boundary * 0.9 && distance <= boundary * 1.1) {
+              return;
+            }
+               
+            // 先停止旧模型上的动画
+            if (unitInstance.activeAnimation) {
+              unitInstance.activeModel.activeAnimations.remove(unitInstance.activeAnimation);
+              unitInstance.activeAnimation = null;
+            } 
+            
+            // 复制当前模型的位置矩阵到目标模型，并隐藏原来的模型
+            if (currentLodModel.model !== targetLodModel.model) {
+              // 新模型可见性等于上个模型，因为可能上个模型处于视野范围外，是隐藏的
+              Cesium.Matrix4.clone(currentLodModel.model.modelMatrix, targetLodModel.model.modelMatrix);
+              targetLodModel.model.show = currentLodModel.model.show;
+              unitInstance.activeLOD = targetLOD;
+              unitInstance.activeModel = targetLodModel.model;
+              currentLodModel.model.show = false;
+            }
 
-          // 只为特定兵种添加动画
-          if (!unitInstance.activeAnimation && 
-              (unitInstance.renderingKey === 'soldier' || 
-               unitInstance.renderingKey === 'helicopter1' || 
-               unitInstance.renderingKey === 'helicopter2')) {
-            this._addAnimationNonAsync(unitInstance, isMoving ? 'moving' : 'idle');
+            // 移除动画
+            this.removeMoveAnimation(unitInstance);
           }
+        } catch (error) {
+          console.error(`[MilitaryInstanceRenderer] 更新LOD处理失败: ${unitInstanceId}`, error);
         }
-      } catch (e) {
-        console.warn(`[MilitaryInstanceRenderer] 获取模型位置失败: ${unitInstanceId}`, e);
-      }
+      })();
+      
+      updatePromises.push(updatePromise);
     });
     
-    // 如果没有需要更新的单元，直接返回
-    if (unitsToUpdate.length === 0) return;
-    
-    // 批量处理所有需要更新的单元
-    for (const {unitInstance, unitInstanceId, targetLOD, currentLodModel, targetLodModel, shouldPlayAnimation} of unitsToUpdate) {
-      try {
-        // 先停止旧模型上的动画
-        if (unitInstance.activeAnimation) {
-          unitInstance.activeModel.activeAnimations.remove(unitInstance.activeAnimation);
-          unitInstance.activeAnimation = null;
-        } 
-        
-        // 复制当前模型的位置矩阵到目标模型，并更新可见性
-        if (currentLodModel.model !== targetLodModel.model) {
-          // 新模型可见性等于上个模型，因为可能上个模型处于视野范围外，是隐藏的
-          Cesium.Matrix4.clone(currentLodModel.model.modelMatrix, targetLodModel.model.modelMatrix);
-          targetLodModel.model.show = currentLodModel.model.show;
-          unitInstance.activeLOD = targetLOD;
-          unitInstance.activeModel = targetLodModel.model;
-          currentLodModel.model.show = false;
-        }
-        
-        // 检查当前的移动状态
-        const isMoving = unitInstance.forceId ? 
-          this.movementController.movingForces.has(unitInstance.forceId) : false;
-        
-        // 💡修改：仅在距离阈值内且为特定兵种添加动画
-        if (shouldPlayAnimation && (unitInstance.renderingKey === 'soldier' || 
-            unitInstance.renderingKey === 'helicopter1' || 
-            unitInstance.renderingKey === 'helicopter2')) {
-          const animStatus = isMoving ? 'moving' : 'idle';
-          this._addAnimationNonAsync(unitInstance, animStatus);
-        }
-      } catch (error) {
-        console.error(`[MilitaryInstanceRenderer] LOD切换失败: ${unitInstanceId}`, error);
-      }
+    // 等待所有LOD更新任务完成
+    try {
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error(`LOD批量更新失败:`, error);
     }
   }
   

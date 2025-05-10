@@ -6,7 +6,7 @@ import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
 import { HexHeightCache } from "@/layers/scene-layer/components/HexHeightCache";
 import { ModelPoseCalculator } from "./ModelPoseCalculator";
-import { GeoMathUtils } from "@/utils/GeoMathUtils";
+import { GeoMathUtils } from "@/layers/scene-layer/utils/GeoMathUtils";
 import { MilitaryConfig } from "@/config/GameConfig";
 
 /**
@@ -587,12 +587,6 @@ export class MilitaryMovementController {
   _calTurnDuration(angleDiff) {
     // 将角度差转换为正值
     const absDiff = Math.abs(angleDiff);
-    
-    // 为小角度差设置最小有效转向时间
-    // 即使角度很小，也保证至少有500毫秒的转向时间
-    if (absDiff < 0.1) { // 约5.7度
-      return Math.max(500, this.config.minTurnDuration);
-    }
     
     // 基于角度差计算转向时间，角度越大，时间越长
     // 将角度差(弧度)除以基础转向速率(弧度/秒)得到转向时间(秒)

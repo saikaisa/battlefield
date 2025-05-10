@@ -65,19 +65,13 @@ export class ModelInstanceLoader {
     // 并行加载所有LOD级别模型
     const loadPromises = sortedLevels.map(async (lod) => {
       try {
-        // 加载模型 - 使用安全的优化选项
+        // 加载模型
         const model = await Cesium.Model.fromGltfAsync({
           url: lod.path,
           modelMatrix: Cesium.Matrix4.IDENTITY.clone(),
           scale: scale,
           allowPicking: false, 
-          shadows: Cesium.ShadowMode.DISABLED,     // 关闭阴影提高性能
-          incrementallyLoadTextures: true,         // 增量加载纹理
-          asynchronous: true,                      // 异步加载
-          // 安全的优化选项
-          compressVertices: true,                  // 压缩顶点
-          releaseGltfJson: true,                   // 释放GLTF JSON减少内存占用
-          clampAnimations: false                   // 避免动画问题
+          shadows: Cesium.ShadowMode.ENABLED
         });
         
         // 添加到LOD数组
