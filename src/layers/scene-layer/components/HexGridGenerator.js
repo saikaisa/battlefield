@@ -70,7 +70,7 @@ export class HexGridGenerator {
     // 采用行步长为 dy*0.5 实现交错排列
     for (let lat = minLat; lat <= maxLat; lat += this.dy * 0.5) {
       // 根据行号决定水平偏移
-      const offset = (row % 2 === 0) ? 0 : this.dx; // 相邻行的六角格在水平方向上因为错开排列，间隔为 1.5倍的六角格半径
+      const offset = (row % 2 === 0) ? 0 : this.dx; // 不同但相邻行的六角格在水平方向上因为错开排列，间隔为 1.5倍的六角格半径
       // console.log(`[HexGridGenerator] Row ${row}: lat=${lat.toFixed(6)} offset=${offset.toFixed(6)} (经度差)`);
       let col = 0;
       // 同一行的六角格相隔 3倍六角格半径的距离

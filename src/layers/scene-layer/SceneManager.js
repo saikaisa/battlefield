@@ -9,6 +9,7 @@ import { HexGridGenerator } from '@/layers/scene-layer/components/HexGridGenerat
 import { HexGridRenderer } from '@/layers/scene-layer/components/HexGridRenderer';
 import { HexHeightCache } from '@/layers/scene-layer/components/HexHeightCache';
 import { SceneInteractor } from '@/layers/interaction-layer/SceneInteractor';
+// import { FogOfWarManager } from "./components/FogOfWarManager";
 
 /**
  * 场景管理器（单例模式）
@@ -117,6 +118,11 @@ export class SceneManager {
       this.cameraViewController = CameraViewController.getInstance(this.viewer);
       this.cameraViewController.initialize();
       // ---------------- 相机系统加载结束 ----------------
+
+      // ---------------- 战争迷雾系统加载开始 ----------------
+      // this.fogOfWarManager = FogOfWarManager.getInstance(this.viewer);
+      // this.fogOfWarManager.enableDebug(false);
+      // ---------------- 战争迷雾系统加载结束 ----------------
 
       return this.viewer;
     } catch (error) {

@@ -62,17 +62,17 @@ export const LocationConfig = {
 
 /** 战场相关配置 */ 
 export const BattleConfig = {
-  locationName: LocationConfig.qingXian.name,
+  locationName: LocationConfig.greatRiftValley.name,
   center: {
-    lon: LocationConfig.qingXian.lon,
-    lat: LocationConfig.qingXian.lat,
+    lon: LocationConfig.greatRiftValley.lon,
+    lat: LocationConfig.greatRiftValley.lat,
     offset: 0.1
   },
 };
 
 /** 六角格相关配置 */ 
 export const HexConfig = {
-  radius: 200, // 六角格半径（单位：米，从中心到顶点的距离）
+  radius: 300, // 六角格半径（单位：米，从中心到顶点的距离）
   // 战场边界
   bounds: {
     minLon: BattleConfig.center.lon - BattleConfig.center.offset,
@@ -153,7 +153,7 @@ export const MilitaryConfig = {
   // 移动配置
   movementConfig: {
     defaultTurnDuration: 200, // 默认转向时间(毫秒)
-    baseSpeed: 20, // 基础移动速度（米/秒）
+    baseSpeed: HexConfig.radius / 2, // 基础移动速度（米/秒），应该为六角格半径的1/2
     baseTurnRate: 3,  // 基础转向速率(弧度/秒)，角度越小越快
     minTurnDuration: 100, // 最小转向时间(毫秒)
     maxTurnDuration: 800, // 最大转向时间(毫秒)

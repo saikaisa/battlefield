@@ -526,58 +526,21 @@ export class HexHeightCache {
    * @returns {Array<string>} 周围六角格ID数组
    */
   _findNearbyHexIds(hexId) {
-    // 获取六角格的行和列
+    // 获取六角格
     const cell = this.store.getHexCellById(hexId);
     if (!cell) {
       console.warn(`[HexHeightCache] 无效的六角格: ${hexId}`);
       return [];
     }
-    const { row, col } = cell.getRowCol();
     
-    // 构建更多可能的邻居（考虑六角格的排列方式）
-    // 每个六角格最多可能有6个邻居
-    const neighborIds = [];
+    // 使用getHexCellInRange获取半径为2的范围内的所有六角格
+    const radius = 2;
+    const neighborCells = cell.getHexCellInRange(radius);
     
-    // 首先尝试添加常规的6个邻居
-    // 对于平顶六角格，偶数行和奇数行的邻居模式不同
-    const offsets = [];
-    
-    if (row % 2 === 0) {
-      // 偶数行：左上、右上、左、右、左下、右下
-      offsets.push(
-        [-1, -1], [-1, 0],  // 左上、右上
-        [0, -1], [0, 1],    // 左、右
-        [1, -1], [1, 0]     // 左下、右下
-      );
-    } else {
-      // 奇数行：左上、右上、左、右、左下、右下
-      offsets.push(
-        [-1, 0], [-1, 1],   // 左上、右上
-        [0, -1], [0, 1],    // 左、右
-        [1, 0], [1, 1]      // 左下、右下
-      );
-    }
-    
-    // 添加更多可能的邻居（扩展搜索范围）
-    offsets.push(
-      [-2, -1], [-2, 0], [-2, 1], // 上两行
-      [-1, -2], [-1, 2],          // 上一行左2、右2
-      [0, -2], [0, 2],            // 同行左2、右2
-      [1, -2], [1, 2],            // 下一行左2、右2
-      [2, -1], [2, 0], [2, 1]     // 下两行
-    );
-    
-    // 检查所有可能的邻居
-    for (const [rowOffset, colOffset] of offsets) {
-      const neighborRow = row + rowOffset;
-      const neighborCol = col + colOffset;
-      const neighborId = `H_${neighborRow}_${neighborCol}`;
-      
-      // 如果该邻居在缓存中存在，添加到列表
-      if (this.hexHeightCache.has(neighborId)) {
-        neighborIds.push(neighborId);
-      }
-    }
+    // 过滤掉不在缓存中的六角格，并提取ID
+    const neighborIds = neighborCells
+      .filter(neighbor => neighbor && this.hexHeightCache.has(neighbor.hexId))
+      .map(neighbor => neighbor.hexId);
     
     if (neighborIds.length === 0) {
       console.warn(`[HexHeightCache] 六角格 ${hexId} 没有找到任何邻居`);

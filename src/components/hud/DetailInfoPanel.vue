@@ -20,7 +20,8 @@
           <div class="info-row">
             <span class="info-label">位置:</span>
             <span class="info-value" v-if="selectedHexCenter">
-              ({{ selectedHexCenter.latitude.toFixed(3) }}°, {{ selectedHexCenter.longitude.toFixed(3) }}°)
+              ({{ selectedHexCenter.latitude.toFixed(3) > 0 ? selectedHexCenter.latitude.toFixed(3) + '°N' : Math.abs(selectedHexCenter.latitude.toFixed(3)) + '°S' }}, 
+              {{ selectedHexCenter.longitude.toFixed(3) > 0 ? selectedHexCenter.longitude.toFixed(3) + '°E' : Math.abs(selectedHexCenter.longitude.toFixed(3)) + '°W' }})
             </span>
             <span class="info-value" v-else>未知位置</span>
           </div>
@@ -101,20 +102,32 @@
                   <!-- 陆地火力行 -->
                   <tr class="firepower-row land-row">
                     <td class="row-header">陆</td>
-                    <td class="col-value">{{ getFirepowerValue('attack', 'land') }}</td>
-                    <td class="col-value">{{ getFirepowerValue('defense', 'land') }}</td>
+                    <td class="col-value" :title="getFirepowerValue('attack', 'land')">
+                      {{ formatNumber(getFirepowerValue('attack', 'land')) }}
+                    </td>
+                    <td class="col-value" :title="getFirepowerValue('defense', 'land')">
+                      {{ formatNumber(getFirepowerValue('defense', 'land')) }}
+                    </td>
                   </tr>
                   <!-- 海洋火力行 -->
                   <tr class="firepower-row sea-row">
                     <td class="row-header">海</td>
-                    <td class="col-value">{{ getFirepowerValue('attack', 'sea') }}</td>
-                    <td class="col-value">{{ getFirepowerValue('defense', 'sea') }}</td>
+                    <td class="col-value" :title="getFirepowerValue('attack', 'sea')">
+                      {{ formatNumber(getFirepowerValue('attack', 'sea')) }}
+                    </td>
+                    <td class="col-value" :title="getFirepowerValue('defense', 'sea')">
+                      {{ formatNumber(getFirepowerValue('defense', 'sea')) }}
+                    </td>
                   </tr>
                   <!-- 空中火力行 -->
                   <tr class="firepower-row air-row">
                     <td class="row-header">空</td>
-                    <td class="col-value">{{ getFirepowerValue('attack', 'air') }}</td>
-                    <td class="col-value">{{ getFirepowerValue('defense', 'air') }}</td>
+                    <td class="col-value" :title="getFirepowerValue('attack', 'air')">
+                      {{ formatNumber(getFirepowerValue('attack', 'air')) }}
+                    </td>
+                    <td class="col-value" :title="getFirepowerValue('defense', 'air')">
+                      {{ formatNumber(getFirepowerValue('defense', 'air')) }}
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -124,10 +137,10 @@
             <div class="detail-column attributes-column">
               <div class="column-header">属性</div>
               <div class="attr-groups-container">
-                <!-- 第一组：战斗机会数、士气值 -->
+                <!-- 第一组：战斗机会、士气值 -->
                 <div class="attr-group">
                   <div class="attr-row">
-                    <span class="attr-label">战斗机会数:</span>
+                    <span class="attr-label">战斗机会:</span>
                     <span class="attr-value">{{ selectedForce.combatChance }}</span>
                   </div>
                   <div class="attr-row">
@@ -138,10 +151,10 @@
                 
                 <div class="attr-divider"></div>
                 
-                <!-- 第二组：兵力回复速率、疲劳系数 -->
+                <!-- 第二组：兵力恢复速率、疲劳系数 -->
                 <div class="attr-group">
                   <div class="attr-row">
-                    <span class="attr-label">兵力回复速率:</span>
+                    <span class="attr-label">恢复速率:</span>
                     <span class="attr-value">{{ selectedForce.recoveryRate || 0 }}</span>
                   </div>
                   <div class="attr-row">
@@ -403,6 +416,23 @@ function getPassableTypes(hex) {
   return types.length > 0 ? types.join('、') : '无';
 }
 
+// 格式化大数字，使用m表示百万级，b表示十亿级
+function formatNumber(num) {
+  if (!num || isNaN(num)) return '0';
+  
+  // 转为数字确保格式化正确
+  num = Number(num);
+  
+  if (num >= 1000000000) {
+    return (num / 1000000000).toFixed(1) + 'b';
+  } else if (num >= 1000000) {
+    return (num / 1000000).toFixed(1) + 'm';
+  } else {
+    // 百万以下数字精确显示
+    return String(num);
+  }
+}
+
 // 辅助函数：获取火力值
 function getFirepowerValue(type, dimension) {
   if (!selectedForce.value) return 'N/A';
@@ -424,10 +454,10 @@ function getFirepowerValue(type, dimension) {
         attackData = selectedForce.value.attackFirepower;
       }
       
-      // 返回对应维度的值
-      if (dimension === 'land') return attackData?.land || '0';
-      if (dimension === 'sea') return attackData?.sea || '0';
-      if (dimension === 'air') return attackData?.air || '0';
+      // 返回格式化后的值
+      if (dimension === 'land') return attackData?.land || 0;
+      if (dimension === 'sea') return attackData?.sea || 0;
+      if (dimension === 'air') return attackData?.air || 0;
     }
     
     // 防御火力值获取
@@ -446,10 +476,10 @@ function getFirepowerValue(type, dimension) {
         defenseData = selectedForce.value.defenseFirepower;
       }
       
-      // 返回对应维度的值
-      if (dimension === 'land') return defenseData?.land || '0';
-      if (dimension === 'sea') return defenseData?.sea || '0';
-      if (dimension === 'air') return defenseData?.air || '0';
+      // 返回格式化后的值
+      if (dimension === 'land') return defenseData?.land || 0;
+      if (dimension === 'sea') return defenseData?.sea || 0;
+      if (dimension === 'air') return defenseData?.air || 0;
     }
     
     return '0';
@@ -564,11 +594,6 @@ function executeCommand(commandType, params = {}) {
     return;
   }
   
-  // 默认使用选中的部队ID
-  if (!params.forceId && selectedForce.value) {
-    params.forceId = selectedForce.value.forceId;
-  }
-  
   // 根据命令类型执行对应操作
   switch (commandType) {
     case CommandType.MOVE_PREPARE:
@@ -603,9 +628,12 @@ function executeCommand(commandType, params = {}) {
       // 提取选中的六角格作为路径
       const path = Array.from(store.selectedHexIds);
       console.log('执行移动，路径:', path);
+
+      // 移动的部队id应为第一个选中的部队
+      const forceId = Array.from(store.selectedForceIds)[0];
       
       CommandService.executeCommandFromUI(commandType, { 
-        forceId: params.forceId,
+        forceId: forceId,
         path: path
       }).then(() => {
         console.log('移动命令已执行');
@@ -628,9 +656,12 @@ function executeCommand(commandType, params = {}) {
       const hexIds = Array.from(store.selectedHexIds);
       const targetHex = hexIds[hexIds.length - 1];
       console.log('执行攻击，目标:', targetHex);
+
+      // 攻击的指挥部队id应为第一个选中的部队
+      const forceId = Array.from(store.selectedForceIds)[0];
       
       CommandService.executeCommandFromUI(commandType, { 
-        commandForceId: params.forceId,
+        commandForceId: forceId,
         targetHex: targetHex,
         supportForceIds: [] // 暂时不支持支援部队
       }).then(() => {
@@ -920,7 +951,6 @@ const serviceMap = {
 }
 
 .detail-column {
-  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -930,15 +960,20 @@ const serviceMap = {
 }
 
 .firepower-column {
+  flex: 0 0 40%;
+  width: 40%;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .attributes-column {
+  flex: 0 0 30%;
+  width: 30%;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .composition-column {
-  flex: 1;
+  flex: 0 0 30%;
+  width: 30%;
   overflow-y: auto;
 }
 
@@ -1012,8 +1047,8 @@ const serviceMap = {
 }
 
 .attr-label {
-  min-width: 90px;
-  max-width: 90px;
+  min-width: 60px;
+  max-width: 60px;
   color: rgba(255, 255, 255, 0.7);
   font-size: 11px;
   overflow: hidden;
@@ -1066,6 +1101,8 @@ const serviceMap = {
   display: flex;
   padding: 3px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .units-row:hover {
@@ -1081,20 +1118,25 @@ const serviceMap = {
 }
 
 .unit-type {
-  flex: 2;
-  padding: 0 8px;
+  flex: 1;
+  padding-left: 8px;
+  padding-right: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
+  box-sizing: border-box;
 }
 
 .unit-count {
-  flex: 1;
+  width: 40px;
   min-width: 40px;
+  max-width: 40px;
   text-align: right;
-  padding: 0 8px;
+  padding-right: 8px;
   font-size: 11px;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 /* 命令按钮区 */
@@ -1240,6 +1282,19 @@ const serviceMap = {
   font-size: 12px;
   padding: 6px 4px;
   color: rgba(255, 255, 255, 0.9);
+}
+
+.row-header {
+  width: 20px;
+  padding: 6px 2px;
+}
+
+.col-empty {
+  width: 20px;
+}
+
+.col-header {
+  width: calc(50% - 10px);
 }
 
 .col-value {

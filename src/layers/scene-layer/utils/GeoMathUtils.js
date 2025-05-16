@@ -119,32 +119,61 @@ export class GeoMathUtils {
   }
 
   /**
-   * 计算两点之间的距离（米）
+   * 计算两点之间的2d距离（米）
    * @param {Object} from 起点 {longitude, latitude}（十进制度数）
    * @param {Object} to 终点 {longitude, latitude}（十进制度数）
-   * @returns {number} 距离（米）
+   * @returns {number} 2d距离（米）
+   */
+    static calculateDistance2D(from, to) {
+      const from2D = {
+        longitude: from.longitude,
+        latitude: from.latitude,
+        height: 0
+      };
+      const to2D = {
+        longitude: to.longitude,
+        latitude: to.latitude,
+        height: 0
+      };
+      return GeoMathUtils.calculateDistance(from2D, to2D);
+    }
+
+  /**
+   * 计算两点之间的距离（米）
+   * @param {Object} from 起点 {longitude, latitude, height}（十进制度数，高度单位为米）
+   * @param {Object} to 终点 {longitude, latitude, height}（十进制度数，高度单位为米）
+   * @returns {number} 空间直线距离（米）
    */
   static calculateDistance(from, to) {
-    // 转换为Cesium坐标点
-    const fromCartographic = Cesium.Cartographic.fromDegrees(from.longitude, from.latitude);
-    const toCartographic = Cesium.Cartographic.fromDegrees(to.longitude, to.latitude);
+    // 转换为Cesium坐标点，包含高度信息
+    const fromCartographic = new Cesium.Cartographic(
+      Cesium.Math.toRadians(from.longitude),
+      Cesium.Math.toRadians(from.latitude),
+      from.height || 0
+    );
+    
+    const toCartographic = new Cesium.Cartographic(
+      Cesium.Math.toRadians(to.longitude),
+      Cesium.Math.toRadians(to.latitude),
+      to.height || 0
+    );
     
     // 转换为笛卡尔坐标
     const fromCartesian = Cesium.Cartographic.toCartesian(fromCartographic);
     const toCartesian = Cesium.Cartographic.toCartesian(toCartographic);
     
-    // 计算距离
+    // 计算空间直线距离
     return Cesium.Cartesian3.distance(fromCartesian, toCartesian);
   }
 
   /**
-   * 线性插值两点之间的位置
+   * 线性插值两点之间的位置（不考虑高度）
    * @param {Object} from 起点 {longitude, latitude}（十进制度数）
    * @param {Object} to 终点 {longitude, latitude}（十进制度数）
    * @param {number} t 插值因子 (0-1)
    * @returns {Object} 插值结果 {longitude, latitude}
    */
-  static lerpPosition(from, to, t) {
+  static lerp2DPosition(from, to, t=1) {
     // 确保t在0-1范围内
     t = Math.max(0, Math.min(1, t));
     
@@ -196,54 +225,5 @@ export class GeoMathUtils {
     if (diff < -Math.PI) diff += 2 * Math.PI;
     
     return diff;
-  }
-
-  /**
-   * 创建东北天(ENU)坐标系到ECEF的变换矩阵
-   * @param {Object} position 位置 {longitude, latitude, height}
-   * @param {Object} direction 方向 {heading, pitch, roll}
-   * @returns {Cesium.Matrix4} 变换矩阵
-   */
-  static createTransformMatrix(position, direction = {}) {
-    if (!position) return Cesium.Matrix4.IDENTITY;
-
-    // 创建位置点
-    const cartesian = Cesium.Cartesian3.fromDegrees(
-      position.longitude,
-      position.latitude,
-      position.height || 0
-    );
-
-    // 创建基础ENU矩阵
-    const enuMatrix = Cesium.Transforms.eastNorthUpToFixedFrame(cartesian);
-    
-    // 如果有方向，应用旋转
-    if (direction && direction.heading !== undefined) {
-      // 创建绕Z轴旋转的矩阵
-      const headingRotation = Cesium.Matrix3.fromRotationZ(direction.heading || 0);
-      
-      if (direction.pitch !== undefined && direction.pitch !== 0) {
-        // 如果有俯仰角，围绕X轴旋转
-        const pitchRotation = Cesium.Matrix3.fromRotationX(direction.pitch);
-        Cesium.Matrix3.multiply(headingRotation, pitchRotation, headingRotation);
-      }
-      
-      if (direction.roll !== undefined && direction.roll !== 0) {
-        // 如果有翻滚角，围绕Y轴旋转
-        const rollRotation = Cesium.Matrix3.fromRotationY(direction.roll);
-        Cesium.Matrix3.multiply(headingRotation, rollRotation, headingRotation);
-      }
-      
-      // 创建旋转矩阵
-      const rotationMatrix = Cesium.Matrix4.fromRotationTranslation(
-        headingRotation,
-        Cesium.Cartesian3.ZERO
-      );
-      
-      // 将旋转应用到ENU矩阵
-      Cesium.Matrix4.multiply(enuMatrix, rotationMatrix, enuMatrix);
-    }
-
-    return enuMatrix;
   }
 } 

@@ -16,7 +16,7 @@
     </div>
   </div>
 </template>
-
+ 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, onUnmounted } from 'vue';
 import { SceneManager } from '@/layers/scene-layer/SceneManager';
@@ -26,6 +26,7 @@ import OverviewPanel from '@/components/hud/OverviewPanel.vue';
 import DetailInfoPanel from '@/components/hud/DetailInfoPanel.vue';
 import FormationPanel from '@/components/hud/FormationPanel.vue';
 import CommandPanel from '@/components/hud/CommandPanel.vue';
+// eslint-disable-next-line no-unused-vars
 import { runTests, runMovementTestOnly } from '@/test/test';
 
 // viewer 引用
@@ -37,6 +38,7 @@ const gameReady = ref(false);
 let sceneManager;
 let militaryManager;
 let commandDispatcher;
+
 
 onMounted(async () => {
   // 初始化场景管理器
@@ -59,10 +61,10 @@ onMounted(async () => {
   runTests();
   
   // 等待足够时间后测试移动功能（确保地图和部队都加载完成）
-  setTimeout(() => {
-    console.log('[App] 延时后测试移动功能...');
-    runMovementTestOnly();
-  }, 30000);
+  // setTimeout(() => {
+  //   console.log('[App] 延时后测试移动功能...');
+  //   runMovementTestOnly();
+  // }, 15000);
 });
 
 onBeforeUnmount(() => {
@@ -102,5 +104,33 @@ onUnmounted(() => {
   transform: translate(-50%, -50%);
   font-size: 20px;
   color: #333;
+}
+.test-control-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 5px;
+  color: white;
+}
+.test-control-panel button {
+  margin: 5px;
+  padding: 5px 10px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.test-control-panel button:hover {
+  background: #45a049;
+}
+.test-report {
+  margin-top: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 10px;
+  border-radius: 3px;
 }
 </style>

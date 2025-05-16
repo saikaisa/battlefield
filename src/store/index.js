@@ -7,6 +7,7 @@ import { RuleConfig } from "@/config/GameConfig";
 import { CommandLimit } from "@/config/CommandConfig";
 import { GameMode } from "@/config/GameModeConfig";
 import { HexVisualStyles } from "@/config/HexVisualStyles";
+import { OverviewConsole } from "@/layers/interaction-layer/utils/OverviewConsole";
 
 /** 工具函数：把传入对象转成"已 reactive 的指定类实例" */
 function Rea(input, ClassCtor) {
@@ -261,16 +262,13 @@ export const openGameStore = defineStore("gameStore", () => {
       selectedHexIds.delete(id);
       selectedHexIds.add(id);
     }
-
     if (lockedSelection.hexIds.has(id)) {
       return;
     }
-
     // 检查当前模式下是否允许多选，如果不允许则先清空
     if (selectMode.value === 'single' && selectedHexIds.size > 0) {
-      selectedHexIds.clear();
+      clearSelectedHexIds();
     }
-    
     // 添加新的选中ID
     selectedHexIds.add(id);
   };
@@ -308,12 +306,10 @@ export const openGameStore = defineStore("gameStore", () => {
     if (lockedSelection.forceIds.has(id)) {
       return;
     }
-
     // 单选模式下只能选中一个部队
     if (selectMode.value === 'single') {
-      selectedForceIds.clear();
+      clearSelectedForceIds();
     }
-
     // 添加部队所在的六角格，会自动根据单选/多选模式选中，以及linked同步
     addSelectedHexId(force.hexId);
     // 再添加部队，以防出现先添加部队但未添加六角格而又被linked模式移除的情况
@@ -498,6 +494,9 @@ export const openGameStore = defineStore("gameStore", () => {
     return disabledButtons.has(buttonId);
   }
 
+  /** 获取总览控制台 */
+  const getOverviewConsole = () => OverviewConsole;
+
   return {
     // 状态导出
     layerIndex,
@@ -621,5 +620,8 @@ export const openGameStore = defineStore("gameStore", () => {
     setCameraControlEnabled,
     isPanelDisabled,
     isButtonDisabled,
+
+    // 控制台方法
+    getOverviewConsole
   };
 });

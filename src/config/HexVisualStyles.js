@@ -77,15 +77,15 @@ export const HexVisualStyles = {
     showFill: true,
     showBorder: true
   },
-  // 不可见遮罩
+  // 战争迷雾
   invisible: {
     layer: 'mark',
     type: 'invisible',
     priority: 1,
-    fillColor: Cesium.Color.BLACK.withAlpha(0.5),
-    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
+    fillColor: Cesium.Color.BLACK.withAlpha(0.7),
+    borderColor: Cesium.Color.BLACK.withAlpha(0.7),
     showFill: true,
-    showBorder: true
+    showBorder: false
   },
   // =========================== 交互层 ===========================
   // 选中高亮：默认黄色

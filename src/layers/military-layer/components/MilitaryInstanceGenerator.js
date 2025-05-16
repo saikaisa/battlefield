@@ -6,15 +6,16 @@ import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 // eslint-disable-next-line no-unused-vars
 import { ModelInstanceLoader } from "./ModelInstanceLoader";
 import { MilitaryConfig } from "@/config/GameConfig";
-import { ModelPoseCalculator } from "./ModelPoseCalculator";
+import { ModelPoseCalculator } from "../utils/ModelPoseCalculator";
 
 /**
  * 军事单位实例生成器
  *
  * 主要职责：
- * 1. 管理部队、兵种实例的生成
- * 2. 计算部队位置和初始化姿态
- * 3. 维护部队在六角格内的排布
+ * 1. 计算渲染组并创建兵种实例
+ * 2. 管理部队实例的生成
+ * 3. 计算部队初始位置和朝向
+ * 4. 维护部队在六角格内的排布
  */
 export class MilitaryInstanceGenerator {
   // 单例实例

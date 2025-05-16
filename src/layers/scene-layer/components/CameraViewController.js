@@ -2,7 +2,7 @@
 import * as Cesium from "cesium";
 import { openGameStore } from "@/store";
 import { CameraConfig, HexConfig } from "@/config/GameConfig";
-import { CameraView } from "@/models/CameraView";
+import { CameraView } from "@/layers/scene-layer/utils/CameraView";
 // eslint-disable-next-line no-unused-vars
 import { HexCell } from "@/models/HexCell";
 import { watch } from "vue";

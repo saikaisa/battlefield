@@ -1,9 +1,9 @@
-// src\layers\military-layer\components\MilitaryBattleController.js
+// src\layers\military-layer\components\BattleController.js
 // eslint-disable-next-line no-unused-vars
 import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
-import { ModelPoseCalculator } from "./ModelPoseCalculator";
+import { ModelPoseCalculator } from "../utils/ModelPoseCalculator";
 
 /**
  * 军事战斗控制器
@@ -13,20 +13,20 @@ import { ModelPoseCalculator } from "./ModelPoseCalculator";
  * 2. 处理战斗结果的视觉反馈
  * 3. 协调战斗过程中的模型行为
  */
-export class MilitaryBattleController {
+export class BattleController {
   // 单例实例
   static #instance = null;
   
   /**
    * 获取单例实例
    * @param {Cesium.Viewer} viewer Cesium Viewer实例
-   * @returns {MilitaryBattleController} 单例实例
+   * @returns {BattleController} 单例实例
    */
   static getInstance(viewer) {
-    if (!MilitaryBattleController.#instance) {
-      MilitaryBattleController.#instance = new MilitaryBattleController(viewer);
+    if (!BattleController.#instance) {
+      BattleController.#instance = new BattleController(viewer);
     }
-    return MilitaryBattleController.#instance;
+    return BattleController.#instance;
   }
   
   /**
@@ -237,6 +237,6 @@ export class MilitaryBattleController {
    * 销毁实例
    */
   destroy() {
-    MilitaryBattleController.#instance = null;
+    BattleController.#instance = null;
   }
 }

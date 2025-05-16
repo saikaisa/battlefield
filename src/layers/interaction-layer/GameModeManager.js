@@ -6,6 +6,7 @@
  */
 import { GameMode, ModesConfig, GameModeNames, GamePanels } from '@/config/GameModeConfig';
 import { openGameStore } from '@/store';
+import { OverviewConsole } from './utils/OverviewConsole';
 
 /**
  * 游戏模式管理器
@@ -33,6 +34,9 @@ export class GameModeManager {
     // 保存选中六角格和部队id
     this._lastSelectedHexIds = [];
     this._lastSelectedForceIds = [];
+    
+    // 保存总览控制台内容
+    this._lastConsoleContent = null;
 
     // 初始化为自由模式
     this.setMode(GameMode.FREE);
@@ -83,6 +87,7 @@ export class GameModeManager {
   saveSelectedHexIds() {
     this._lastSelectedHexIds = Array.from(this.store.getSelectedHexIds());
     this._lastSelectedForceIds = Array.from(this.store.getSelectedForceIds());
+    return this;
   }
 
   /**
@@ -91,6 +96,7 @@ export class GameModeManager {
   restoreSelectedHexIds() {
     this.store.setSelectedHexIds(this._lastSelectedHexIds);
     this.store.setSelectedForceIds(this._lastSelectedForceIds);
+    return this;
   }
 
   /**
@@ -98,6 +104,7 @@ export class GameModeManager {
    */
   setLockedSelection(hexIds, forceIds) {
     this.store.setLockedSelection(hexIds, forceIds);
+    return this;
   }
 
   /**
@@ -105,6 +112,32 @@ export class GameModeManager {
    */
   clearLockedSelection() {
     this.store.clearLockedSelection();
+    return this;
+  }
+
+  /**
+   * 保存控制台内容
+   */
+  saveConsoleContent() {
+    this._lastConsoleContent = OverviewConsole.getContent();
+    return this;
+  }
+
+  /**
+   * 恢复控制台内容
+   * @returns {boolean} 是否成功恢复
+   */
+  restoreConsoleContent() {
+    OverviewConsole.setContent(this._lastConsoleContent);
+    return this;
+  }
+
+  /**
+   * 清除控制台
+   */
+  clearConsole() {
+    OverviewConsole.clear();
+    return this;
   }
   
   // ==================== 私有辅助方法 ====================
@@ -138,10 +171,12 @@ export class GameModeManager {
 
     // 1. 设置相机控制
     this.store.setCameraControlEnabled(inter.cameraControl !== undefined ? inter.cameraControl : true);
-    
+    console.log(`CameraControl IS SET TO : ${inter.cameraControl  }`);
+
     // 2. 应用选择维护规则
-    if (inter.mouseInteract) {
+    if (inter.mouseInteract !== undefined) {
       this.store.setMouseInteract(inter.mouseInteract);
+      console.log(`MOUSEINTERACT IS SET TO : ${inter.mouseInteract}`);
     }
     if (inter.selectMode) {
       this.store.setSelectMode(inter.selectMode);
@@ -184,4 +219,16 @@ export const gameModeService = {
   clearLockedSelection() {
     return GameModeManager.getInstance().clearLockedSelection();
   },
+
+  saveConsoleContent() {
+    return GameModeManager.getInstance().saveConsoleContent();
+  },
+
+  restoreConsoleContent() {
+    return GameModeManager.getInstance().restoreConsoleContent();
+  },
+
+  clearConsole() {
+    return GameModeManager.getInstance().clearConsole();
+  }
 }; 

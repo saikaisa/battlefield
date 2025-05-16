@@ -80,8 +80,8 @@ export async function runTests() {
     }
 
     // 添加单独测试移动功能的调用
-    console.log('[Test] 尝试单独测试移动功能...');
-    await testMoveSingleForce();
+    // console.log('[Test] 尝试单独测试移动功能...');
+    // await testMoveSingleForce();
     
   } catch (error) {
     console.error('[Test] 测试过程出错:', error);
@@ -104,26 +104,26 @@ export async function createBasicUnits() {
     // 1. 普通步兵
     const infantry = {
       unitId: null,  // 自动生成ID
-      unitName: '普通步兵',
+      unitName: '超级无敌牛逼的普通步兵一批',
       service: ['land'],
       category: '步兵',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
-        baseAttackPower: 20,
+        baseAttackPower: 20000000,
         domainFactor: { land: 1.0, sea: 0.2, air: 0.5 },
         terrainFactor: { plain: 1.0, hill: 0.8, mountain: 0.6, water: 0.1 }
       },
       defensePowerComposition: {
-        baseDefensePower: 15,
+        baseDefensePower: 15000000,
         domainFactor: { land: 1.0, sea: 0.2, air: 0.3 },
         terrainFactor: { plain: 1.0, hill: 1.2, mountain: 1.5, water: 0.1 }
       },
-      visibilityRadius: 2,
+      visibilityRadius: 8,
       actionPointCostComposition: {
-        baseActionPointCost: 10,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.5, mountain: 2.0, water: 5.0 }
       },
-      recoveryRate: 10,
+      recoveryRate: 1000000,
       commandCapability: 1.2,
       commandRange: 1,
       renderingKey: "soldier"
@@ -137,18 +137,18 @@ export async function createBasicUnits() {
       category: '装甲',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
-        baseAttackPower: 40,
+        baseAttackPower: 40000000,
         domainFactor: { land: 1.0, sea: 0.1, air: 0.7 },
         terrainFactor: { plain: 1.0, hill: 0.8, mountain: 0.4, water: 0 }
       },
       defensePowerComposition: {
-        baseDefensePower: 30,
+        baseDefensePower: 30000000,
         domainFactor: { land: 1.0, sea: 0.1, air: 0.5 },
         terrainFactor: { plain: 1.0, hill: 0.9, mountain: 0.7, water: 0 }
       },
-      visibilityRadius: 3,
+      visibilityRadius: 7,
       actionPointCostComposition: {
-        baseActionPointCost: 15,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.8, mountain: 3.0, water: 10.0 }
       },
       recoveryRate: 5,
@@ -165,18 +165,18 @@ export async function createBasicUnits() {
       category: '直升机',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
-        baseAttackPower: 35,
+        baseAttackPower: 35000000000,
         domainFactor: { land: 1.0, sea: 0.8, air: 1.2 },
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
       defensePowerComposition: {
-        baseDefensePower: 20,
+        baseDefensePower: 20000000000,
         domainFactor: { land: 0.5, sea: 0.5, air: 1.0 },
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
-      visibilityRadius: 4,
+      visibilityRadius: 10,
       actionPointCostComposition: {
-        baseActionPointCost: 8,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
       recoveryRate: 8,
@@ -193,18 +193,18 @@ export async function createBasicUnits() {
       category: '炮兵',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
-        baseAttackPower: 50,
+        baseAttackPower: 5000000000,
         domainFactor: { land: 1.2, sea: 0.6, air: 0.3 },
         terrainFactor: { plain: 1.0, hill: 0.9, mountain: 0.7, water: 0 }
       },
       defensePowerComposition: {
-        baseDefensePower: 15,
+        baseDefensePower: 150000000,
         domainFactor: { land: 1.0, sea: 0.1, air: 0.2 },
         terrainFactor: { plain: 1.0, hill: 1.1, mountain: 1.3, water: 0 }
       },
-      visibilityRadius: 3,
+      visibilityRadius: 6,
       actionPointCostComposition: {
-        baseActionPointCost: 12,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.6, mountain: 2.5, water: 10.0 }
       },
       recoveryRate: 6,
@@ -221,18 +221,18 @@ export async function createBasicUnits() {
       category: '舰艇',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
-        baseAttackPower: 60,
+        baseAttackPower: 600000,
         domainFactor: { land: 0.7, sea: 1.0, air: 0.8 },
         terrainFactor: { plain: 0, hill: 0, mountain: 0, water: 1.0 }
       },
       defensePowerComposition: {
-        baseDefensePower: 45,
+        baseDefensePower: 450000,
         domainFactor: { land: 0.5, sea: 1.0, air: 0.7 },
         terrainFactor: { plain: 0, hill: 0, mountain: 0, water: 1.0 }
       },
-      visibilityRadius: 5,
+      visibilityRadius: 8,
       actionPointCostComposition: {
-        baseActionPointCost: 20,
+        baseActionPointCost: 2,
         terrainFactor: { plain: 10.0, hill: 10.0, mountain: 10.0, water: 1.0 }
       },
       recoveryRate: 4,
@@ -249,18 +249,18 @@ export async function createBasicUnits() {
       category: '战机',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
-        baseAttackPower: 45,
+        baseAttackPower: 45000000000001,
         domainFactor: { land: 0.8, sea: 0.8, air: 1.5 },
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
       defensePowerComposition: {
-        baseDefensePower: 25,
+        baseDefensePower: 25000000000002,
         domainFactor: { land: 0.3, sea: 0.3, air: 1.2 },
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
-      visibilityRadius: 6,
+      visibilityRadius: 10,
       actionPointCostComposition: {
-        baseActionPointCost: 10,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
       recoveryRate: 7,
@@ -277,18 +277,18 @@ export async function createBasicUnits() {
       category: '无人机',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
-        baseAttackPower: 10,
+        baseAttackPower: 100000,
         domainFactor: { land: 0.5, sea: 0.5, air: 0.5 },
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
       defensePowerComposition: {
-        baseDefensePower: 10,
+        baseDefensePower: 100000,
         domainFactor: { land: 0.3, sea: 0.3, air: 0.8 },
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
-      visibilityRadius: 8,
+      visibilityRadius: 10,
       actionPointCostComposition: {
-        baseActionPointCost: 5,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
       recoveryRate: 10,
@@ -362,9 +362,9 @@ export async function createAdvancedUnits() {
         domainFactor: { land: 1.1, sea: 0.4, air: 0.5 },
         terrainFactor: { plain: 1.0, hill: 1.2, mountain: 1.3, water: 0.3 }
       },
-      visibilityRadius: 3,
+      visibilityRadius: 6,
       actionPointCostComposition: {
-        baseActionPointCost: 8,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.1, mountain: 1.2, water: 3.0 }
       },
       recoveryRate: 12,
@@ -390,9 +390,9 @@ export async function createAdvancedUnits() {
         domainFactor: { land: 1.0, sea: 0.2, air: 0.4 },
         terrainFactor: { plain: 1.1, hill: 0.9, mountain: 0.6, water: 0.0 }
       },
-      visibilityRadius: 3,
+      visibilityRadius: 6,
       actionPointCostComposition: {
-        baseActionPointCost: 7,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 0.8, hill: 1.3, mountain: 2.0, water: 10.0 }
       },
       recoveryRate: 9,
@@ -418,9 +418,9 @@ export async function createAdvancedUnits() {
         domainFactor: { land: 0.9, sea: 0.1, air: 0.2 },
         terrainFactor: { plain: 0.9, hill: 1.0, mountain: 1.1, water: 0.0 }
       },
-      visibilityRadius: 3,
+      visibilityRadius: 6,
       actionPointCostComposition: {
-        baseActionPointCost: 14,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.7, mountain: 2.8, water: 10.0 }
       },
       recoveryRate: 5,
@@ -446,9 +446,9 @@ export async function createAdvancedUnits() {
         domainFactor: { land: 0.0, sea: 1.2, air: 0.5 },
         terrainFactor: { plain: 0, hill: 0, mountain: 0, water: 1.0 }
       },
-      visibilityRadius: 4,
+      visibilityRadius: 5,
       actionPointCostComposition: {
-        baseActionPointCost: 18,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 10.0, hill: 10.0, mountain: 10.0, water: 1.0 }
       },
       recoveryRate: 3,
@@ -474,9 +474,9 @@ export async function createAdvancedUnits() {
         domainFactor: { land: 0.6, sea: 0.6, air: 1.1 },
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
-      visibilityRadius: 5,
+      visibilityRadius: 10,
       actionPointCostComposition: {
-        baseActionPointCost: 9,
+        baseActionPointCost: 1,
         terrainFactor: { plain: 1.0, hill: 1.0, mountain: 1.0, water: 1.0 }
       },
       recoveryRate: 7,
@@ -993,36 +993,17 @@ export async function testMoveSingleForce() {
     
     // 获取周围六角格
     console.log(`[Test] 查找 ${currentHexId} 周围的六角格...`);
-    const { row, col } = currentHex.getRowCol();
+    const neighborHexes = currentHex.neighbors;
+    console.log(`[Test] 周围六角格: ${neighborHexes}`);
     
-    // 根据行号奇偶尝试获取相邻六角格
-    const offsets = row % 2 === 0 
-      ? [[-1,-1], [-1,0], [0,-1], [0,1], [1,-1], [1,0]] // 偶数行
-      : [[-1,0], [-1,1], [0,-1], [0,1], [1,0], [1,1]];  // 奇数行
-    
-    let neighborHex = null;
-    
-    for (const [rowOffset, colOffset] of offsets) {
-      const neighborRow = row + rowOffset;
-      const neighborCol = col + colOffset;
-      const neighborId = `H_${neighborRow}_${neighborCol}`;
-      const hex = store.getHexCellById(neighborId);
-      
-      if (hex) {
-        neighborHex = hex;
-        console.log(`[Test] 找到邻近六角格: ${neighborId}`);
-        break;
-      }
-    }
-    
-    if (!neighborHex) {
+    if (!neighborHexes) {
       console.error('[Test] 没有找到邻近六角格');
       return;
     }
     
     // 测试移动
-    console.log(`[Test] 开始移动部队 ${redForce.forceId} 从 ${currentHexId} 到 ${neighborHex.hexId}`);
-    await testMoveForce(redForce.forceId, neighborHex.hexId);
+    console.log(`[Test] 开始移动部队 ${redForce.forceId} 从 ${currentHexId} 到 ${neighborHexes[0].hexId}`);
+    await testMoveForce(redForce.forceId, neighborHexes[0].hexId);
     
   } catch (error) {
     console.error('[Test] 单独测试移动功能出错:', error);

@@ -364,7 +364,7 @@ function toggleForceSelection(forceId) {
   }
 }
 
-// 聚焦部队（定位功能）
+// 聚焦并选中部队（定位功能）
 function focusForce(force) {
   if (!force || !force.forceId || isDragging.value) return;
 
@@ -375,6 +375,7 @@ function focusForce(force) {
   }
 
   try {
+    store.addSelectedForceId(force.forceId);
     // 使用命令系统聚焦到部队
     CommandService.executeCommandFromUI(CommandType.FOCUS_FORCE, {
       forceId: force.forceId,

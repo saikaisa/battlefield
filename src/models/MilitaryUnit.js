@@ -99,8 +99,12 @@ export class Unit {
   }
 
   getActionPointCost(terrain) {
-    const { baseActionPointCost, terrainFactor } = this.actionPointCostComposition;Math.round()
-    return Math.round(baseActionPointCost * (terrainFactor[terrain] ?? 1));
+    const { baseActionPointCost, terrainFactor } = this.actionPointCostComposition;
+    if (this.service.includes('air')) {
+      // 空军行动力消耗不受地形影响
+      return Math.round(baseActionPointCost);
+    }
+    return Math.round(baseActionPointCost * (terrainFactor[terrain] ?? 1) * 1.5);
   }
 
   /* ======================== 序列化 =========================== */
@@ -260,10 +264,11 @@ export class Force {
    */
   computeActionPointsForPath(hexIdPath = []) {
     let total = 0;
-    hexIdPath.forEach(hexId => {
-      const cost = this.getActionPointCost(hexId);
+    // 从第二格开始计算行动力消耗
+    for (let i = 1; i < hexIdPath.length; i++) {
+      const cost = this.getActionPointCost(hexIdPath[i]);
       total += cost;
-    });
+    }
     return total;
   }
 
@@ -360,8 +365,6 @@ export class Battlegroup {
     this.forceIdList    = forceIdList; // ForceId[]，包含了commandForceId
     // this.jointAttackFirepower = get from Force.attackFirepower, commandCapability;
     // this.jointDefenseFirepower = get from Force.defenseFirepower, commandCapability;
-    // this.commandCapability = get from Force.commandCapability;
-    // this.commandRange = get from Force.commandRange;
   }
 
   /* ======================== 动态计算属性 =========================== */
@@ -383,11 +386,11 @@ export class Battlegroup {
     const jointFirepower = { land: 0, sea: 0, air: 0 };
     this._forces().forEach(force => {
       const firepower = force[firepowerType];
-      jointFirepower.land += firepower.land; 
+      jointFirepower.land += firepower.land;
       jointFirepower.sea += firepower.sea; 
       jointFirepower.air += firepower.air;
     });
-    const k = this.commandCapability;
+    const k = this.openGameStore().getForceById(this.commandForceId)?.commandCapability ?? 1;
     return { 
       land: jointFirepower.land * k, 
       sea: jointFirepower.sea * k, 

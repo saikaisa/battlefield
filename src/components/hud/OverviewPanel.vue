@@ -50,8 +50,8 @@
       <div class="command-button" 
            :class="{
              'disabled': isButtonDisabled(GameButtons.TOGGLE_LAYER),
-             'terrain-layer': currentLayerName === '地形图层',
-             'no-hex-layer': currentLayerName === '无六角格图层',
+             'terrain-layer': currentLayerIndex === 2,
+             'no-hex-layer': currentLayerIndex === 3,
            }"
            @click="cycleMapLayer"
            :title="`图层: ${currentLayerName}`">
@@ -88,7 +88,10 @@
         <div class="console-header">
           <span>战场指挥控制台</span>
           <div class="console-actions">
-            <div class="console-action" @click="clearConsole" title="清空控制台">
+            <div class="console-action" 
+                 :class="{'disabled': store.gameMode !== GameMode.FREE}"
+                 @click="clearConsole" 
+                 title="清空控制台">
               <img src="/assets/icons/delete.png" alt="清空" />
             </div>
           </div>
@@ -129,9 +132,9 @@ const currentLayerIndex = ref(1); // 当前图层索引，默认从1开始
 
 // 图层名称映射
 const layerNames = {
-  1: '默认图层',
-  2: '地形图层',
-  3: '无六角格图层'
+  1: '战术视图',
+  2: '地形视图',
+  3: '真实视图'
 };
 
 // 控制台行数据
@@ -207,7 +210,7 @@ function toggleStatisticsMode() {
 function cycleMapLayer() {
   if (isButtonDisabled(GameButtons.TOGGLE_LAYER)) return;
   
-  // 假设有3个图层，循环切换 1->2->3->1
+  // 循环切换 1->2->3->1
   currentLayerIndex.value = (currentLayerIndex.value % 3) + 1;
   
   executeCommand(CommandType.CHANGE_LAYER, { layerIndex: currentLayerIndex.value });
@@ -475,6 +478,12 @@ onMounted(() => {
   transition: all 0.2s;
 }
 
+.console-action.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .console-action:hover {
   background-color: rgba(255, 255, 255, 0.2);
 }
@@ -491,6 +500,7 @@ onMounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
   min-height: 0;
 }
 
@@ -499,41 +509,16 @@ onMounted(() => {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px;
-  font-family: 'Courier New', monospace;
+  font-family: monospace;
   font-size: 13px;
   background-color: rgba(54, 40, 26, 0.8);
   color: #f0f0f0;
   line-height: 1.4;
   border: 1px solid rgba(80, 60, 40, 0.8);
   border-radius: 4px;
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
   position: relative;
   scrollbar-width: none;
   -ms-overflow-style: none;
-}
-
-.console-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 6px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.2), transparent);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.console-container::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 6px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.2), transparent);
-  pointer-events: none;
-  z-index: 1;
 }
 
 .console-content {

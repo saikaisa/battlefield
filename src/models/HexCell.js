@@ -2,7 +2,7 @@
 import { HexConfig } from '@/config/GameConfig';
 import { HexVisualStyles } from '@/config/HexVisualStyles';
 import { HexForceMapper } from '@/layers/interaction-layer/utils/HexForceMapper';
-
+import { openGameStore } from '@/store';
 export class HexCell {
   /**
    * 构造函数
@@ -97,6 +97,48 @@ export class HexCell {
 
   /** 六角格包含部队 */
   get forcesIds() { return HexForceMapper.getForcesByHexId(this.hexId); }
+  
+  /** 获取六角格的相邻六角格 */
+  get neighbors() {
+    const store = openGameStore();
+    const { row, col } = this.getRowCol();
+    
+    // 按行号奇偶性选择偏移表
+    const offsets = row % 2 === 0
+      ? [ [-1, -1], [-1, 0], [-2, 0], [ 2, 0], [ 1, -1], [ 1, 0] ] // 偶数行
+      : [ [-1,  0], [-1, 1], [-2, 0], [ 2, 0], [ 1,  0], [ 1, 1] ]; // 奇数行
+    
+    // 计算所有邻近六角格的ID并过滤掉不存在的六角格
+    return offsets.map(([rowOffset, colOffset]) => {
+      const neighborRow = row + rowOffset;
+      const neighborCol = col + colOffset;
+      return store.getHexCellById(`H_${neighborRow}_${neighborCol}`);
+    }).filter(cell => cell !== null && cell !== undefined);
+  }
+  
+  /** 获取六角格半径范围内的所有六角格(不包含自身) */
+  getHexCellInRange(radius) {
+    const store    = openGameStore();
+    const visited  = new Set([this.hexId]);  // 已经到过
+    let frontier = new Set([this]);   // 当前这一层
+  
+    for (let step = 0; step < radius; step++) {
+      const next = new Set();
+      frontier.forEach(cell => {
+        cell.neighbors.forEach(nb => {
+          if (!visited.has(nb.hexId)) {
+            visited.add(nb.hexId);
+            next.add(nb);
+          }
+        });
+      });
+      frontier = next;  // 进入下一层
+      if (!frontier.size) break;  // 防止走到边界早停
+    }
+  
+    visited.delete(this.hexId);
+    return Array.from(visited).map(id => store.getHexCellById(id));
+  }
 
   /**
    * 获取中心点
@@ -194,13 +236,28 @@ export class HexCell {
     // 低海拔用 plain；中等海拔用 hill；高海拔用 mountain
     if (this.terrainAttributes.elevation < 100) {
       style = HexVisualStyles.plain;
-    } else if (this.terrainAttributes.elevation < 200) {
+    } else if (this.terrainAttributes.elevation < 500) {
       style = HexVisualStyles.hill;
     } else {
       style = HexVisualStyles.mountain;
     }
     this.terrainAttributes.terrainType = style.type || 'default';
     this.addVisualStyle(style);
+  }
+
+  // (row, col)  →  axial (q, r)
+  _offsetToAxial(row, col) {
+    // 奇数行整体向右偏 0.5 格
+    const q = col - ((row & 1) ? (row + 1) / 2 : row / 2);
+    const r = row;
+    return { q, r };
+  }
+
+  // axial (q, r)  →  (row, col)
+  _axialToOffset(q, r) {
+    const row = r;
+    const col = q + ((row & 1) ? (row + 1) / 2 : row / 2);
+    return { row, col };
   }
 
   /**

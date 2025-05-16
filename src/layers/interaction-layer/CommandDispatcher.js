@@ -234,7 +234,6 @@ export class CommandDispatcher {
     try {
       // 更新命令状态
       this.store.setCurrentCommand(command);
-      console.log(`命令正在执行：${this.store.isExecuting}`);
       command.status = CommandStatus.EXECUTING;
       command.startTime = Date.now();
       

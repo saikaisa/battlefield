@@ -128,7 +128,7 @@ export const ModesConfig = {
       cameraControl: true,
       mouseInteract: true,
       selectMode: 'multi',
-      linkMode: 'independent',
+      linkMode: 'linked',
       validator: 'validateMovePath'
     }
   },

@@ -5,7 +5,7 @@ import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
 import { HexHeightCache } from "@/layers/scene-layer/components/HexHeightCache";
-import { ModelPoseCalculator } from "./ModelPoseCalculator";
+import { ModelPoseCalculator } from "../utils/ModelPoseCalculator";
 import { GeoMathUtils } from "@/layers/scene-layer/utils/GeoMathUtils";
 import { MilitaryConfig } from "@/config/GameConfig";
 
@@ -18,20 +18,20 @@ import { MilitaryConfig } from "@/config/GameConfig";
  * 3. 基于地形计算移动速度
  * 4. 管理单位移动状态
  */
-export class MilitaryMovementController {
+export class MovementController {
   // 单例实例
   static #instance = null;
   
   /**
    * 获取单例实例
    * @param {Cesium.Viewer} viewer Cesium Viewer实例
-   * @returns {MilitaryMovementController} 单例实例
+   * @returns {MovementController} 单例实例
    */
   static getInstance(viewer) {
-    if (!MilitaryMovementController.#instance) {
-      MilitaryMovementController.#instance = new MilitaryMovementController(viewer);
+    if (!MovementController.#instance) {
+      MovementController.#instance = new MovementController(viewer);
     }
-    return MilitaryMovementController.#instance;
+    return MovementController.#instance;
   }
   
   /**
@@ -250,9 +250,7 @@ export class MilitaryMovementController {
       });
 
       // 计算路径持续时间
-      const cell = this.store.getHexCellById(hexId);
       const duration = this._calMovementDuration(
-        cell.terrainAttributes.elevation, 
         prevForcePos, 
         forcePos
       );
@@ -517,9 +515,10 @@ export class MilitaryMovementController {
       const unitInstance = forceInstance.unitInstanceMap.get(unitInstanceId);
       if (targetUnitPath && unitInstance) {
           // 计算本帧的位置
+          const nextPosition = GeoMathUtils.lerp2DPosition(startUnitPath.position, targetUnitPath.position, progress);
           const position = {
-            longitude: startUnitPath.position.longitude + (targetUnitPath.position.longitude - startUnitPath.position.longitude) * progress,
-            latitude: startUnitPath.position.latitude + (targetUnitPath.position.latitude - startUnitPath.position.latitude) * progress,
+            longitude: nextPosition.longitude,
+            latitude: nextPosition.latitude,
             height: 0
           };
           // 计算高度插值
@@ -556,26 +555,36 @@ export class MilitaryMovementController {
   /**
    * 计算两点间移动持续时间
    * @private
-   * @param {string} elevation 高度
    * @param {Object} fromPosition 起点位置 {longitude, latitude, height}
    * @param {Object} toPosition 终点位置 {longitude, latitude, height}
    * @returns {number} 移动持续时间（毫秒）
    */
-  _calMovementDuration(elevation, fromPosition, toPosition) {
-    // 计算两点之间的直线距离(米)
+  _calMovementDuration(fromPosition, toPosition) {
+    // 计算两点之间的3d距离(米)
     const distanceMeters = GeoMathUtils.calculateDistance(fromPosition, toPosition);
+    // 计算高度差(米)，正值表示上坡，负值表示下坡
+    const heightDiff = toPosition.height - fromPosition.height;
     
-    // 计算地形影响因子（高度越高，速度越慢）
-    const terrainFactor = 1 - (elevation / 1000) * 0.5;
+    // 计算坡度 = 高度差/距离
+    const slope = (distanceMeters > 0) ? (heightDiff / distanceMeters) : 0;
+    // 计算坡度影响因子，坡度大于0.4时，超过0.4的部分会对速度产生影响
+    let slopeFactor = 1;
+    if (slope > 0.4) {
+      // 上坡
+      slopeFactor = 1 - (slope - 0.4);
+    } else if (slope < -0.4) {
+      // 下坡影响减半
+      slopeFactor = 1 + (Math.abs(slope) - 0.4) * 0.5;
+    }
     
     // 计算实际移动速度(米/秒)
-    const actualSpeed = MilitaryConfig.movementConfig.baseSpeed * Math.max(0.5, terrainFactor);
+    const actualSpeed = MilitaryConfig.movementConfig.baseSpeed * slopeFactor;
     
     // 计算理论移动时间(秒)
     const timeSeconds = distanceMeters / actualSpeed;
     
-    // 转换为毫秒并限制最小2秒，最大6秒
-    return Math.max(2000, Math.min(6000, timeSeconds * 1000));
+    // 转换为毫秒并限制最小1秒，最大3秒
+    return Math.max(1000, Math.min(3000, timeSeconds * 1000));
   }
 
   /**
@@ -604,6 +613,6 @@ export class MilitaryMovementController {
    */
   dispose() {
     this.movingForces.clear();
-    MilitaryMovementController.#instance = null;
+    MovementController.#instance = null;
   }
 }

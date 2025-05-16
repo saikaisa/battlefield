@@ -1,14 +1,12 @@
 /* eslint-disable no-unused-vars */
 import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
-// import { HexForceMapper } from '@/utils/HexForceMapper';
 import { ModelInstanceLoader } from "./ModelInstanceLoader";
 import { HexCell } from "@/models/HexCell";
 import { Unit, Force, Battlegroup, Formation } from "@/models/MilitaryUnit";
 import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
-import { MilitaryMovementController } from "./MilitaryMovementController";
-import { ModelPoseCalculator } from "./ModelPoseCalculator";
-import { HexForceMapper } from "@/layers/interaction-layer/utils/HexForceMapper";
+import { MovementController } from "./MovementController";
+import { ModelPoseCalculator } from "../utils/ModelPoseCalculator";
 import { HexVisualStyles } from "@/config/HexVisualStyles";
 import { MilitaryConfig } from "@/config/GameConfig";
 import { HexRenderer } from "@/layers/scene-layer/components/HexGridRenderer";
@@ -17,7 +15,7 @@ import { HexRenderer } from "@/layers/scene-layer/components/HexGridRenderer";
  * 军事单位实例渲染器
  * 
  * 主要职责：
- * 1. 管理部队模型的渲染
+ * 1. 管理部队模型的显示和渲染
  * 2. 处理部队位置更新和 LOD 切换
  * 3. 管理部队的移动、交战渲染
  */
@@ -50,7 +48,7 @@ export class MilitaryInstanceRenderer {
     // 初始化实例生成器
     this.generator = MilitaryInstanceGenerator.getInstance(viewer);
     // 初始化移动控制器
-    this.movementController = MilitaryMovementController.getInstance(viewer);
+    this.movementController = MovementController.getInstance(viewer);
     // 获取部队实例映射表
     this.forceInstanceMap = MilitaryInstanceGenerator.getforceInstanceMap();
     // 更新循环监听器

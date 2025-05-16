@@ -71,6 +71,14 @@ export class HexGridRenderer {
       }
     );
 
+    // 监听 highlightStyle 的变化，重新渲染交互层
+    watch(
+      () => this.store.highlightStyle,
+      () => {
+        this.renderInteractGrid();
+      }
+    );
+
     // 设置地形采样精度
     this.viewer.scene.globe.maximumScreenSpaceError = HexRendererConfig.optimization.terrainSamplingError;
   }
