@@ -49,7 +49,7 @@
       <!-- 中间：六角格部队列表 -->
       <div class="hex-forces-section">
         <div class="section-header">
-          <h4>六角格部队列表</h4>
+          <h4>六角格部队列表 {{ selectedHex ? `(${selectedHex.hexId})` : '' }}</h4>
         </div>
         <div class="forces-table" v-if="hexForces.length > 0">
           <div class="forces-table-header">
@@ -81,7 +81,7 @@
       <!-- 右侧：部队详细信息 -->
       <div class="force-detail-section">
         <div class="section-header">
-          <h4>部队详细信息</h4>
+          <h4>{{ selectedForce ? `${selectedForce.forceName} 详细信息` : '部队详细信息' }}</h4>
         </div>
         
         <div class="force-detail-content" v-if="selectedForce">
@@ -260,9 +260,39 @@
       <span>发起移动</span>
     </div>
     
-    <div class="floating-confirm attack-confirm" v-if="inAttackMode" @click="executeCommand(CommandType.ATTACK)">
-      <img src="/assets/icons/confirm.png" alt="确认" />
-      <span>发起进攻</span>
+    <div class="floating-attack-controls" v-if="inAttackMode">
+      <div class="attack-phase-indicator">{{ attackPhaseText }}</div>
+      
+      <div class="attack-buttons">
+        <!-- 第一阶段退出按钮 -->
+        <div v-if="attackState.phase === 'selectTarget'" 
+             class="attack-button exit-button" 
+             @click="handleAttackButtonClick" 
+             title="退出攻击模式">
+          <img src="/assets/icons/cancel.png" alt="退出" />
+          <span>退出攻击</span>
+        </div>
+        
+        <!-- 第二阶段重置按钮 -->
+        <div v-if="attackState.phase === 'selectSupport'" 
+             class="attack-button reset-button" 
+             @click="resetAttackPhase" 
+             title="重置选择">
+          <img src="/assets/icons/reset.png" alt="重置" />
+          <span>重置选择</span>
+        </div>
+        
+        <div class="attack-button confirm-button" 
+             :class="{
+               'phase-select-target': attackState.phase === 'selectTarget',
+               'phase-select-support': attackState.phase === 'selectSupport'
+             }"
+             @click="handleAttackNextStep" 
+             :title="attackButtonTitle">
+          <img src="/assets/icons/confirm.png" alt="确认" />
+          <span>{{ attackButtonText }}</span>
+        </div>
+      </div>
     </div>
   </teleport>
 </template>
@@ -271,10 +301,11 @@
 import { computed, watch, ref, onMounted } from 'vue';
 import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
-import { showWarning } from '@/layers/interaction-layer/utils/MessageBox';
+import { showInfo, showSuccess, showWarning } from '@/layers/interaction-layer/utils/MessageBox';
 import { CommandType } from '@/config/CommandConfig';
 import { GameButtons, GameMode, GamePanels } from '@/config/GameModeConfig';
 import { gameModeService } from '@/layers/interaction-layer/GameModeManager';
+// import { HexSelectValidator } from '@/layers/interaction-layer/utils/HexSelectValidator';
 
 // 状态管理
 const store = openGameStore();
@@ -497,6 +528,12 @@ function getFactionName(faction) {
 
 // 按钮禁用状态检查
 function isButtonDisabled(buttonType) {
+  // 如果正处于移动/进攻准备模式，则相应的按钮可用
+  if ((inMoveMode.value && buttonType === GameButtons.MOVE) || 
+      (inAttackMode.value && buttonType === GameButtons.ATTACK)) {
+    return false;
+  }
+
   // 没有选中部队，或者选中的是敌方部队时禁用移动和进攻按钮
   if (buttonType === GameButtons.MOVE || buttonType === GameButtons.ATTACK) {
     if (!selectedForce.value || selectedForce.value.faction !== store.currentFaction) {
@@ -526,37 +563,27 @@ function isButtonDisabled(buttonType) {
 
 // 处理移动按钮点击
 function handleMoveButtonClick() {
-  if (isButtonDisabled(GameButtons.MOVE)) {
-    console.log('移动按钮被禁用');
-    return;
-  }
-  
   if (inMoveMode.value) {
-    console.log('已在移动准备模式，取消移动');
+    showInfo('退出移动准备');
     // 已经在移动准备模式，点击取消
-    executeCommand(CommandType.MOVE_PREPARE, { forceId: selectedForce.value.forceId });
+    executeCommand(CommandType.MOVE_PREPARE);
   } else {
-    console.log('进入移动准备模式');
+    showInfo('进入移动准备');
     // 进入移动准备模式
-    executeCommand(CommandType.MOVE_PREPARE, { forceId: selectedForce.value.forceId });
+    executeCommand(CommandType.MOVE_PREPARE);
   }
 }
 
 // 处理攻击按钮点击
 function handleAttackButtonClick() {
-  if (isButtonDisabled(GameButtons.ATTACK)) {
-    console.log('攻击按钮被禁用');
-    return;
-  }
-  
   if (inAttackMode.value) {
-    console.log('已在攻击准备模式，取消攻击');
+    showInfo('退出攻击准备');
     // 已经在攻击准备模式，点击取消
-    executeCommand(CommandType.ATTACK_PREPARE, { forceId: selectedForce.value.forceId });
+    executeCommand(CommandType.ATTACK_PREPARE);
   } else {
-    console.log('进入攻击准备模式');
+    showInfo('进入攻击准备');
     // 进入攻击准备模式
-    executeCommand(CommandType.ATTACK_PREPARE, { forceId: selectedForce.value.forceId });
+    executeCommand(CommandType.ATTACK_PREPARE);
   }
 }
 
@@ -580,6 +607,184 @@ function openUnitManagement() {
   showWarning('兵种管理功能尚未实现');
   // TODO: 实现兵种管理模态框
   // 可以使用 showModal 或其他方式显示模态框
+}
+
+// 计算属性：获取攻击按钮文本
+const attackButtonText = computed(() => {
+  const attackState = store.attackState;
+  if (!attackState.phase) return '选择目标';
+  
+  if (attackState.phase === 'selectTarget') {
+    return '锁定目标';
+  } else if (attackState.phase === 'selectSupport') {
+    return '发起攻击';
+  }
+  
+  return '选择目标';
+});
+
+// 计算属性：获取攻击按钮提示文本
+const attackButtonTitle = computed(() => {
+  const attackState = store.attackState;
+  if (!attackState.phase) return '选择敌方目标六角格';
+  
+  if (attackState.phase === 'selectTarget') {
+    return '锁定当前选择的敌方目标';
+  } else if (attackState.phase === 'selectSupport') {
+    return '确认发起攻击';
+  }
+  
+  return '选择敌方目标六角格';
+});
+
+// 计算属性：获取攻击阶段状态文本
+const attackPhaseText = computed(() => {
+  const attackState = store.attackState;
+  if (!attackState.phase) return '';
+  
+  if (attackState.phase === 'selectTarget') {
+    return '第一阶段：选择敌方目标';
+  } else if (attackState.phase === 'selectSupport') {
+    return '第二阶段：选择支援部队';
+  }
+  
+  return '';
+});
+
+// 重置攻击阶段
+function resetAttackPhase() {
+  // 在攻击准备模式下重置攻击状态
+  if (inAttackMode.value) {
+    const attackState = store.attackState;
+    
+    // 第二阶段：清空选中的支援部队，返回到选择目标阶段
+    if (attackState.phase === 'selectSupport') {
+      // 获取指挥部队
+      const commandForce = store.getForceById(attackState.commandForceId);
+      if (!commandForce) return;
+      
+      // 清空锁定和选中的六角格和部队
+      store.clearLockedSelection();
+      store.clearSelectedHexIds();
+      store.clearSelectedForceIds();
+      
+      // 回到选择目标阶段
+      attackState.phase = 'selectTarget';
+      
+      // 清空敌方指挥部队和支援部队
+      attackState.enemyCommandForceId = null;
+      attackState.enemySupportForceIds = [];
+      showInfo('重新选择敌方目标');
+
+      // // 手动触发战斗群预览更新
+      // try {
+      //   const validator = HexSelectValidator.getInstance();
+      //   validator.previewBattlegroups(commandForce, null);
+      // } catch (error) {
+      //   console.error('无法更新战斗群预览:', error);
+      // }
+    }
+  }
+}
+
+// 进入支援部队选择阶段
+function enterSupportSelectionPhase() {
+  const attackState = store.attackState;
+  
+  // 获取敌方部队所在六角格
+  const enemyForce = store.getForceById(attackState.enemyCommandForceId);
+  if (!enemyForce) {
+    showWarning('无法获取敌方指挥部队信息');
+    return;
+  }
+  
+  // 获取指挥部队
+  const commandForce = store.getForceById(attackState.commandForceId);
+  if (!commandForce) {
+    showWarning('无法获取指挥部队信息');
+    return;
+  }
+  
+  // 切换到支援部队选择阶段
+  attackState.phase = 'selectSupport';
+
+  // 将友方指挥部队及所在六角格锁定高亮
+  store.setSelectedHexIds([commandForce.hexId]);
+  store.setLockedSelection([commandForce.hexId]);
+  
+  // 手动触发战斗群预览更新
+  // try {
+  //   const validator = HexSelectValidator.getInstance();
+  //   validator.previewBattlegroups(commandForce, enemyForce);
+  // } catch (error) {
+  //   console.error('无法更新战斗群预览:', error);
+  // }
+}
+
+// 处理攻击下一步
+function handleAttackNextStep() {
+  const attackState = store.attackState;
+  
+  // 如果没有攻击状态或者不在攻击模式，不处理
+  if (!attackState.phase || !inAttackMode.value) {
+    return;
+  }
+  
+  // 根据当前阶段执行不同操作
+  if (attackState.phase === 'selectTarget') {
+    // 第一阶段：检查是否已选择敌方指挥部队
+    if (attackState.enemyCommandForceId) {
+      // 进入支援部队选择阶段
+      enterSupportSelectionPhase();
+      showSuccess('已锁定敌方目标，请选择参战部队');
+    } else {
+      // 还没选择目标，提示用户选择
+      showWarning('请先选择一个敌方六角格作为攻击目标');
+    }
+  } else if (attackState.phase === 'selectSupport') {
+    // 第二阶段：已选择目标六角格，执行攻击命令
+    executeAttackCommand();
+  }
+}
+
+// 执行攻击命令
+function executeAttackCommand() {
+  const attackState = store.attackState;
+  
+  // 检查是否有敌方指挥部队
+  if (!attackState.enemyCommandForceId) {
+    showWarning('请先选择一个敌方六角格作为攻击目标');
+    return;
+  }
+  
+  // 获取敌方指挥部队所在的六角格作为目标
+  const enemyForce = store.getForceById(attackState.enemyCommandForceId);
+  if (!enemyForce) {
+    showWarning('无法获取敌方指挥部队信息');
+    return;
+  }
+  
+  // 构建支援部队列表（当前所有选中的部队，除了指挥部队）
+  const supportForceIds = Array.from(store.selectedForceIds)
+    .filter(id => id !== attackState.commandForceId);
+
+  showSuccess('开始攻击');
+  
+  // 执行攻击命令
+  executeCommand(CommandType.ATTACK, {
+    commandForceId: attackState.commandForceId,
+    targetHex: enemyForce.hexId,
+    supportForceIds: supportForceIds,
+    enemyCommandForceId: attackState.enemyCommandForceId,
+    enemySupportForceIds: attackState.enemySupportForceIds
+  });
+  
+  // 清空锁定选择
+  store.clearLockedSelection();
+  
+  // 清空选中的六角格和部队
+  store.clearSelectedHexIds();
+  store.clearSelectedForceIds();
 }
 
 // 执行命令
@@ -646,24 +851,16 @@ function executeCommand(commandType, params = {}) {
     }
       
     case CommandType.ATTACK: {
-      // 攻击命令需要目标六角格
-      if (!store.selectedHexIds || store.selectedHexIds.size < 1) {
-        showWarning('请先选择攻击目标');
+      // 检查参数是否完整
+      if (!params.commandForceId || !params.targetHex) {
+        showWarning('攻击参数不完整');
         return;
       }
       
-      // 获取选中的最后一个六角格作为目标
-      const hexIds = Array.from(store.selectedHexIds);
-      const targetHex = hexIds[hexIds.length - 1];
-      console.log('执行攻击，目标:', targetHex);
-
-      // 攻击的指挥部队id应为第一个选中的部队
-      const forceId = Array.from(store.selectedForceIds)[0];
-      
       CommandService.executeCommandFromUI(commandType, { 
-        commandForceId: forceId,
-        targetHex: targetHex,
-        supportForceIds: [] // 暂时不支持支援部队
+        commandForceId: params.commandForceId,
+        targetHex: params.targetHex,
+        supportForceIds: params.supportForceIds || []
       }).then(() => {
         console.log('攻击命令已执行');
         inAttackMode.value = false; // 执行完成后重置模式
@@ -721,6 +918,9 @@ const serviceMap = {
   'sea': '海军',
   'air': '空军'
 }
+
+// 添加攻击状态的访问
+const attackState = computed(() => store.attackState);
 </script>
 
 <style scoped>
@@ -1312,5 +1512,112 @@ const serviceMap = {
   height: calc(100% - 26px);
   background-color: rgba(0, 0, 0, 0.1);
   border-radius: 3px;
+}
+
+/* 攻击控制按钮 */
+.floating-attack-controls {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 1000;
+  bottom: 420px;
+  right: 20px;
+  gap: 8px;
+}
+
+.attack-phase-indicator {
+  background-color: rgba(30, 30, 30, 0.8);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  font-weight: bold;
+}
+
+.attack-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.attack-button {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px 8px 10px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+
+.reset-button {
+  background-color: rgba(180, 180, 180, 0.9);
+}
+
+.reset-button:hover {
+  background-color: rgba(180, 180, 180, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
+}
+
+.exit-button {
+  background-color: rgba(204, 85, 85, 0.9);
+}
+
+.exit-button:hover {
+  background-color: rgba(204, 85, 85, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
+}
+
+/* 第一阶段锁定按钮样式（黄色） */
+.attack-button.confirm-button.phase-select-target {
+  background-color: rgba(255, 193, 7, 0.9);
+}
+
+.attack-button.confirm-button.phase-select-target:hover {
+  background-color: rgba(255, 193, 7, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
+}
+
+/* 第二阶段确认按钮样式（红色） */
+.attack-button.confirm-button.phase-select-support {
+  background-color: rgba(204, 0, 0, 0.9);
+}
+
+.attack-button.confirm-button.phase-select-support:hover {
+  background-color: rgba(204, 0, 0, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
+}
+
+.attack-button img {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+}
+
+.attack-button span {
+  font-size: 14px;
+  color: white;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 </style>

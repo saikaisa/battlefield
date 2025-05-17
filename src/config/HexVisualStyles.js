@@ -14,7 +14,9 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.BLACK.withAlpha(0.1),
     borderColor: Cesium.Color.BLACK.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 平原地形
   plain: {
@@ -24,7 +26,9 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.WHITE.withAlpha(0.1),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 丘陵地形
   hill: {
@@ -34,7 +38,9 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.GREEN.withAlpha(0.1),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 山地地形
   mountain: {
@@ -44,7 +50,9 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.BURLYWOOD.withAlpha(0.1),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 水域地形
   water: {
@@ -54,7 +62,9 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.CYAN.withAlpha(0.1),
     borderColor: Cesium.Color.BLUE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // =========================== 标记层 ===========================
   // 蓝方阵营标记
@@ -62,30 +72,36 @@ export const HexVisualStyles = {
     layer: 'mark',
     type: 'factionBlue',
     priority: 0,
-    fillColor: Cesium.Color.BLUE.withAlpha(0.1),
+    fillColor: Cesium.Color.BLUE.withAlpha(0.15),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 红方阵营标记
   factionRed: {
     layer: 'mark',
     type: 'factionRed',
     priority: 0,
-    fillColor: Cesium.Color.RED.withAlpha(0.1),
+    fillColor: Cesium.Color.RED.withAlpha(0.15),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 战争迷雾
   invisible: {
     layer: 'mark',
     type: 'invisible',
-    priority: 1,
+    priority: 2,
     fillColor: Cesium.Color.BLACK.withAlpha(0.7),
     borderColor: Cesium.Color.BLACK.withAlpha(0.7),
     showFill: true,
-    showBorder: false
+    showBorder: false,
+    borderPattern: false,
+    borderWidth: 1.0
   },
   // =========================== 交互层 ===========================
   // 选中高亮：默认黄色
@@ -96,27 +112,45 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.YELLOW.withAlpha(0.3),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: true,  // 使用虚线边框
+    borderWidth: 4.0
+  },
+  // 选中高亮：淡黄色
+  selectedLightYellow: {
+    layer: 'interaction',
+    type: 'selected',
+    priority: 2,
+    fillColor: Cesium.Color.YELLOW.withAlpha(0.04),
+    borderColor: Cesium.Color.WHITE.withAlpha(0),
+    showFill: true,
+    showBorder: false,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 选中高亮：蓝色
   selectedBlue: {
     layer: 'interaction',
     type: 'selected',
     priority: 2,
-    fillColor: Cesium.Color.BLUE.withAlpha(0.3),
+    fillColor: Cesium.Color.BLUE.withAlpha(0.04),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: false,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 选中高亮：红色
   selectedRed: {
     layer: 'interaction',
     type: 'selected',
     priority: 2,
-    fillColor: Cesium.Color.RED.withAlpha(0.3),
+    fillColor: Cesium.Color.RED.withAlpha(0.04),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: false,
+    borderPattern: false,
+    borderWidth: 2.0
   },
   // 选中高亮：绿色
   selectedGreen: {
@@ -126,17 +160,57 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.GREEN.withAlpha(0.3),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: false,
+    borderWidth: 2.0
+  },
+  // 选中高亮：白色
+  selectedWhite: {
+    layer: 'interaction',
+    type: 'selected',
+    priority: 2,
+    fillColor: Cesium.Color.WHITE.withAlpha(0.04),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
+    showFill: true,
+    showBorder: true,
+    borderPattern: true,
+    borderWidth: 2.0
+  },
+  // 指挥部队：蓝方
+  commanderBlue: {
+    layer: 'interaction',
+    type: 'commander',
+    priority: 2,
+    fillColor: Cesium.Color.BLUE.withAlpha(0.4),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
+    showFill: true,
+    showBorder: true,
+    borderPattern: true,
+    borderWidth: 2.0
+  },
+  // 指挥部队：红方
+  commanderRed: {
+    layer: 'interaction',
+    type: 'commander',
+    priority: 2,
+    fillColor: Cesium.Color.RED.withAlpha(0.4),
+    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
+    showFill: true,
+    showBorder: true,
+    borderPattern: true,
+    borderWidth: 2.0
   },
   // 提示不合法的高亮
   invalid: {
     layer: 'interaction',
     type: 'invalid',
-    priority: 3,
+    priority: 4,
     fillColor: Cesium.Color.RED.withAlpha(0.6),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
-    showBorder: true
+    showBorder: true,
+    borderPattern: true, // 使用虚线边框
+    borderWidth: 3.0
   },
   // 鼠标悬浮灰块
   hovered: {
@@ -146,6 +220,8 @@ export const HexVisualStyles = {
     fillColor: Cesium.Color.GRAY.withAlpha(0.5),
     borderColor: null,
     showFill: true,
-    showBorder: false
+    showBorder: false,
+    borderPattern: false,
+    borderWidth: 1.0
   },
 };

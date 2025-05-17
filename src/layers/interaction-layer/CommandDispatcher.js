@@ -370,9 +370,9 @@ export class CommandDispatcher {
       case CommandType.STATISTIC:
         return typeof command.params.enabled === 'boolean';
       case CommandType.MOVE_PREPARE:
-        return !!command.params.forceId;
+        return true;
       case CommandType.ATTACK_PREPARE:
-        return !!command.params.forceId;
+        return true;
       case CommandType.MOVE:
         return !!command.params.forceId && Array.isArray(command.params.path) && command.params.path.length > 1;
       case CommandType.ATTACK:
@@ -460,7 +460,13 @@ export class CommandDispatcher {
         break;
 
       case CommandType.ATTACK:
-        result = await this.processor.attack(params.commandForceId, params.targetHex, params.supportForceIds);
+        result = await this.processor.attack(
+          params.commandForceId, 
+          params.targetHex, 
+          params.supportForceIds, 
+          params.enemyCommandForceId, 
+          params.enemySupportForceIds
+        );
         break;
 
       case CommandType.EDIT_UNIT:
@@ -512,11 +518,11 @@ export class CommandDispatcher {
         break;
 
       case CommandType.MOVE_PREPARE:
-        result = await this.processor.movePrepare(params.forceId);
+        result = await this.processor.movePrepare();
         break;
         
       case CommandType.ATTACK_PREPARE:
-        result = await this.processor.attackPrepare(params.forceId);
+        result = await this.processor.attackPrepare();
         break;
       
       case CommandType.RESET_CAMERA:

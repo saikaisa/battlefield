@@ -20,6 +20,8 @@ import { OverviewConsole } from './utils/OverviewConsole';
 import { StatisticsHelper } from './utils/OverviewConsole';
 import { watch } from 'vue';
 import { showSuccess } from './utils/MessageBox';
+import { SelectValidator } from './utils/HexSelectValidator';
+
 /**
  * 命令错误类 - 用于统一处理命令执行过程中的错误
  */
@@ -356,8 +358,8 @@ export class CommandProcessor {
     } catch (error) {
       // 发生错误时恢复状态
       gameModeService.setMode(GameMode.FREE)
-          .restoreConsoleContent()
-          .restoreSelectedHexIds();
+        .restoreConsoleContent()
+        .restoreSelectedHexIds();
       throw new CommandError(`切换统计模式失败: ${error.message}`, "statistics");
     }
   }
@@ -446,10 +448,6 @@ export class CommandProcessor {
     gameModeService.saveSelectedHexIds().setMode(GameMode.MOVE_EXECUTE);
 
     try {
-      // 设置高亮样式为部队颜色
-      const highlightStyle = this.store.getFactionByForceId(forceId) === 'blue' ?
-                             HexVisualStyles.selectedBlue : HexVisualStyles.selectedRed;
-      this.store.setHighlightStyle(highlightStyle);
       this.store.setSelectedHexIds(path);
       this.store.setSelectedForceIds([forceId]);
       
@@ -495,9 +493,6 @@ export class CommandProcessor {
               });
             }
 
-            // 恢复高亮样式
-            this.store.setHighlightStyle(HexVisualStyles.selected);
-
             // 完成后恢复自由模式
             gameModeService.setMode(GameMode.FREE)
               .clearLockedSelection()
@@ -531,8 +526,6 @@ export class CommandProcessor {
         message: "移动完成",
       };
     } catch (error) {
-      // 发生错误时恢复状态
-      this.store.setHighlightStyle(HexVisualStyles.selected);
       gameModeService.setMode(lastMode).restoreSelectedHexIds();
       throw new CommandError(`移动失败: ${error.message}`, "move");
     }
@@ -547,19 +540,21 @@ export class CommandProcessor {
    * @param {string} forceId 部队ID
    * @returns {Object} 命令执行结果
    */
-  async attackPrepare(forceId) {
+  async attackPrepare() {
     // 仅能在自由模式或攻击准备模式下切换攻击准备
-    const currendMode = gameModeService.getCurrentMode();
-    if (currendMode !== GameMode.FREE && currendMode !== GameMode.ATTACK_PREPARE) {
+    const currentMode = gameModeService.getCurrentMode();
+    if (currentMode !== GameMode.FREE && currentMode !== GameMode.ATTACK_PREPARE) {
       throw new CommandError("仅能在自由模式或攻击准备模式下切换攻击准备", "attack");
     }
 
-    if (currendMode === GameMode.ATTACK_PREPARE) {
+    if (currentMode === GameMode.ATTACK_PREPARE) {
       gameModeService.setMode(GameMode.FREE)
         .clearLockedSelection()
         .restoreConsoleContent()
         .restoreSelectedHexIds();
       OverviewConsole.log(`\n===== 取消攻击准备 =====\n`);
+      // 清除攻击状态
+      this.store.clearAttackState();
       return {
         status: CommandStatus.FINISHED,
         message: "从攻击准备模式回到自由模式",
@@ -567,18 +562,67 @@ export class CommandProcessor {
     }
 
     try {
+      // 检查是否有选中的部队作为指挥部队
+      if (this.store.selectedForceIds.size === 0) {
+        throw new CommandError("请先选择一个部队作为指挥部队", "validation");
+      }
+      
+      const commandForceId = Array.from(this.store.selectedForceIds)[0];
+      const commandForce = this.store.getForceById(commandForceId);
+      
+      if (!commandForce) {
+        throw new CommandError("无法获取指挥部队信息", "validation");
+      }
+      
+      // 检查部队是否属于当前阵营的回合
+      if (commandForce.faction !== this.store.currentFaction) {
+        throw new CommandError(`当前是${this.store.currentFaction}方的回合，无法使用${commandForce.faction}方部队`, "validation");
+      }
+      
+      // 检查部队是否有战斗机会
+      if (commandForce.combatChance <= 0) {
+        throw new CommandError(`${commandForce.forceName}已无战斗机会`, "validation");
+      }
+      
+      // 检查指挥范围内是否有敌方隶属权六角格
+      const commandRange = commandForce.commandRange;
+      const commandHexId = commandForce.hexId;
+      const commandHex = this.store.getHexCellById(commandHexId);
+      
+      if (!commandHex) {
+        throw new CommandError("无法获取指挥部队所在的六角格", "validation");
+      }
+      
+      // 检查指挥范围内是否有敌方控制的六角格
+      const hexesInRange = commandHex.getHexCellInRange(commandRange);
+      const hasEnemyHex = hexesInRange.some(hex => 
+        hex && hex.battlefieldState.controlFaction !== 'neutral' && 
+        hex.battlefieldState.controlFaction !== commandForce.faction
+      );
+      
+      if (!hasEnemyHex) {
+        throw new CommandError("该部队指挥范围内没有敌方控制的六角格，无法发起攻击", "validation");
+      }
+      
+      // 保存当前选中状态并设置模式
       gameModeService.saveSelectedHexIds()
         .saveConsoleContent()
         .clearConsole()
-        .setLockedSelection(this.store.selectedHexIds, this.store.selectedForceIds)
-        .setMode(GameMode.MOVE_PREPARE);
+        .setMode(GameMode.ATTACK_PREPARE);
 
-      OverviewConsole.stat(`===== 进入攻击准备模式 =====`);
-      OverviewConsole.log(`接下来在指挥范围内选取打击目标六角格。`);
-      OverviewConsole.warning(`当前指挥部队：${this.store.getForceById(Array.from(this.store.selectedForceIds)[0]).forceName}`);
-
-      // 1. 根据选中部队，为其指挥范围内的六角格做上标记
-      // 点击操作和反馈处理交给HexSelectValidator._validateAttackTarget接管
+      // 清除选中的六角格和部队
+      this.store.clearSelectedHexIds();
+      this.store.clearSelectedForceIds();
+      
+      // 初始化攻击状态
+      this.store.initAttackState(commandForceId);
+      
+      // 初始化阶段提示
+      OverviewConsole.stat(`===== 攻击准备模式：选择攻击目标 =====`, 'current_stage');
+      OverviewConsole.warning(`请在指挥范围内选取需要打击的敌方六角格。`, 'prepare_attack_info');
+      
+      // 初始化战斗信息表格
+      SelectValidator.previewBattlegroups();
 
       return {
         status: CommandStatus.FINISHED,
@@ -590,6 +634,8 @@ export class CommandProcessor {
         .clearLockedSelection()
         .restoreConsoleContent()
         .restoreSelectedHexIds();
+      // 清除攻击状态
+      this.store.clearAttackState();
       throw new CommandError(`切换攻击准备模式失败: ${error.message}`, "attack");
     }
   }
@@ -602,9 +648,11 @@ export class CommandProcessor {
    * @param {string} commandForceId 指挥部队ID
    * @param {string} targetHex 目标六角格ID
    * @param {Array<string>} supportForceIds 支援部队ID数组
+   * @param {string} [enemyCommandForceId] 敌方指挥部队ID (如果为null则由targetHex计算)
+   * @param {Array<string>} [enemySupportForceIds] 敌方支援部队ID数组 (如果为null则由targetHex计算)
    * @returns {Object} 命令执行结果
    */
-  async attack(commandForceId, targetHex, supportForceIds = []) {
+  async attack(commandForceId, targetHex, supportForceIds = [], enemyCommandForceId = null, enemySupportForceIds = []) {
     // 仅能在自由模式或攻击准备模式下执行攻击
     const lastMode = gameModeService.getCurrentMode();
     if (lastMode !== GameMode.FREE && lastMode !== GameMode.ATTACK_PREPARE) {
@@ -1110,5 +1158,25 @@ export class CommandProcessor {
    */
   destroy() {
     CommandProcessor.#instance = null;
+  }
+
+  /**
+   * 格式化数字，使用k表示千级，m表示百万级，b表示十亿级等
+   * @private
+   */
+  _formatNumber(num) {
+    if (!num || isNaN(num)) return '0';
+    
+    // 转为数字确保格式化正确
+    num = Number(num);
+    
+    if (num >= 1000000000) {
+      return (num / 1000000000).toFixed(3) + 'b';
+    } else if (num >= 1000000) {
+      return (num / 1000000).toFixed(3) + 'm';
+    } else {
+      // 百万以下数字精确显示
+      return String(Math.round(num));
+    }
   }
 }

@@ -19,8 +19,10 @@ export const openGameStore = defineStore("gameStore", () => {
   /* ========================= 状态定义 ========================= */
   /* 1. 图层状态 */
   const layerIndex = ref(1);  // 当前图层: 1=默认, 2=地形, 3=隐藏
-  const highlightStyle = ref(HexVisualStyles.selected);  // 高亮样式
-  
+  const highlightStyle = ref(HexVisualStyles.selected);  // 选中六角格高亮样式
+  const rangeStyle = ref({ blue: HexVisualStyles.selectedBlue, red: HexVisualStyles.selectedRed });  // 指挥范围高亮样式
+  const commanderStyle = ref({ blue: HexVisualStyles.commanderBlue, red: HexVisualStyles.commanderRed });  // 指挥部队高亮样式
+
   /* 2. 游戏回合状态 */
   const currentRound = ref(RuleConfig.startRound);  // 当前回合数
   const currentFaction = ref(RuleConfig.firstFaction);  // 当前操作阵营
@@ -37,6 +39,15 @@ export const openGameStore = defineStore("gameStore", () => {
   const selectedHexIds   = reactive(new Set());
   const selectedForceIds = reactive(new Set());
   const lockedSelection = reactive({ hexIds: new Set(), forceIds: new Set() });
+
+  /* 4.1 攻击准备状态 */
+  const attackState = reactive({
+    phase: null,              // 攻击阶段: 'selectTarget'/'selectSupport'/null
+    commandForceId: null,     // 指挥部队ID
+    supportForceIds: [],      // 支援部队ID数组
+    enemyCommandForceId: null, // 敌方指挥部队ID
+    enemySupportForceIds: [],  // 敌方支援部队ID数组
+  });
 
   /* 5. 命令系统相关状态 */
   const isExecuting = ref(false);      // 是否有命令正在执行
@@ -245,8 +256,8 @@ export const openGameStore = defineStore("gameStore", () => {
   /** 批量设置锁定选中 */
   const setLockedSelection = (hexIds, forceIds) => {
     clearLockedSelection();
-    hexIds.forEach(id => addLockedHexId(id));
-    forceIds.forEach(id => addLockedForceId(id));
+    if (hexIds) hexIds.forEach(id => addLockedHexId(id));
+    if (forceIds) forceIds.forEach(id => addLockedForceId(id));
   }
   /** 清空锁定选中 */
   const clearLockedSelection = () => {
@@ -339,6 +350,25 @@ export const openGameStore = defineStore("gameStore", () => {
     clearSelectedForceIds();
     forceIds.forEach(id => addSelectedForceId(id));
   };
+
+  // -------------------- 攻击状态操作 --------------------
+  /** 初始化攻击状态 */
+  function initAttackState(commandForceId) {
+    attackState.phase = 'selectTarget';
+    attackState.commandForceId = commandForceId;
+    attackState.supportForceIds = [];
+    attackState.enemyCommandForceId = null;
+    attackState.enemySupportForceIds = [];
+  }
+
+  /** 清除攻击状态 */
+  function clearAttackState() {
+    attackState.phase = null;
+    attackState.commandForceId = null;
+    attackState.supportForceIds = [];
+    attackState.enemyCommandForceId = null;
+    attackState.enemySupportForceIds = [];
+  }
 
   // -------------------- 命令系统操作 --------------------
   /** 设置自动模式 */
@@ -501,6 +531,8 @@ export const openGameStore = defineStore("gameStore", () => {
     // 状态导出
     layerIndex,
     highlightStyle,
+    rangeStyle,
+    commanderStyle,
     currentRound,
     currentFaction,
     factionFinished,
@@ -512,6 +544,7 @@ export const openGameStore = defineStore("gameStore", () => {
     selectedHexIds,
     selectedForceIds,
     lockedSelection,
+    attackState,  // 导出攻击状态
     
     // 命令系统状态
     autoMode,
@@ -597,6 +630,10 @@ export const openGameStore = defineStore("gameStore", () => {
     getLockedForceIds,
     setLockedSelection,
     clearLockedSelection,
+    
+    // 攻击状态方法
+    initAttackState,
+    clearAttackState,
     
     // 命令系统方法
     setAutoMode,

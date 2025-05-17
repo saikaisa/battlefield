@@ -390,7 +390,7 @@ export class Battlegroup {
       jointFirepower.sea += firepower.sea; 
       jointFirepower.air += firepower.air;
     });
-    const k = this.openGameStore().getForceById(this.commandForceId)?.commandCapability ?? 1;
+    const k = openGameStore().getForceById(this.commandForceId)?.commandCapability ?? 1;
     return { 
       land: jointFirepower.land * k, 
       sea: jointFirepower.sea * k, 
