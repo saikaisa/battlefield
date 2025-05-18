@@ -8,9 +8,10 @@ import { Battlegroup } from '@/models/MilitaryUnit';
  * 军事战斗控制器
  * 
  * 主要职责：
- * 1. 管理战斗动画的渲染
+ * 1. 管理战斗的全流程
  * 2. 处理战斗结果的视觉反馈、战斗裁决与结算
- * 3. 协调战斗过程中的模型行为
+ * 3. 协调战斗过程中的模型行为和动画
+ * 4. 在总览界面格式化显示战斗结果
  */
 export class BattleController {
   // 单例实例
@@ -92,7 +93,7 @@ export class BattleController {
     return forces;
   }
 
-  /**
+  /** 
    * 验证支援部队是否都在指挥部队的指挥范围内
    * @param {string} commandForceId 指挥部队ID
    * @param {Array<string>} supportForceIds 支援部队ID数组
