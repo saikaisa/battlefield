@@ -200,44 +200,54 @@ export class HexGridRenderer {
   _updateHexPrimitives(primCollection, primMap, hexIdsToRender, createPrimitiveFn, forceUpdate = false) {
     // 1. 计算需要移除的格子
     const hexIdsToRemove = [];
-    for (const hexId of primMap.keys()) {
+    for (const mapKey of primMap.keys()) {
+      const [hexId] = mapKey.split('|');
       if (!hexIdsToRender.has(hexId)) {
-        hexIdsToRemove.push(hexId);
+        hexIdsToRemove.push(mapKey);
       }
     }
     
     // 2. 计算需要处理的格子
     const hexIdsToProcess = [];
     for (const hexId of hexIdsToRender) {
-      // 如果是强制更新模式，或者格子不在primMap中，则需要处理
-      if (forceUpdate || !primMap.has(hexId)) {
-        hexIdsToProcess.push(hexId);
+      // 获取六角格当前的样式
+      const hexCell = this.store.getHexCellById(hexId);
+      if (!hexCell) continue;
+      
+      // 获取样式的哈希值（简化版，可以根据需要扩展）
+      const styleHash = this._getStyleHash(hexId);
+      const mapKey = `${hexId}|${styleHash}`;
+      
+      // 如果是强制更新模式，或者格子不在primMap中，或者样式已变化，则需要处理
+      if (forceUpdate || !primMap.has(mapKey)) {
+        hexIdsToProcess.push({hexId, mapKey});
       }
     }
     
     // 3. 移除不再需要的primitive
-    for (const hexId of hexIdsToRemove) {
-      const primitive = primMap.get(hexId);
+    for (const mapKey of hexIdsToRemove) {
+      const primitive = primMap.get(mapKey);
       if (primitive) {
         primCollection.remove(primitive);
-        primMap.delete(hexId);
+        primMap.delete(mapKey);
       }
     }
     
     // 4. 添加或更新primitive
-    for (const hexId of hexIdsToProcess) {
-      // 如果已存在，先移除旧的
-      if (primMap.has(hexId)) {
-        const oldPrimitive = primMap.get(hexId);
-        primCollection.remove(oldPrimitive);
-        primMap.delete(hexId);
+    for (const {hexId, mapKey} of hexIdsToProcess) {
+      // 查找并移除所有与该hexId相关的旧primitive
+      for (const [oldKey, oldPrimitive] of primMap.entries()) {
+        if (oldKey.startsWith(hexId + '|')) {
+          primCollection.remove(oldPrimitive);
+          primMap.delete(oldKey);
+        }
       }
       
       // 添加新的
       const primitive = createPrimitiveFn(hexId);
       if (primitive) {
         primCollection.add(primitive);
-        primMap.set(hexId, primitive);
+        primMap.set(mapKey, primitive);
       }
     }
   }
@@ -341,7 +351,6 @@ export class HexGridRenderer {
             'interaction', 
             5.0,
             this.store.highlightStyle,
-            true
           );
         }
         return null;
@@ -995,57 +1004,95 @@ export class HexGridRenderer {
   }
 
   /**
-   * 获取或创建六角格几何
+   * 获取六角格样式的哈希值
+   * @param {string} hexId 六角格ID
+   * @returns {string} 样式的哈希值
+   * @private
    */
-  static getOrCreateGeometry(hexCell) {
-    let geom = geometryCache.get(hexCell.hexId);
-    if (!geom) {
-      geom = {
-        fillGeometry: HexGridRenderer._createHexCellGeometry(hexCell),
-        borderGeometry: HexGridRenderer._createHexCellBorderGeometry(hexCell)
-      };
-      geometryCache.set(hexCell.hexId, geom);
+  _getStyleHash(hexId) {
+    const hexCell = this.store.getHexCellById(hexId);
+    if (!hexCell) return 'none';
+    
+    // 获取六角格当前的样式信息
+    let styleHash = '';
+    
+    // 基于当前六角格的可视样式生成哈希
+    if (hexCell.visibility && hexCell.visibility.visualStyles) {
+      // 获取interaction层和base层的样式
+      const interactionStyle = hexCell.getTopVisualStyle('interaction');
+      const baseStyle = hexCell.getTopVisualStyle('base');
+      const markStyle = hexCell.getTopVisualStyle('mark');
+      
+      // 添加各层样式的哈希信息
+      if (interactionStyle) {
+        styleHash += `int:${interactionStyle.type}:${interactionStyle.priority}:`;
+        if (interactionStyle.fillColor) {
+          styleHash += `${interactionStyle.fillColor.toString()}:`;
+        }
+        if (interactionStyle.borderColor) {
+          styleHash += `${interactionStyle.borderColor.toString()}:`;
+        }
+        styleHash += `${interactionStyle.showFill}:${interactionStyle.showBorder}:${interactionStyle.borderPattern}:${interactionStyle.borderWidth}|`;
+      }
+      
+      if (baseStyle) {
+        styleHash += `base:${baseStyle.type}:`;
+      }
+      
+      if (markStyle) {
+        styleHash += `mark:${markStyle.type}:`;
+      }
     }
-    return geom;
-  }
-
-  /**
-   * 根据 hexCell 对象创建 Cesium.PolygonGeometry 用于渲染
-   * 注意：此函数只使用 position.points 中的顶点（第 1 至第 6 个元素）来创建多边形边界，中
-   * 心点不参与边界绘制。
-   * @param {HexCell} hexCell 六角格数据对象，要求 position.points 包含至少 7 个点（中心 + 6 个顶点）
-   * @returns {Cesium.PolygonGeometry}
-   */
-  static _createHexCellGeometry(hexCell) {
-    const vertices = hexCell.getVertices();
-    const pos = vertices.concat(vertices[0]);
-    const posArr = pos.flatMap((pt) => [pt.longitude, pt.latitude, pt.height]);
     
-    // 创建几何体时使用较低精度
-    return Cesium.PolygonGeometry.fromPositions({
-      positions: Cesium.Cartesian3.fromDegreesArrayHeights(posArr),
-      vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
-      granularity: Cesium.Math.RADIANS_PER_DEGREE // 降低采样精度
-    });
-  }
-
-  /**
-   * 根据 hexCell 对象生成边框的 PolylineGeometry
-   * 只使用 position.points 中的顶点（第 1 至第 6 个元素），然后重复第一个顶点闭合
-   * @param {HexCell} hexCell - 六角格数据对象，要求 position.points 包含至少 7 个点（中心 + 6 个顶点）
-   * @returns {Cesium.GroundPolylineGeometry}
-   */
-  static _createHexCellBorderGeometry(hexCell) {
-    const vertices = hexCell.getVertices();
-    const posArr = vertices.map((pt) => [pt.longitude, pt.latitude]).flat();
+    // 添加游戏模式相关的样式信息
+    styleHash += `mode:${this.store.gameMode}:`;
     
-    // 创建几何体时使用较低精度
-    return new Cesium.GroundPolylineGeometry({
-      positions: Cesium.Cartesian3.fromDegreesArray(posArr),
-      loop: true,
-      width: 4.0,
-      granularity: Cesium.Math.RADIANS_PER_DEGREE * 2 // 降低采样精度
-    });
+    // 添加全局样式信息
+    styleHash += `highlight:${JSON.stringify(this.store.highlightStyle)}:`;
+    
+    // 基于不同游戏模式添加特定样式信息
+    if (this.store.gameMode === GameMode.ATTACK_PREPARE) {
+      // 攻击模式特定状态
+      const attackState = this.store.attackState;
+      
+      // 检查该六角格是否是指挥部队或支援部队
+      const isCommandForce = attackState.commandForceId && 
+                            this.store.getForceById(attackState.commandForceId)?.hexId === hexId;
+      const isEnemyCommandForce = attackState.enemyCommandForceId && 
+                                 this.store.getForceById(attackState.enemyCommandForceId)?.hexId === hexId;
+      
+      // 检查是否在支援部队列表中
+      const isSupportForce = attackState.supportForceIds.some(id => 
+        this.store.getForceById(id)?.hexId === hexId);
+      const isEnemySupportForce = attackState.enemySupportForceIds.some(id => 
+        this.store.getForceById(id)?.hexId === hexId);
+      
+      // 添加状态信息到哈希
+      styleHash += `attack:${attackState.phase}:${isCommandForce}:${isEnemyCommandForce}:${isSupportForce}:${isEnemySupportForce}:`;
+    } else {
+      // 其他模式下，如果有选中的部队，检查其指挥范围
+      const selectedForceIds = this.store.getSelectedForceIds();
+      if (selectedForceIds.size > 0) {
+        const firstForceId = Array.from(selectedForceIds)[0];
+        const force = this.store.getForceById(firstForceId);
+        
+        if (force && force.hexId) {
+          // 检查该六角格是否在选中部队的指挥范围内
+          const commandCell = this.store.getHexCellById(force.hexId);
+          if (commandCell) {
+            const inRange = commandCell.getHexCellInRange(force.commandRange)
+                            .some(cell => cell.hexId === hexId);
+            styleHash += `selected:${firstForceId}:inRange:${inRange}:`;
+          }
+        }
+      }
+    }
+    
+    // 最后添加选中状态
+    const isSelected = this.store.getSelectedHexIds().has(hexId);
+    styleHash += `selected:${isSelected}`;
+    
+    return styleHash;
   }
   
   /**

@@ -221,7 +221,7 @@ function handleNextTurn() {
   if (isButtonDisabled(GameButtons.NEXT_FACTION)) return;
   
   executeCommand(CommandType.NEXT_FACTION);
-  OverviewConsole.success('========== 下一回合 ==========');
+  OverviewConsole.success('\n========== 第' + currentRound.value + '回合：' + getFactionName(currentFaction.value) + ' ==========');
   showSuccess('下一回合开始');
 }
 
