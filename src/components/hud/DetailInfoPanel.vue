@@ -711,14 +711,6 @@ function enterSupportSelectionPhase() {
   // 将友方指挥部队及所在六角格锁定高亮
   store.setSelectedHexIds([commandForce.hexId]);
   store.setLockedSelection([commandForce.hexId]);
-  
-  // 手动触发战斗群预览更新
-  // try {
-  //   const validator = HexSelectValidator.getInstance();
-  //   validator.previewBattlegroups(commandForce, enemyForce);
-  // } catch (error) {
-  //   console.error('无法更新战斗群预览:', error);
-  // }
 }
 
 // 处理攻击下一步
@@ -763,18 +755,16 @@ function executeAttackCommand() {
     showWarning('无法获取敌方指挥部队信息');
     return;
   }
-  
-  // 构建支援部队列表（当前所有选中的部队，除了指挥部队）
-  const supportForceIds = Array.from(store.selectedForceIds)
-    .filter(id => id !== attackState.commandForceId);
 
   showSuccess('开始攻击');
+  console.log(`supportForceIds: ${attackState.supportForceIds}`);
+  console.log(`selectedHexIds: ${store.selectedHexIds}`);
   
   // 执行攻击命令
   executeCommand(CommandType.ATTACK, {
     commandForceId: attackState.commandForceId,
     targetHex: enemyForce.hexId,
-    supportForceIds: supportForceIds,
+    supportForceIds: attackState.supportForceIds,
     enemyCommandForceId: attackState.enemyCommandForceId,
     enemySupportForceIds: attackState.enemySupportForceIds
   });

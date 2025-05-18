@@ -676,7 +676,11 @@ export class CommandProcessor {
       // 6. 在界面上显示战斗报告
       // 7. 等待用户对战斗报告点击确认后，返回，允许继续执行，回到自由模式
       //    对于战斗报告是否确认，可以通过监视一个状态或者确认按钮的事件来判断
-
+      OverviewConsole.log(`============ 参战部队 ============`);
+      OverviewConsole.log(`指挥部队: ${commandForceId}`);
+      OverviewConsole.log(`支援部队: ${supportForceIds.join(', ')}`);
+      OverviewConsole.log(`敌方指挥部队: ${enemyCommandForceId}`);
+      OverviewConsole.log(`敌方支援部队: ${enemySupportForceIds.join(', ')}`);
 
       // 完成后恢复自由模式
       gameModeService.setMode(GameMode.FREE);

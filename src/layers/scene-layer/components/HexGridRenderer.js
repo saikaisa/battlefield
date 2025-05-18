@@ -46,28 +46,56 @@ export class HexGridRenderer {
     this.heightCache = HexHeightCache.getInstance(viewer);
 
     this.layerIndex = computed(() => this.store.layerIndex);
+    /* 全量渲染图层 */
     this.markGridPrimitives = null; // 标记层
-    this.interactGridPrimitives = null; // 交互层集合(选中高亮)
-    this.commandRangePrimitives = null; // 指挥范围高亮层
-    this.enemyCommandRangePrimitives = null; // 敌方指挥范围高亮层
+    this.friendlyCommandRangePrimitives = null; // 攻击准备模式下友方指挥范围高亮层
+    this.enemyCommandRangePrimitives = null; // 攻击准备模式下敌方指挥范围高亮层
+
+    /* 增量渲染图层 */
+    this.highlightPrimitives = null; // 交互层集合(选中高亮)
+    this.immCommandRangePrimitives = null; // 自由模式下指挥范围高亮层
+    this.friendlyCommanderPrimitives = null; // 攻击准备模式下友方指挥部队高亮层
+    this.enemyCommanderPrimitives = null; // 攻击准备模式下敌方指挥部队高亮层
+    this.friendlySupportPrimitives = null; // 攻击准备模式下友方支援部队高亮层
+    this.enemySupportPrimitives = null; // 攻击准备模式下敌方支援部队高亮层
     
-    // 存储六角格ID到Primitive的映射
-    this.hexPrimitiveMap = new Map();
-    this.commandRangeHexMap = new Map(); // 指挥范围六角格ID到Primitive的映射
-    this.enemyCommandRangeHexMap = new Map(); // 敌方指挥范围六角格ID到Primitive的映射
+    this.highlightPrimitivesMap = new Map(); // 存储高亮六角格ID到Primitive的映射
+    this.immCommandRangePrimitiveMap = new Map(); // 存储自由模式下指挥范围六角格ID到Primitive的映射
+    this.friendlyCommanderPrimitiveMap = new Map(); // 存储攻击准备模式下的友方指挥部队六角格ID到Primitive的映射
+    this.enemyCommanderPrimitiveMap = new Map(); // 存储攻击准备模式下的敌方指挥部队六角格ID到Primitive的映射
+    this.friendlySupportPrimitiveMap = new Map(); // 存储攻击准备模式下的友方支援部队六角格ID到Primitive的映射
+    this.enemySupportPrimitiveMap = new Map(); // 存储攻击准备模式下的敌方支援部队六角格ID到Primitive的映射
     
-    // 监听选中状态、样式、游戏模式的变化，更新交互层渲染
+    // 用于跟踪上一次渲染的敌方指挥部队ID，避免频繁重新渲染
+    this._lastEnemyCommandForceId = null;
+    
+    // 监听选中状态、样式的变化，更新交互层渲染
     watch(
       [
         () => this.store.getSelectedHexIds(),
         () => this.store.getSelectedForceIds(),
         () => this.store.highlightStyle,
         () => this.store.rangeStyle,
-        () => this.store.gameMode,
         () => this.store.attackState,
       ],
       () => {
         // 直接触发交互层渲染
+        this.renderInteractGrid(false);
+      },
+      { deep: true }
+    );
+
+    watch(
+      () => this.store.gameMode,
+      () => {
+        // 切换高亮样式
+        if (this.store.gameMode === GameMode.ATTACK_PREPARE) {
+          this.store.setHighlightStyle(HexVisualStyles.selectedBorder);
+        } else if (this.store.gameMode === GameMode.MOVE_EXECUTE) {
+          this.store.setHighlightStyle(HexVisualStyles.selectedGreen);
+        } else {
+          this.store.setHighlightStyle(HexVisualStyles.selected);
+        }
         this.renderInteractGrid(false);
       },
       { deep: true }
@@ -166,44 +194,50 @@ export class HexGridRenderer {
    * @param {Map} primMap 六角格ID到primitive的映射
    * @param {Set} hexIdsToRender 需要显示的六角格ID集合
    * @param {Function} createPrimitiveFn 创建primitive的函数，接收hexId参数，返回primitive
-   * @param {string} prefix 用于区分不同类型的primitive，防止同一hexId的不同类型primitive相互覆盖
+   * @param {boolean} [forceUpdate=false] 是否强制更新所有格子，包括已存在于primMap中的
    * @private
    */
-  _updateHexPrimitives(primCollection, primMap, hexIdsToRender, createPrimitiveFn, prefix = '') {
+  _updateHexPrimitives(primCollection, primMap, hexIdsToRender, createPrimitiveFn, forceUpdate = false) {
     // 1. 计算需要移除的格子
     const hexIdsToRemove = [];
-    for (const key of primMap.keys()) {
-      const [p, hexId] = key.split('::');
-      if (p === prefix && !hexIdsToRender.has(hexId)) {
-        hexIdsToRemove.push(key);
+    for (const hexId of primMap.keys()) {
+      if (!hexIdsToRender.has(hexId)) {
+        hexIdsToRemove.push(hexId);
       }
     }
     
-    // 2. 计算需要新增的格子
-    const hexIdsToAdd = [];
+    // 2. 计算需要处理的格子
+    const hexIdsToProcess = [];
     for (const hexId of hexIdsToRender) {
-      const key = `${prefix}::${hexId}`;
-      if (!primMap.has(key)) {
-        hexIdsToAdd.push(hexId);
+      // 如果是强制更新模式，或者格子不在primMap中，则需要处理
+      if (forceUpdate || !primMap.has(hexId)) {
+        hexIdsToProcess.push(hexId);
       }
     }
     
     // 3. 移除不再需要的primitive
-    for (const key of hexIdsToRemove) {
-      const primitive = primMap.get(key);
+    for (const hexId of hexIdsToRemove) {
+      const primitive = primMap.get(hexId);
       if (primitive) {
         primCollection.remove(primitive);
-        primMap.delete(key);
+        primMap.delete(hexId);
       }
     }
     
-    // 4. 添加新的primitive
-    for (const hexId of hexIdsToAdd) {
+    // 4. 添加或更新primitive
+    for (const hexId of hexIdsToProcess) {
+      // 如果已存在，先移除旧的
+      if (primMap.has(hexId)) {
+        const oldPrimitive = primMap.get(hexId);
+        primCollection.remove(oldPrimitive);
+        primMap.delete(hexId);
+      }
+      
+      // 添加新的
       const primitive = createPrimitiveFn(hexId);
       if (primitive) {
         primCollection.add(primitive);
-        // 使用前缀+hexId作为key，防止不同类型的primitive相互覆盖
-        primMap.set(`${prefix}::${hexId}`, primitive);
+        primMap.set(hexId, primitive);
       }
     }
   }
@@ -217,47 +251,75 @@ export class HexGridRenderer {
     // 图层切换时处理显隐控制
     if (indexChange) {
       const shouldShow = (this.layerIndex.value !== 3); 
-      if (this.interactGridPrimitives) {
-        this.interactGridPrimitives.show = shouldShow;
+      if (this.highlightPrimitives) {
+        this.highlightPrimitives.show = shouldShow;
       }
-      if (this.commandRangePrimitives) {
-        this.commandRangePrimitives.show = shouldShow;
+      if (this.immCommandRangePrimitives) {
+        this.immCommandRangePrimitives.show = shouldShow;
+      }
+      if (this.friendlyCommandRangePrimitives) {
+        this.friendlyCommandRangePrimitives.show = shouldShow;
       }
       if (this.enemyCommandRangePrimitives) {
         this.enemyCommandRangePrimitives.show = shouldShow;
+      }
+      if (this.friendlyCommanderPrimitives) {
+        this.friendlyCommanderPrimitives.show = shouldShow;
+      }
+      if (this.enemyCommanderPrimitives) {
+        this.enemyCommanderPrimitives.show = shouldShow;
+      }
+      if (this.friendlySupportPrimitives) {
+        this.friendlySupportPrimitives.show = shouldShow;
+      }
+      if (this.enemySupportPrimitives) {
+        this.enemySupportPrimitives.show = shouldShow;
       }
       return;
     }
     
     // ===================================================
-    // 1. 初始化和重置primitive集合
+    // 1. 初始化primitive集合，如果不存在则创建
     // ===================================================
-    
-    // 移除并重新创建所有primitive集合，确保没有历史数据干扰
-    
-    // 1.1 选中高亮层
-    if (this.interactGridPrimitives) {
-      this.viewer.scene.primitives.remove(this.interactGridPrimitives);
+    if (!this.highlightPrimitives) {
+      this.highlightPrimitives = new Cesium.PrimitiveCollection();
+      this.viewer.scene.primitives.add(this.highlightPrimitives);
     }
-    this.interactGridPrimitives = new Cesium.PrimitiveCollection();
-    this.hexPrimitiveMap = new Map();
-    this.viewer.scene.primitives.add(this.interactGridPrimitives);
     
-    // 1.2 友方指挥范围高亮层
-    if (this.commandRangePrimitives) {
-      this.viewer.scene.primitives.remove(this.commandRangePrimitives);
+    if (!this.immCommandRangePrimitives) {
+      this.immCommandRangePrimitives = new Cesium.PrimitiveCollection();
+      this.viewer.scene.primitives.add(this.immCommandRangePrimitives);
     }
-    this.commandRangePrimitives = new Cesium.PrimitiveCollection();
-    this.commandRangeHexMap = new Map();
-    this.viewer.scene.primitives.add(this.commandRangePrimitives);
+
+    if (!this.friendlyCommanderPrimitives) {
+      this.friendlyCommanderPrimitives = new Cesium.PrimitiveCollection();
+      this.viewer.scene.primitives.add(this.friendlyCommanderPrimitives);
+    }
+
+    if (!this.enemyCommanderPrimitives) {
+      this.enemyCommanderPrimitives = new Cesium.PrimitiveCollection(); 
+      this.viewer.scene.primitives.add(this.enemyCommanderPrimitives);
+    }
+
+    if (!this.friendlySupportPrimitives) {
+      this.friendlySupportPrimitives = new Cesium.PrimitiveCollection();
+      this.viewer.scene.primitives.add(this.friendlySupportPrimitives);
+    }
+
+    if (!this.enemySupportPrimitives) {
+      this.enemySupportPrimitives = new Cesium.PrimitiveCollection();
+      this.viewer.scene.primitives.add(this.enemySupportPrimitives);
+    }
     
-    // 1.3 敌方指挥范围高亮层
-    if (this.enemyCommandRangePrimitives) {
-      this.viewer.scene.primitives.remove(this.enemyCommandRangePrimitives);
+    if (!this.friendlyCommandRangePrimitives) {
+      this.friendlyCommandRangePrimitives = new Cesium.PrimitiveCollection();
+      this.viewer.scene.primitives.add(this.friendlyCommandRangePrimitives);
     }
-    this.enemyCommandRangePrimitives = new Cesium.PrimitiveCollection();
-    this.enemyCommandRangeHexMap = new Map();
-    this.viewer.scene.primitives.add(this.enemyCommandRangePrimitives);
+    
+    if (!this.enemyCommandRangePrimitives) {
+      this.enemyCommandRangePrimitives = new Cesium.PrimitiveCollection();
+      this.viewer.scene.primitives.add(this.enemyCommandRangePrimitives);
+    }
     
     // ===================================================
     // 2. 处理选中高亮
@@ -268,8 +330,8 @@ export class HexGridRenderer {
     
     // 2.1 直接使用selectedHexIds创建高亮Primitive，无需修改HexCell对象
     this._updateHexPrimitives(
-      this.interactGridPrimitives,
-      this.hexPrimitiveMap,
+      this.highlightPrimitives,
+      this.highlightPrimitivesMap,
       selectedHexIds,
       (hexId) => {
         const hexCell = this.store.getHexCellById(hexId);
@@ -277,13 +339,13 @@ export class HexGridRenderer {
           return this._createHexPrimitive(
             hexCell,
             'interaction', 
-            2.0,
-            this.store.highlightStyle // 直接使用store中的highlightStyle
+            5.0,
+            this.store.highlightStyle,
+            true
           );
         }
         return null;
-      },
-      'selected_hex' // 选中六角格前缀
+      }
     );
     
     // ===================================================
@@ -293,8 +355,20 @@ export class HexGridRenderer {
     // 记录当前游戏模式，用于条件判断
     const currentGameMode = this.store.gameMode;
     
-    // 3.1 在自由模式或环绕模式下启用部队指挥范围高亮
+    // 在自由模式或环绕模式下启用部队指挥范围高亮
     if (currentGameMode === GameMode.FREE || currentGameMode === GameMode.ORBIT) {
+      // 清空攻击准备模式下的图层
+      this.friendlyCommanderPrimitives.removeAll();
+      this.enemyCommanderPrimitives.removeAll();
+      this.friendlySupportPrimitives.removeAll();
+      this.enemySupportPrimitives.removeAll();
+      this.friendlyCommandRangePrimitives.removeAll();
+      this.enemyCommandRangePrimitives.removeAll();
+      this.friendlyCommanderPrimitiveMap.clear();
+      this.enemyCommanderPrimitiveMap.clear();
+      this.friendlySupportPrimitiveMap.clear();
+      this.enemySupportPrimitiveMap.clear();
+      
       // 获取当前选中的部队
       const selectedForceIds = this.store.getSelectedForceIds();
       
@@ -324,328 +398,311 @@ export class HexGridRenderer {
             const hexesInRange = hexCell.getHexCellInRange(commandRange);
             
             // 收集所有需要显示的指挥范围六角格ID
-            // 转换hexesInRange数组为hexId的Set
-            const rangeHexIdsToRender = new Set(hexesInRange.map(cell => cell.hexId));
+            const rangeHexIdsToRender = new Set();
+            for (const rangeHexCell of hexesInRange) {
+              // 排除选中高亮的六角格和指挥部队所在的六角格
+              if (!selectedHexIds.has(rangeHexCell.hexId) && rangeHexCell.hexId !== hexCell.hexId) {
+                rangeHexIdsToRender.add(rangeHexCell.hexId);
+              }
+            }
             
-            // 使用通用方法更新指挥范围高亮，明确传入rangeStyle
+            // 使用_updateHexPrimitives进行增量更新，而不是完全重建
             this._updateHexPrimitives(
-              this.commandRangePrimitives,
-              this.commandRangeHexMap,
+              this.immCommandRangePrimitives,
+              this.immCommandRangePrimitiveMap,
               rangeHexIdsToRender,
               (hexId) => {
-                const hexCell = this.store.getHexCellById(hexId);
-                if (hexCell && rangeStyle) {
+                const rangeHexCell = this.store.getHexCellById(hexId);
+                if (rangeHexCell) {
                   return this._createHexPrimitive(
-                    hexCell,
+                    rangeHexCell,
                     'interaction', 
                     1.5,
-                    rangeStyle // 明确使用rangeStyle
+                    rangeStyle
                   );
                 }
                 return null;
-              },
-              'free_mode_range' // 自由模式范围前缀
+              }
             );
-            console.log('[HexGridRenderer] 渲染指挥范围高亮，六角格数量:', rangeHexIdsToRender.size);
+            
+            console.log('[HexGridRenderer] 渲染指挥范围高亮，六角格数量:', 
+              this.immCommandRangePrimitives.length);
           }
         }
       } else {
         // 没有选中部队，清空指挥范围
-        this.commandRangePrimitives.removeAll();
-        this.commandRangeHexMap.clear();
+        this.immCommandRangePrimitives.removeAll();
+        this.immCommandRangePrimitiveMap.clear();
       }
-      
-      // 在非攻击准备模式下，不需要渲染攻击准备模式下的敌方指挥范围
-      this.enemyCommandRangePrimitives.removeAll();
-      this.enemyCommandRangeHexMap.clear();
     }
-    // 3.2 在攻击准备模式下，使用attackState中的指挥部队渲染指挥范围
+
+    // 在攻击准备模式下，使用attackState中的指挥部队渲染指挥范围
     else if (currentGameMode === GameMode.ATTACK_PREPARE) {
       console.log('[HexGridRenderer] 正在攻击准备模式下渲染指挥范围高亮');
       
+      // 清空自由模式下的指挥范围
+      this.immCommandRangePrimitives.removeAll();
+      this.immCommandRangePrimitiveMap.clear();
+      
       // 获取攻击状态
       const attackState = this.store.attackState;
+
+      // 获取敌我指挥部队和支援部队所在的六角格
+      const commandForce = this.store.getForceById(attackState.commandForceId);
+      const commandForceHex = commandForce && this.store.getHexCellById(commandForce.hexId);
       
-      // ==================================================
-      // 处理友方指挥部队
-      // ==================================================
-      if (attackState.commandForceId) {
-        const commandForce = this.store.getForceById(attackState.commandForceId);
-        
-        if (commandForce) {
-          // 获取部队所在六角格
-          const hexId = commandForce.hexId;
-          const hexCell = this.store.getHexCellById(hexId);
-          
-          if (hexCell) {
-            // 获取部队的指挥范围
-            const commandRange = commandForce.commandRange;
-            
-            // 获取指挥范围内的所有六角格
-            const hexesInRange = hexCell.getHexCellInRange(commandRange);
-            
-            // 阵营和样式
-            const friendlyFaction = commandForce.faction;
-            const friendlyRangeStyle = this.store.rangeStyle[friendlyFaction];
-            const friendlyCommanderStyle = this.store.commanderStyle[friendlyFaction];
-            
-            // 收集需要显示的友方指挥范围六角格ID (不包括指挥部队所在六角格)
-            const friendlyRangeHexIds = new Set();
-            hexesInRange.forEach(rangeHexCell => {
-              // 排除已选中高亮和指挥部队本身所在的六角格
-              if (!selectedHexIds.has(rangeHexCell.hexId) && rangeHexCell.hexId !== hexId) {
-                friendlyRangeHexIds.add(rangeHexCell.hexId);
-              }
-            });
-            
-            // 渲染友方指挥范围
-            if (friendlyRangeHexIds.size > 0) {
-              console.log('[HexGridRenderer] 渲染友方指挥范围，六角格数量:', friendlyRangeHexIds.size);
-              console.log('[HexGridRenderer] 友方样式:', friendlyRangeStyle);
-              
-              // 强行使用敌方primitive集合来渲染友方指挥范围(该死的，只能这样了)
-              this._updateHexPrimitives(
-                this.enemyCommandRangePrimitives,
-                this.enemyCommandRangeHexMap,
-                friendlyRangeHexIds,
-                (hexId) => {
-                  const hexCell = this.store.getHexCellById(hexId);
-                  if (hexCell) {
-                    // 将友方样式的不透明度加大一点
-                    const enhancedStyle = friendlyRangeStyle ? {
-                      ...friendlyRangeStyle,
-                      fillColor: new Cesium.Color(
-                        friendlyRangeStyle.fillColor.red,
-                        friendlyRangeStyle.fillColor.green,
-                        friendlyRangeStyle.fillColor.blue,
-                        0.2 // 强制提高不透明度
-                      ),
-                      showBorder: true
-                    } : HexVisualStyles.selectedBlue;
-                    
-                    return this._createHexPrimitive(
-                      hexCell,
-                      'interaction', 
-                      1.7, // 提高高度偏移
-                      enhancedStyle
-                    );
-                  }
-                  return null;
-                },
-                'friendly_range' // 友方指挥范围前缀
-              );
-              
-              // 检查是否成功添加了primitive
-              console.log('[HexGridRenderer] 友方指挥范围primitive数量(使用敌方集合):', this.enemyCommandRangePrimitives.length);
-            } else {
-              // 如果没有友方范围，清空现有的primitive
-              this.commandRangePrimitives.removeAll();
-              this.commandRangeHexMap.clear();
-            }
-            
-            // 单独处理友方指挥部队所在的六角格，使用commanderStyle
-            if (!selectedHexIds.has(hexId)) {
-              const friendlyCommanderHexIds = new Set([hexId]);
-              console.log('[HexGridRenderer] 渲染友方指挥部队高亮');
-              
-              // 友方指挥部队继续使用commandRangePrimitives
-              this._updateHexPrimitives(
-                this.commandRangePrimitives,
-                this.commandRangeHexMap,
-                friendlyCommanderHexIds,
-                (hexId) => {
-                  const hexCell = this.store.getHexCellById(hexId);
-                  if (hexCell) {
-                    const style = friendlyCommanderStyle || HexVisualStyles.commanderBlue;
-                    console.log('[HexGridRenderer] 友方指挥部队样式:', style);
-                    return this._createHexPrimitive(
-                      hexCell,
-                      'interaction', 
-                      2.0, // 使其高于所有范围，确保可见
-                      style // 使用指挥部队样式
-                    );
-                  }
-                  return null;
-                },
-                'friendly_commander' // 友方指挥部队前缀
-              );
-            }
-          }
+      const enemyCommandForce = this.store.getForceById(attackState.enemyCommandForceId);
+      const enemyCommandForceHex = enemyCommandForce && this.store.getHexCellById(enemyCommandForce.hexId);
+      
+      const supportForceHexes = [];
+      for (const forceId of attackState.supportForceIds) {
+        const force = this.store.getForceById(forceId);
+        if (force) {
+          const hexCell = this.store.getHexCellById(force.hexId);
+          if (hexCell) supportForceHexes.push(hexCell);
         }
-      } else {
-        // 如果没有友方指挥部队，清空友方指挥范围
-        this.commandRangePrimitives.removeAll();
-        this.commandRangeHexMap.clear();
       }
       
-      // ==================================================
-      // 处理敌方指挥部队
-      // ==================================================
-      if (attackState.enemyCommandForceId) {
-        const enemyCommandForce = this.store.getForceById(attackState.enemyCommandForceId);
-        
-        if (enemyCommandForce) {
-          // 获取部队所在六角格
-          const hexId = enemyCommandForce.hexId;
-          const hexCell = this.store.getHexCellById(hexId);
-          
-          if (hexCell) {
-            // 获取部队的指挥范围
-            const commandRange = enemyCommandForce.commandRange;
-            
-            // 获取指挥范围内的所有六角格
-            const hexesInRange = hexCell.getHexCellInRange(commandRange);
-            
-            // 敌方阵营和样式
-            const enemyFaction = enemyCommandForce.faction;
-            const enemyRangeStyle = this.store.rangeStyle[enemyFaction];
-            const enemyCommanderStyle = this.store.commanderStyle[enemyFaction];
-            
-            // 收集需要显示的敌方指挥范围六角格ID (不包括指挥部队所在六角格)
-            const enemyRangeHexIds = new Set();
-            hexesInRange.forEach(rangeHexCell => {
-              // 排除已选中高亮和敌方指挥部队本身所在的六角格
-              if (!selectedHexIds.has(rangeHexCell.hexId) && rangeHexCell.hexId !== hexId) {
-                enemyRangeHexIds.add(rangeHexCell.hexId);
-              }
-            });
-            
-            // 渲染敌方指挥范围
-            if (enemyRangeHexIds.size > 0) {
-              console.log('[HexGridRenderer] 渲染敌方指挥范围，六角格数量:', enemyRangeHexIds.size);
-              
-              // 由于我们用enemyCommandRangePrimitives渲染了友方范围，所以敌方范围需要用commandRangePrimitives
-              this._updateHexPrimitives(
-                this.commandRangePrimitives,
-                this.commandRangeHexMap,
-                enemyRangeHexIds,
-                (hexId) => {
-                  const hexCell = this.store.getHexCellById(hexId);
-                  if (hexCell) {
-                    return this._createHexPrimitive(
-                      hexCell,
-                      'interaction', 
-                      1.3, // 稍低于友方范围，确保自然重叠
-                      enemyRangeStyle || HexVisualStyles.selectedRed // 明确传入样式
-                    );
-                  }
-                  return null;
-                },
-                'enemy_range' // 敌方指挥范围前缀
+      const enemySupportForceHexes = [];
+      for (const forceId of attackState.enemySupportForceIds) {
+        const force = this.store.getForceById(forceId);
+        if (force) {
+          const hexCell = this.store.getHexCellById(force.hexId);
+          if (hexCell) enemySupportForceHexes.push(hexCell);
+        }
+      }
+      
+      // 处理指挥部队高亮
+      if (commandForceHex && attackState.phase) {
+        // 使用增量更新指挥部队高亮
+        this._updateHexPrimitives(
+          this.friendlyCommanderPrimitives,
+          this.friendlyCommanderPrimitiveMap,
+          new Set([commandForceHex.hexId]),
+          (hexId) => {
+            const hexCell = this.store.getHexCellById(hexId);
+            if (hexCell) {
+              const faction = commandForce.faction;
+              const style = this.store.commanderStyle[faction] || HexVisualStyles.commanderBlue;
+              return this._createHexPrimitive(
+                hexCell,
+                'interaction',
+                2.5, // 最高层
+                style
               );
-            } else {
-              // 如果没有敌方范围，清空现有的primitive
-              this.enemyCommandRangePrimitives.removeAll();
-              this.enemyCommandRangeHexMap.clear();
             }
-            
-            // 单独处理敌方指挥部队所在的六角格，使用enemyCommanderStyle
-            if (!selectedHexIds.has(hexId)) {
-              const enemyCommanderHexIds = new Set([hexId]);
-              console.log('[HexGridRenderer] 渲染敌方指挥部队高亮');
-              
-              // 敌方指挥部队也使用commandRangePrimitives，但高度略低于友方
-              this._updateHexPrimitives(
-                this.commandRangePrimitives, // 改为与友方一致
-                this.commandRangeHexMap,
-                enemyCommanderHexIds,
-                (hexId) => {
-                  const hexCell = this.store.getHexCellById(hexId);
-                  if (hexCell) {
-                    const style = enemyCommanderStyle || HexVisualStyles.commanderRed;
-                    console.log('[HexGridRenderer] 敌方指挥部队样式:', style);
-                    return this._createHexPrimitive(
-                      hexCell,
-                      'interaction', 
-                      1.9, // 略低于友方指挥部队，但高于范围
-                      style // 使用指挥部队样式
-                    );
-                  }
-                  return null;
-                },
-                'enemy_commander' // 敌方指挥部队前缀
+            return null;
+          }
+        );
+      } else {
+        this.friendlyCommanderPrimitives.removeAll();
+        this.friendlyCommanderPrimitiveMap.clear();
+      }
+      
+      // 处理敌方指挥部队高亮
+      if (enemyCommandForceHex && attackState.phase === 'selectTarget' || attackState.phase === 'selectSupport') {
+        // 使用增量更新敌方指挥部队高亮
+        this._updateHexPrimitives(
+          this.enemyCommanderPrimitives,
+          this.enemyCommanderPrimitiveMap,
+          new Set([enemyCommandForceHex.hexId]),
+          (hexId) => {
+            const hexCell = this.store.getHexCellById(hexId);
+            if (hexCell) {
+              const faction = enemyCommandForce.faction;
+              const style = this.store.commanderStyle[faction] || HexVisualStyles.commanderRed;
+              return this._createHexPrimitive(
+                hexCell,
+                'interaction',
+                2.3, // 稍低于友方指挥部队
+                style
               );
+            }
+            return null;
+          }
+        );
+      } else {
+        this.enemyCommanderPrimitives.removeAll();
+        this.enemyCommanderPrimitiveMap.clear();
+      }
+      
+      // 处理支援部队高亮
+      if (supportForceHexes.length > 0) {
+        const hexIds = new Set(supportForceHexes.map(hex => hex.hexId));
+        this._updateHexPrimitives(
+          this.friendlySupportPrimitives,
+          this.friendlySupportPrimitiveMap,
+          hexIds,
+          (hexId) => {
+            const hexCell = this.store.getHexCellById(hexId);
+            if (hexCell) {
+              const faction = commandForce ? commandForce.faction : 'blue';
+              const style = this.store.supportStyle[faction] || HexVisualStyles.supportBlue;
+              return this._createHexPrimitive(
+                hexCell,
+                'interaction',
+                2.0,
+                style
+              );
+            }
+            return null;
+          }
+        );
+      } else {
+        this.friendlySupportPrimitives.removeAll();
+        this.friendlySupportPrimitiveMap.clear();
+      }
+      
+      // 处理敌方支援部队高亮
+      if (enemySupportForceHexes.length > 0) {
+        const hexIds = new Set(enemySupportForceHexes.map(hex => hex.hexId));
+        this._updateHexPrimitives(
+          this.enemySupportPrimitives,
+          this.enemySupportPrimitiveMap,
+          hexIds,
+          (hexId) => {
+            const hexCell = this.store.getHexCellById(hexId);
+            if (hexCell) {
+              const faction = enemyCommandForce ? enemyCommandForce.faction : 'red';
+              const style = this.store.supportStyle[faction] || HexVisualStyles.supportRed;
+              return this._createHexPrimitive(
+                hexCell,
+                'interaction',
+                1.8,
+                style
+              );
+            }
+            return null;
+          }
+        );
+      } else {
+        this.enemySupportPrimitives.removeAll();
+        this.enemySupportPrimitiveMap.clear();
+      }
+      
+      // 刚进入selectTarget阶段时，画出指挥部队的指挥范围，在模式退出/切换前保持不变
+      if (attackState.commandForceId && this.friendlyCommandRangePrimitives.length === 0) {
+        // 获取部队的指挥范围
+        const commandRange = commandForce.commandRange;
+
+        console.log(`friendlyCommandRangePrimitives长度: ${this.friendlyCommandRangePrimitives.length}`);
+        
+        // 获取指挥范围内的所有六角格
+        const hexesInRange = commandForceHex.getHexCellInRange(commandRange);
+        
+        // 阵营和样式
+        const friendlyFaction = commandForce.faction;
+        const friendlyRangeStyle = this.store.rangeStyle[friendlyFaction];
+        
+        // 收集需要显示的友方指挥范围六角格ID (不包括指挥部队所在六角格)
+        const friendlyRangeHexIds = new Set();
+        hexesInRange.forEach(rangeHexCell => {
+          // 排除已选中高亮和指挥部队本身所在的六角格
+          if (rangeHexCell.hexId !== commandForceHex.hexId &&
+              !supportForceHexes.some(hex => hex.hexId === rangeHexCell.hexId)) {
+            friendlyRangeHexIds.add(rangeHexCell.hexId);
+          }
+        });
+        
+        // 渲染友方指挥范围
+        if (friendlyRangeHexIds.size > 0) {
+          console.log('[HexGridRenderer] 渲染友方指挥范围，六角格数量:', friendlyRangeHexIds.size);
+          
+          // 完全重建友方指挥范围，不使用增量更新
+          this.friendlyCommandRangePrimitives.removeAll();
+          
+          // 直接创建并添加所有指挥范围内的六角格primitive
+          for (const hexId of friendlyRangeHexIds) {
+            const hexCell = this.store.getHexCellById(hexId);
+            if (hexCell) {
+              const primitive = this._createHexPrimitive(
+                hexCell,
+                'interaction', 
+                1.5,
+                friendlyRangeStyle || HexVisualStyles.selectedBlue
+              );
+              
+              if (primitive) {
+                this.friendlyCommandRangePrimitives.add(primitive);
+              }
             }
           }
         }
-      } else {
-        // 如果没有敌方指挥部队，清空敌方指挥范围
+      } else if (!attackState.commandForceId || attackState.phase === null) {
+        // 只有在指挥部队不存在或退出攻击模式时才清除
+        this.friendlyCommandRangePrimitives.removeAll();
+      }
+      
+      // 在selectTarget阶段，实时更新敌方指挥范围；在selectSupport阶段，保持不变
+      if (!attackState.enemyCommandForceId || (attackState.phase !== 'selectTarget' && attackState.phase !== 'selectSupport')) {
         this.enemyCommandRangePrimitives.removeAll();
-        this.enemyCommandRangeHexMap.clear();
-      }
-      
-      // 不管敌方指挥部队是否存在，都需要单独确保友方指挥范围显示
-      // 这部分代码移到了敌方处理之后，确保它独立运行
-      if (attackState.commandForceId) {
-        console.log('[HexGridRenderer] 强制单独渲染友方指挥范围...');
-        const commandForce = this.store.getForceById(attackState.commandForceId);
+      } else if (attackState.phase === 'selectTarget') {
+        const enemyRangeHexIds = new Set();
         
-        if (commandForce && commandForce.hexId) {
-          const hexId = commandForce.hexId;
-          const hexCell = this.store.getHexCellById(hexId);
+        // 只有当选中不同敌方部队或首次渲染时才重新计算
+        if (this.enemyCommandRangePrimitives.length === 0 || this._lastEnemyCommandForceId !== attackState.enemyCommandForceId) {
+          this._lastEnemyCommandForceId = attackState.enemyCommandForceId;
           
-          if (hexCell) {
-            // 获取部队的指挥范围
-            const commandRange = commandForce.commandRange;
-            const hexesInRange = hexCell.getHexCellInRange(commandRange);
+          // 获取部队的指挥范围
+          const commandRange = enemyCommandForce.commandRange;
+          
+          // 获取指挥范围内的所有六角格
+          const hexesInRange = enemyCommandForceHex.getHexCellInRange(commandRange);
+          
+          // 敌方阵营和样式
+          const enemyFaction = enemyCommandForce.faction;
+          const enemyRangeStyle = this.store.rangeStyle[enemyFaction];
+          
+          // 收集需要显示的敌方指挥范围六角格ID (不包括指挥部队所在六角格)
+          hexesInRange.forEach(rangeHexCell => {
+            // 排除指挥部队本身所在的六角格和支援部队
+            if (rangeHexCell.hexId !== enemyCommandForceHex.hexId &&
+                !enemySupportForceHexes.some(hex => hex.hexId === rangeHexCell.hexId)) {
+              enemyRangeHexIds.add(rangeHexCell.hexId);
+            }
+          });
+          
+          // 渲染敌方指挥范围
+          if (enemyRangeHexIds.size > 0) {
+            console.log('[HexGridRenderer] 渲染敌方指挥范围，六角格数量:', enemyRangeHexIds.size);
             
-            // 阵营和样式
-            const friendlyFaction = commandForce.faction;
-            const friendlyRangeStyle = this.store.rangeStyle[friendlyFaction];
+            // 完全重建敌方指挥范围，不使用增量更新
+            this.enemyCommandRangePrimitives.removeAll();
             
-            // 收集需要显示的友方指挥范围六角格ID
-            const forcedFriendlyRangeHexIds = new Set();
-            hexesInRange.forEach(rangeHexCell => {
-              // 不排除任何六角格，确保所有范围内六角格都显示
-              forcedFriendlyRangeHexIds.add(rangeHexCell.hexId);
-            });
-            
-            if (forcedFriendlyRangeHexIds.size > 0) {
-              console.log('[HexGridRenderer] 强制渲染友方指挥范围，六角格数量:', forcedFriendlyRangeHexIds.size);
-              
-              // 尝试用互换后的集合渲染
-              this._updateHexPrimitives(
-                this.enemyCommandRangePrimitives,
-                this.enemyCommandRangeHexMap, 
-                forcedFriendlyRangeHexIds,
-                (hexId) => {
-                  const hexCell = this.store.getHexCellById(hexId);
-                  if (hexCell) {
-                    // 友方样式加强版
-                    const style = friendlyRangeStyle ? {
-                      ...friendlyRangeStyle,
-                      fillColor: new Cesium.Color(
-                        friendlyRangeStyle.fillColor.red,
-                        friendlyRangeStyle.fillColor.green,
-                        friendlyRangeStyle.fillColor.blue,
-                        0.2 // 强制提高不透明度
-                      ),
-                      showBorder: true,
-                      borderWidth: 2.0
-                    } : HexVisualStyles.selectedBlue;
-                    
-                    // 创建独立的primitive
-                    return this._createHexPrimitive(
-                      hexCell,
-                      'interaction', 
-                      1.7,
-                      style
-                    );
-                  }
-                  return null;
-                },
-                'forced_friendly_range' // 使用独特的前缀
-              );
+            // 直接创建并添加所有指挥范围内的六角格primitive
+            for (const hexId of enemyRangeHexIds) {
+              const hexCell = this.store.getHexCellById(hexId);
+              if (hexCell) {
+                const primitive = this._createHexPrimitive(
+                  hexCell,
+                  'interaction', 
+                  1.3,
+                  enemyRangeStyle || HexVisualStyles.selectedRed
+                );
+                
+                if (primitive) {
+                  this.enemyCommandRangePrimitives.add(primitive);
+                }
+              }
             }
           }
         }
       }
     } else {
-      // 在其他模式下，清空所有指挥范围
-      this.commandRangePrimitives.removeAll();
-      this.commandRangeHexMap.clear();
+      // 在其他模式下，清空所有指挥和范围
+      this.immCommandRangePrimitives.removeAll();
+      this.immCommandRangePrimitiveMap.clear();
+      this.friendlyCommandRangePrimitives.removeAll();
       this.enemyCommandRangePrimitives.removeAll();
-      this.enemyCommandRangeHexMap.clear();
+      this.friendlyCommanderPrimitives.removeAll();
+      this.enemyCommanderPrimitives.removeAll();
+      this.friendlySupportPrimitives.removeAll();
+      this.enemySupportPrimitives.removeAll();
+      this.friendlyCommanderPrimitiveMap.clear();
+      this.enemyCommanderPrimitiveMap.clear();
+      this.friendlySupportPrimitiveMap.clear();
+      this.enemySupportPrimitiveMap.clear();
+      this._lastEnemyCommandForceId = null; // 重置上次渲染的敌方指挥部队ID
     }
   }
    
@@ -738,7 +795,7 @@ export class HexGridRenderer {
       if (borderPattern) {
         appearance = new Cesium.PolylineMaterialAppearance({
           material: Cesium.Material.fromType('PolylineDash', {
-            color: Cesium.Color.WHITE,
+            color: borderColor,
             dashLength: 16.0,
             dashPattern: 255 // 0b11111111
           })
@@ -1022,13 +1079,17 @@ export class HexGridRenderer {
       this.viewer.scene.primitives.remove(this.markGridPrimitives);
       this.markGridPrimitives = null;
     }
-    if (this.interactGridPrimitives) {
-      this.viewer.scene.primitives.remove(this.interactGridPrimitives);
-      this.interactGridPrimitives = null;
+    if (this.highlightPrimitives) {
+      this.viewer.scene.primitives.remove(this.highlightPrimitives);
+      this.highlightPrimitives = null;
     }
-    if (this.commandRangePrimitives) {
-      this.viewer.scene.primitives.remove(this.commandRangePrimitives);
-      this.commandRangePrimitives = null; 
+    if (this.immCommandRangePrimitives) {
+      this.viewer.scene.primitives.remove(this.immCommandRangePrimitives);
+      this.immCommandRangePrimitives = null; 
+    }
+    if (this.friendlyCommandRangePrimitives) {
+      this.viewer.scene.primitives.remove(this.friendlyCommandRangePrimitives);
+      this.friendlyCommandRangePrimitives = null; 
     }
     if (this.enemyCommandRangePrimitives) {
       this.viewer.scene.primitives.remove(this.enemyCommandRangePrimitives);
@@ -1037,6 +1098,9 @@ export class HexGridRenderer {
 
     // 清空缓存
     this._clearModuleLevelCache();
+    this.highlightPrimitivesMap.clear();
+    this.immCommandRangePrimitiveMap.clear();
+    this._lastEnemyCommandForceId = null;
     
     // 解除引用关系
     this.viewer = null;

@@ -22,6 +22,7 @@ export const openGameStore = defineStore("gameStore", () => {
   const highlightStyle = ref(HexVisualStyles.selected);  // 选中六角格高亮样式
   const rangeStyle = ref({ blue: HexVisualStyles.selectedBlue, red: HexVisualStyles.selectedRed });  // 指挥范围高亮样式
   const commanderStyle = ref({ blue: HexVisualStyles.commanderBlue, red: HexVisualStyles.commanderRed });  // 指挥部队高亮样式
+  const supportStyle = ref({ blue: HexVisualStyles.supportBlue, red: HexVisualStyles.supportRed });  // 支援部队高亮样式
 
   /* 2. 游戏回合状态 */
   const currentRound = ref(RuleConfig.startRound);  // 当前回合数
@@ -266,6 +267,7 @@ export const openGameStore = defineStore("gameStore", () => {
   }
 
   // ================== 选中六角格 ==================
+
   /** 添加选中六角格，支持单选/多选模式 */
   const addSelectedHexId = id => {
     // 如果这个六角格在选中列表中，则先确保其在最后一位
@@ -533,6 +535,7 @@ export const openGameStore = defineStore("gameStore", () => {
     highlightStyle,
     rangeStyle,
     commanderStyle,
+    supportStyle,
     currentRound,
     currentFaction,
     factionFinished,

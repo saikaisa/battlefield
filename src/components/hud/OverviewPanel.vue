@@ -121,7 +121,7 @@ import { openGameStore } from '@/store';
 import { CommandService } from '@/layers/interaction-layer/CommandDispatcher';
 import { GameMode, GameModeNames, GameButtons, GamePanels } from '@/config/GameModeConfig';
 import { CommandType } from '@/config/CommandConfig';
-import { showWarning } from '@/layers/interaction-layer/utils/MessageBox';
+import { showWarning, showSuccess } from '@/layers/interaction-layer/utils/MessageBox';
 import { OverviewConsole } from '@/layers/interaction-layer/utils/OverviewConsole';
 import { BattleConfig } from '@/config/GameConfig';
 
@@ -221,6 +221,8 @@ function handleNextTurn() {
   if (isButtonDisabled(GameButtons.NEXT_FACTION)) return;
   
   executeCommand(CommandType.NEXT_FACTION);
+  OverviewConsole.success('========== 下一回合 ==========');
+  showSuccess('下一回合开始');
 }
 
 // 清空控制台

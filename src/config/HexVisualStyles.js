@@ -110,10 +110,10 @@ export const HexVisualStyles = {
     type: 'selected',
     priority: 2,
     fillColor: Cesium.Color.YELLOW.withAlpha(0.3),
-    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
+    borderColor: Cesium.Color.WHITE,
     showFill: true,
     showBorder: true,
-    borderPattern: true,  // 使用虚线边框
+    borderPattern: true,  // 使用虚线边框，注意虚线边框的颜色不能带alpha
     borderWidth: 4.0
   },
   // 选中高亮：淡黄色
@@ -133,7 +133,7 @@ export const HexVisualStyles = {
     layer: 'interaction',
     type: 'selected',
     priority: 2,
-    fillColor: Cesium.Color.BLUE.withAlpha(0.04),
+    fillColor: Cesium.Color.BLUE.withAlpha(0.05),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
     showBorder: false,
@@ -145,7 +145,7 @@ export const HexVisualStyles = {
     layer: 'interaction',
     type: 'selected',
     priority: 2,
-    fillColor: Cesium.Color.RED.withAlpha(0.04),
+    fillColor: Cesium.Color.RED.withAlpha(0.05),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
     showBorder: false,
@@ -164,41 +164,65 @@ export const HexVisualStyles = {
     borderPattern: false,
     borderWidth: 2.0
   },
-  // 选中高亮：白色
-  selectedWhite: {
+  // 选中高亮：仅边框
+  selectedBorder: {
     layer: 'interaction',
     type: 'selected',
     priority: 2,
-    fillColor: Cesium.Color.WHITE.withAlpha(0.04),
-    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
+    fillColor: Cesium.Color.BLACK.withAlpha(0),
+    borderColor: Cesium.Color.YELLOW,
     showFill: true,
-    showBorder: true,
-    borderPattern: true,
-    borderWidth: 2.0
+    showBorder: false,
+    borderPattern: false,
+    borderWidth: 0.0
   },
   // 指挥部队：蓝方
   commanderBlue: {
     layer: 'interaction',
     type: 'commander',
-    priority: 2,
-    fillColor: Cesium.Color.BLUE.withAlpha(0.4),
-    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
+    priority: 3,
+    fillColor: Cesium.Color.BLUE.withAlpha(0.6),
+    borderColor: Cesium.Color.WHITE,
     showFill: true,
     showBorder: true,
     borderPattern: true,
-    borderWidth: 2.0
+    borderWidth: 4.0
   },
   // 指挥部队：红方
   commanderRed: {
     layer: 'interaction',
     type: 'commander',
-    priority: 2,
-    fillColor: Cesium.Color.RED.withAlpha(0.4),
-    borderColor: Cesium.Color.WHITE.withAlpha(0.2),
+    priority: 3,
+    fillColor: Cesium.Color.RED.withAlpha(0.6),
+    borderColor: Cesium.Color.WHITE,
     showFill: true,
     showBorder: true,
     borderPattern: true,
-    borderWidth: 2.0
+    borderWidth: 4.0
+  },
+  // 支援部队：蓝方
+  supportBlue: {
+    layer: 'interaction',
+    type: 'support',
+    priority: 4,
+    fillColor: Cesium.Color.BLUE.withAlpha(0.15),
+    borderColor: Cesium.Color.WHITE,
+    showFill: true,
+    showBorder: true,
+    borderPattern: true,
+    borderWidth: 4.0
+  },
+  // 支援部队：红方
+  supportRed: {
+    layer: 'interaction',
+    type: 'support',
+    priority: 4,
+    fillColor: Cesium.Color.RED.withAlpha(0.15),
+    borderColor: Cesium.Color.WHITE,
+    showFill: true,
+    showBorder: true,
+    borderPattern: true,
+    borderWidth: 4.0
   },
   // 提示不合法的高亮
   invalid: {
