@@ -72,7 +72,7 @@ export const BattleConfig = {
 
 /** 六角格相关配置 */ 
 export const HexConfig = {
-  radius: 300, // 六角格半径（单位：米，从中心到顶点的距离）
+  radius: 500, // 六角格半径（单位：米，从中心到顶点的距离）
   // 战场边界
   bounds: {
     minLon: BattleConfig.center.lon - BattleConfig.center.offset,
@@ -153,10 +153,10 @@ export const MilitaryConfig = {
   // 移动配置
   movementConfig: {
     defaultTurnDuration: 200, // 默认转向时间(毫秒)
-    baseSpeed: HexConfig.radius / 2, // 基础移动速度（米/秒），应该为六角格半径的1/2
-    baseTurnRate: 3,  // 基础转向速率(弧度/秒)，角度越小越快
-    minTurnDuration: 100, // 最小转向时间(毫秒)
-    maxTurnDuration: 800, // 最大转向时间(毫秒)
+    baseSpeed: HexConfig.radius, // 基础移动速度（米/秒）
+    baseTurnRate: 20,  // 基础转向速率(弧度/秒)，角度越小越快
+    minTurnDuration: 0, // 最小转向时间(毫秒)
+    maxTurnDuration: 500, // 最大转向时间(毫秒)
   },
 
   // 部队排布配置
@@ -183,7 +183,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/ambulance_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 1.5,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
@@ -196,7 +196,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/helicopter1_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 1.5,
         offset: { x: 0, y: 0, z: 100 }
       },
       animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
@@ -209,7 +209,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/helicopter2_lod2.glb" }
       ],  
       transform: {
-        scale: 2.0,
+        scale: 1.5,
         offset: { x: 0, y: 0, z: 100 }
       },
       animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
@@ -222,7 +222,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/jet_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 1.0,
         offset: { x: 0, y: 0, z: 80 }
       },
       animationList: [],
@@ -248,7 +248,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/sailboat_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 1.0,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
@@ -261,7 +261,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/soldier_lod2.glb" }
       ],
       transform: {
-        scale: 1.0,
+        scale: 0.5,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [ 
@@ -277,7 +277,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/spydrone_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 1.5,
         offset: { x: 0, y: 0, z: 100 }
       },
       animationList: [],
@@ -290,7 +290,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/tank_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 1.2,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
@@ -303,7 +303,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/vehicle_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 1.0,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
@@ -316,7 +316,7 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/warship_lod2.glb" }
       ],
       transform: {
-        scale: 2.0,
+        scale: 1.5,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],

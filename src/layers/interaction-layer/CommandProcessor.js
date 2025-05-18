@@ -513,12 +513,6 @@ export class CommandProcessor {
             resolve();
           }
         }, 100); // 每100毫秒检查一次
-        
-        // 设置超时保护，防止无限等待
-        setTimeout(() => {
-          clearInterval(checkInterval);
-          reject(new Error('移动操作超时'));
-        }, 60000); // 最多等待60秒
       });
 
       return {
@@ -658,6 +652,10 @@ export class CommandProcessor {
     if (lastMode !== GameMode.FREE && lastMode !== GameMode.ATTACK_PREPARE) {
       throw new CommandError("仅能在自由模式或攻击准备模式下执行攻击", "attack");
     }
+
+    // 校验
+    // 1. 如果有supportForceIds,enemyCommandForceId,enemySupportForceIds
+    // 
 
     // 保存进入时的选中的六角格和部队id
     gameModeService.saveSelectedHexIds();

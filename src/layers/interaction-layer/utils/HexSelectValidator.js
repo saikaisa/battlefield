@@ -5,6 +5,7 @@ import { showWarning } from '@/layers/interaction-layer/utils/MessageBox';
 import { OverviewConsole } from "@/layers/interaction-layer/utils/OverviewConsole";
 import { Battlegroup } from "@/models/MilitaryUnit";
 import { watch } from 'vue';
+import { BattleController } from '@/layers/military-layer/components/BattleController';
 
 /**
  * 六角格选择验证器
@@ -30,6 +31,7 @@ export class HexSelectValidator {
    */
   constructor() {
     this.store = openGameStore();
+    this.battleController = BattleController.getInstance();
     // 添加监听器
     this.setupWatchers();
   }
@@ -360,6 +362,18 @@ export class HexSelectValidator {
         return false;
       }
       
+      // 检查六角格内所有友方部队是否还有战斗机会
+      const hasAvailableCombatChance = friendlyForces.some(forceId => {
+        const force = store.getForceById(forceId);
+        return force && force.combatChance > 0;
+      });
+      
+      if (!hasAvailableCombatChance) {
+        console.warn('[HexSelectValidator] 该六角格中所有部队战斗机会均已用尽');
+        showWarning('该六角格中所有部队战斗机会均已用尽，无法参与战斗');
+        return false;
+      }
+      
       return true;
     }
     
@@ -372,44 +386,18 @@ export class HexSelectValidator {
    * @private
    */
   _updateEnemySupportForces(enemyCommandForce) {
-    const store = openGameStore();
+    const store = this.store;
     
     // 清空现有敌方支援部队
     store.attackState.enemySupportForceIds = [];
     
     if (!enemyCommandForce) return;
     
-    // 获取敌方指挥部队所在六角格
-    const hexId = enemyCommandForce.hexId;
-    const hexCell = store.getHexCellById(hexId);
+    // 使用战斗控制器获取敌方指挥范围内的部队
+    const supportForces = this.battleController.getForcesInCommandRange(enemyCommandForce, enemyCommandForce.faction);
     
-    if (!hexCell) return;
-    
-    // 获取指挥范围内的六角格
-    const commandRange = enemyCommandForce.commandRange;
-    const hexesInRange = hexCell.getHexCellInRange(commandRange);
-    
-    // 首先处理指挥部队所在六角格中的其他敌方部队
-    const forcesInCommandHex = hexCell.forcesIds || [];
-    forcesInCommandHex.forEach(forceId => {
-      const force = store.getForceById(forceId);
-      if (force && force.faction === enemyCommandForce.faction && force.forceId !== enemyCommandForce.forceId) {
-        store.attackState.enemySupportForceIds.push(forceId);
-      }
-    });
-    
-    // 然后处理指挥范围内的其他六角格中的敌方部队
-    hexesInRange.forEach(rangeHex => {
-      if (!rangeHex) return;
-      
-      const forcesInHex = rangeHex.forcesIds || [];
-      forcesInHex.forEach(forceId => {
-        const force = store.getForceById(forceId);
-        if (force && force.faction === enemyCommandForce.faction) {
-          store.attackState.enemySupportForceIds.push(forceId);
-        }
-      });
-    });
+    // 更新敌方支援部队列表
+    store.attackState.enemySupportForceIds = supportForces.map(force => force.forceId);
   }
   
   /**
@@ -417,7 +405,7 @@ export class HexSelectValidator {
    * @private
    */
   _previewBattlegroups() {
-    const store = openGameStore();
+    const store = this.store;
     
     // 如果不在攻击准备阶段，不执行
     if (store.gameMode !== GameMode.ATTACK_PREPARE || !store.attackState.phase) {

@@ -63,7 +63,10 @@
               v-for="force in hexForces" 
               :key="force.forceId"
               class="forces-table-row"
-              :class="{'selected-row': isForceSelected(force.forceId)}"
+              :class="{
+                'selected-row': isForceSelected(force.forceId),
+                'disabled-row': force.combatChance <= 0 || force.actionPoints <= 0
+              }"
               @click="toggleForceSelection(force.forceId)"
             >
               <div class="column id-column">{{ getForceNumber(force.forceId) }}</div>
@@ -537,6 +540,20 @@ function isButtonDisabled(buttonType) {
   // 没有选中部队，或者选中的是敌方部队时禁用移动和进攻按钮
   if (buttonType === GameButtons.MOVE || buttonType === GameButtons.ATTACK) {
     if (!selectedForce.value || selectedForce.value.faction !== store.currentFaction) {
+      return true;
+    }
+  }
+
+  // 战斗机会小于等于0时禁用进攻按钮
+  if (buttonType === GameButtons.ATTACK) {
+    if (selectedForce.value && selectedForce.value.combatChance <= 0) {
+      return true;
+    }
+  }
+
+  // 行动力小于等于0时禁用移动按钮
+  if (buttonType === GameButtons.MOVE) {
+    if (selectedForce.value && selectedForce.value.actionPoints <= 0) {
       return true;
     }
   }
@@ -1071,6 +1088,11 @@ const attackState = computed(() => store.attackState);
 
 .forces-table-row.selected-row {
   background-color: rgba(74, 144, 226, 0.3);
+}
+
+.forces-table-row.disabled-row {
+  background-color: rgba(255, 255, 255, 0.1);
+  opacity: 0.5;
 }
 
 .column {
