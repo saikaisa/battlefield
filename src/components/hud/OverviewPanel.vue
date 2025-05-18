@@ -123,7 +123,7 @@ import { GameMode, GameModeNames, GameButtons, GamePanels } from '@/config/GameM
 import { CommandType } from '@/config/CommandConfig';
 import { showWarning, showSuccess } from '@/layers/interaction-layer/utils/MessageBox';
 import { OverviewConsole } from '@/layers/interaction-layer/utils/OverviewConsole';
-import { BattleConfig } from '@/config/GameConfig';
+import { BattlefieldConfig } from '@/config/GameConfig';
 
 // 状态管理
 const store = openGameStore();
@@ -250,24 +250,11 @@ onMounted(() => {
   if (OverviewConsole.getLines().length === 0) {
     OverviewConsole.log('欢迎进入战场指挥系统!');
     OverviewConsole.success('系统初始化完成，可以开始操作');
-    OverviewConsole.log(`当前战场位置: ${BattleConfig.locationName} (${BattleConfig.center.lon}°, ${BattleConfig.center.lat}°)`);
+    OverviewConsole.log(`当前战场位置: ${BattlefieldConfig.locationName} (${BattlefieldConfig.center.lon}°, ${BattlefieldConfig.center.lat}°)`);
     OverviewConsole.warning('警告：检测到敌方侦察无人机活动，请注意隐蔽行动');
     OverviewConsole.error('通信干扰：北部区域信号遭受敌方电子战设备干扰，通信链路不稳定');
     OverviewConsole.log('战场态势：友军已在东南方向展开防御阵地，敌方主力预计将从西北方向发起进攻');
     OverviewConsole.stat('兵力统计 - 我方：装甲部队18辆，步兵156人，支援火力6门；敌方（估计）：装甲部队22-27辆，步兵200-250人，支援火力8-10门');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
-    OverviewConsole.log('补给状态：弹药储备75%，燃料储备82%，医疗物资充足，预计可维持战斗48小时');
   }
   
   // 确保初始化后滚动到底部

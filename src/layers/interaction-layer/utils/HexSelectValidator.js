@@ -587,7 +587,7 @@ export class HexSelectValidator {
   }
   
   /**
-   * 格式化数字，使用m表示百万级，b表示十亿级等
+   * 格式化数字，使用m表示百万级，b表示十亿级
    * @private
    */
   _formatNumber(num) {

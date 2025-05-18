@@ -641,7 +641,7 @@ export class CommandProcessor {
    * - Fallback模式：自由模式(JSON指令)或攻击准备模式(UI)
    * @param {string} commandForceId 指挥部队ID
    * @param {string} targetHex 目标六角格ID
-   * @param {Array<string>} supportForceIds 支援部队ID数组
+   * @param {Array<string>} [supportForceIds] 支援部队ID数组 (如果为null则由commandForceId计算)
    * @param {string} [enemyCommandForceId] 敌方指挥部队ID (如果为null则由targetHex计算)
    * @param {Array<string>} [enemySupportForceIds] 敌方支援部队ID数组 (如果为null则由targetHex计算)
    * @returns {Object} 命令执行结果
@@ -649,48 +649,118 @@ export class CommandProcessor {
   async attack(commandForceId, targetHex, supportForceIds = [], enemyCommandForceId = null, enemySupportForceIds = []) {
     // 仅能在自由模式或攻击准备模式下执行攻击
     const lastMode = gameModeService.getCurrentMode();
-    if (lastMode !== GameMode.FREE && lastMode !== GameMode.ATTACK_PREPARE) {
+    if (lastMode === GameMode.ATTACK_PREPARE) {
+      gameModeService.clearLockedSelection()
+        .clearConsole()
+        .setMode(GameMode.ATTACK_PREPARE);
+    } else if (lastMode === GameMode.FREE) {
+      gameModeService.clearLockedSelection()
+        .saveSelectedHexIds()
+        .saveConsoleContent()
+        .clearConsole()
+        .setMode(GameMode.ATTACK_PREPARE);
+    } else {
       throw new CommandError("仅能在自由模式或攻击准备模式下执行攻击", "attack");
     }
 
-    // 校验
-    // 1. 如果有supportForceIds,enemyCommandForceId,enemySupportForceIds
-    // 
-
-    // 保存进入时的选中的六角格和部队id
-    gameModeService.saveSelectedHexIds();
-
     try {
-      // 切换到攻击执行模式
-      gameModeService.setMode(GameMode.ATTACK_EXECUTE);
 
-      // TODO: 大致流程如下
-      // 1. 验证战斗双方的合法性
-      // 2. 生成战斗群
-      // 3. 根据战斗裁决表计算战斗结果，暂时存储
-      // 4. 由militaryRenderer.update进入动画控制器，播放动画，等待动画结束
-      this.militaryRenderer.update();
-      // 5. 根据战斗结果更新部队状态，包括兵力、行动力、战斗机会等
-      // 6. 在界面上显示战斗报告
-      // 7. 等待用户对战斗报告点击确认后，返回，允许继续执行，回到自由模式
-      //    对于战斗报告是否确认，可以通过监视一个状态或者确认按钮的事件来判断
-      OverviewConsole.log(`============ 参战部队 ============`);
-      OverviewConsole.log(`指挥部队: ${commandForceId}`);
-      OverviewConsole.log(`支援部队: ${supportForceIds.join(', ')}`);
-      OverviewConsole.log(`敌方指挥部队: ${enemyCommandForceId}`);
-      OverviewConsole.log(`敌方支援部队: ${enemySupportForceIds.join(', ')}`);
+      // 参数验证和处理
+      const commandForce = this.store.getForceById(commandForceId);
+      if (!commandForce) {
+        throw new CommandError("找不到指挥部队", "validation");
+      }
 
-      // 完成后恢复自由模式
-      gameModeService.setMode(GameMode.FREE);
+      // 指挥部队必须要有战斗机会
+      if (commandForce.combatChance <= 0) {
+        throw new CommandError(`${commandForce.forceName}已无战斗机会`, "validation");
+      }
+
+      // 验证指挥部队和目标六角格属于相反阵营(blue vs red)
+      if (commandForce.faction === targetHex.battlefieldState.controlFaction || 
+          commandForce.faction === 'neutral' || 
+          targetHex.battlefieldState.controlFaction === 'neutral') {
+        throw new CommandError("指挥部队和目标六角格必须属于不同阵营(蓝方vs红方)", "validation");
+      }
+
+      // 如果没有指定敌方指挥部队，从目标六角格中寻找最佳指挥部队
+      let enemyCommand = null;
+      if (!enemyCommandForceId) {
+        const targetHexCell = this.store.getHexCellById(targetHex);
+        if (!targetHexCell) {
+          throw new CommandError("找不到目标六角格", "validation");
+        }
+
+        // 寻找目标六角格中敌方阵营的最佳防御指挥部队
+        const enemyFaction = commandForce.faction === 'blue' ? 'red' : 'blue';
+        enemyCommand = this.battleController.findBestCommandForce(targetHex, 'bestDefense', enemyFaction);
+        
+        if (!enemyCommand) {
+          throw new CommandError(`在目标六角格中找不到${enemyFaction === 'blue' ? '蓝方' : '红方'}部队`, "validation");
+        }
+        
+        enemyCommandForceId = enemyCommand.forceId;
+      } else {
+        enemyCommand = this.store.getForceById(enemyCommandForceId);
+        if (!enemyCommand) {
+          throw new CommandError("找不到敌方指挥部队", "validation");
+        }
+      }
+
+      // 如果没有指定支援部队，自动获取指挥部队指挥范围内的同阵营部队
+      if (!supportForceIds || supportForceIds.length === 0) {
+        supportForceIds = this.battleController.getForcesInCommandRange(commandForce, commandForce.faction);
+      } else {
+        // 如果指定了支援部队，则验证攻击方支援部队是否在指挥范围内
+        const isValid = this.battleController.validateSupportForcesInRange(commandForceId, supportForceIds);
+        if (!isValid) {
+          throw new CommandError("部分支援部队不在指挥范围内", "validation");
+        }
+      }
+
+      // 如果没有指定敌方支援部队，自动获取敌方指挥部队指挥范围内的同阵营部队
+      if (!enemySupportForceIds || enemySupportForceIds.length === 0) {
+        enemySupportForceIds = this.battleController.getForcesInCommandRange(enemyCommand, enemyCommand.faction);
+      } else {
+        // 如果指定了敌方支援部队，则验证敌方支援部队是否在指挥范围内
+        const isValid = this.battleController.validateSupportForcesInRange(enemyCommandForceId, enemySupportForceIds);
+        if (!isValid) {
+          throw new CommandError("部分敌方支援部队不在指挥范围内", "validation");
+        }
+      }
+
+      // 执行战斗
+      const battleResult = await this.battleController.executeBattle(
+        commandForceId,
+        supportForceIds,
+        enemyCommandForceId,
+        enemySupportForceIds
+      );
+
+      if (!battleResult.success) {
+        throw new CommandError(`战斗失败: ${battleResult.error}`, "battle");
+      }
+
+      // 完成后回到自由模式
+      gameModeService.setMode(GameMode.FREE)
+        .clearLockedSelection()
+        .restoreSelectedHexIds()
+        .restoreConsoleContent();
+      
+      // 在总览控制台显示战斗报告
+      this.battleController.printBattleReportSummary(battleResult);
 
       return {
         status: CommandStatus.FINISHED,
         message: "攻击完成",
+        data: battleResult
       };
     } catch (error) {
-      // 发生错误时恢复状态
-      gameModeService.setMode(lastMode);
-      gameModeService.restoreSelectedHexIds();
+      // 发生错误时回到自由模式
+      gameModeService.setMode(GameMode.FREE)
+        .clearLockedSelection()
+        .restoreSelectedHexIds()
+        .restoreConsoleContent();
       throw new CommandError(`攻击失败: ${error.message}`, "attack");
     }
   }

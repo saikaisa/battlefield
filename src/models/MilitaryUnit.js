@@ -189,14 +189,18 @@ export class Force {
 
   // 疲劳系数
   get fatigueFactor() {
-    const f = MilitaryConfig.limit.fatigueFactor;
-    return this.combatChance === -1 ? f.levelOne : this.combatChance === -2 ? f.levelTwo : 1;
+    const min = MilitaryConfig.limit.combatChance.min;
+    const current = this.combatChance;
+    // 如果当前值大于等于0，疲劳系数为1
+    if (current >= 0) return 1
+    // 如果当前值小于0，疲劳系数为线性插值
+    return Number(((current - min) / -min).toFixed(2));
   }
 
   // 可视范围
   get visibilityRadius() { return this._maxUnitAttr('visibilityRadius'); }
 
-  // 兵力值恢复速率
+  // 兵力值恢复速率，战斗机会达到最低时，疲劳系数为0，即恢复速率为0
   get recoveryRate() { return Math.round(this._weightedAvgUnitAttr('recoveryRate') * this.fatigueFactor); }
 
   // 指挥能力
@@ -373,6 +377,27 @@ export class Battlegroup {
   get commandCapability() { return openGameStore().getForceById(this.commandForceId)?.commandCapability ?? 1; }
   get commandRange() { return openGameStore().getForceById(this.commandForceId)?.commandRange ?? 1; }
 
+  /**
+   * 为战斗群内所有部队消耗战斗机会，进攻方部队战斗机会为0时不再消耗
+   * @param {string} role - 角色，'defender' 或 'attacker'
+   * @returns {void}
+   */
+  consumeCombatChances(role = 'defender') {
+    if (role === 'defender') {
+      this._forces().forEach(force => {
+        if (force) {
+          force.consumeCombatChance();
+        }
+      });
+    } else {
+      this._forces().forEach(force => {
+        if (force && force.combatChance > 0) {
+          force.consumeCombatChance();
+        }
+      });
+    }
+  }
+
   /* ======================== 内部工具方法 =========================== */
   // 返回 forceIdList 内所有部队的对象
   _forces() { 
@@ -385,6 +410,14 @@ export class Battlegroup {
   _getJointFirepower(firepowerType) {
     const jointFirepower = { land: 0, sea: 0, air: 0 };
     this._forces().forEach(force => {
+      // 剔除兵力值小于等于0的部队
+      if (force.troopStrength <= 0) {
+        return;
+      }
+      // 如果是计算进攻火力值，则需要剔除战斗机会小于等于0的部队
+      if (firepowerType === 'attackFirepower' && force.combatChance <= 0) {
+        return;
+      }
       const firepower = force[firepowerType];
       jointFirepower.land += firepower.land;
       jointFirepower.sea += firepower.sea; 

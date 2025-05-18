@@ -3,6 +3,9 @@
 import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 import { Battlegroup } from '@/models/MilitaryUnit';
+import { BattleConfig } from '@/config/GameConfig';
+import { BattleEffectsRenderer } from './BattleEffectsRenderer';
+import { OverviewConsole } from '@/layers/interaction-layer/utils/OverviewConsole';
 
 /**
  * 军事战斗控制器
@@ -36,10 +39,17 @@ export class BattleController {
   constructor(viewer) {
     this.viewer = viewer;
     this.store = openGameStore();
+    
+    // 初始化战斗特效渲染器
+    this.effectsRenderer = BattleEffectsRenderer.getInstance(viewer);
+    // 当前战斗ID计数器
+    this.battleCounter = 0;
+    // 战斗回调缓存，用于异步等待战斗处理完成
+    this.battleCallbacks = new Map();
   }
 
   /**
-   * 获取指挥范围内的所有部队
+   * 获取指挥范围内的所有部队(不包括指挥部队本身)
    * @param {Object} commandForce 指挥部队对象
    * @param {string} [factionFilter] 可选的阵营过滤器，仅返回指定阵营的部队
    * @returns {Array} 部队对象数组
@@ -199,13 +209,614 @@ export class BattleController {
   }
   
   /**
+   * 执行战斗流程
+   * @param {string} attackerCommandForceId 攻击方指挥部队ID
+   * @param {Array<string>} attackerSupportForceIds 攻击方支援部队ID数组
+   * @param {string} defenderCommandForceId 防守方指挥部队ID
+   * @param {Array<string>} defenderSupportForceIds 防守方支援部队ID数组 
+   * @returns {Promise<Object>} 战斗结果
+   */
+  async executeBattle(attackerCommandForceId, attackerSupportForceIds, defenderCommandForceId, defenderSupportForceIds) {
+    try {
+      // 创建战斗ID
+      const battleId = `battle_${++this.battleCounter}`;
+      
+      // 获取攻击方和防守方部队对象
+      const attackerCommand = this.store.getForceById(attackerCommandForceId);
+      const defenderCommand = this.store.getForceById(defenderCommandForceId);
+      
+      if (!attackerCommand || !defenderCommand) {
+        throw new Error('找不到指挥部队');
+      }
+      
+      // 过滤掉无效的支援部队ID
+      const validAttackerSupportIds = Array.isArray(attackerSupportForceIds) ? 
+        attackerSupportForceIds.filter(id => id !== attackerCommandForceId && this.store.getForceById(id)) : [];
+      const validDefenderSupportIds = Array.isArray(defenderSupportForceIds) ? 
+        defenderSupportForceIds.filter(id => id !== defenderCommandForceId && this.store.getForceById(id)) : [];
+      
+      // 创建攻击方和防守方战斗群
+      const attackerBattlegroup = new Battlegroup({
+        BattlegroupId: `BG_A_${battleId}`,
+        faction: attackerCommand.faction,
+        commandForceId: attackerCommandForceId,
+        forceIdList: [attackerCommandForceId, ...validAttackerSupportIds]
+      });
+      const defenderBattlegroup = new Battlegroup({
+        BattlegroupId: `BG_D_${battleId}`,
+        faction: defenderCommand.faction,
+        commandForceId: defenderCommandForceId,
+        forceIdList: [defenderCommandForceId, ...validDefenderSupportIds]
+      });
+
+      // 输出战斗报告头部
+      this._printBattleReportHeader(attackerBattlegroup, defenderBattlegroup);
+      
+      // 记录战前联合火力值
+      const initialAttackPower = this._getTotalFirepower(attackerBattlegroup.jointAttackFirepower);
+      const initialDefensePower = this._getTotalFirepower(defenderBattlegroup.jointDefenseFirepower);
+      
+      // 进行战斗裁决 - 获取预期结果
+      const expectedResults = this._executeBattleAdjudication(battleId, attackerBattlegroup, defenderBattlegroup);
+      
+      // 生成战斗效果
+      await this._executeBattleEffects(battleId, attackerBattlegroup, defenderBattlegroup);
+      
+      // 应用战斗结果 - 获取实际结果
+      const actualResults = this._applyBattleResults(attackerBattlegroup, defenderBattlegroup, expectedResults);
+      
+      // 计算战后联合火力值
+      const finalAttackPower = this._getTotalFirepower(attackerBattlegroup.jointAttackFirepower);
+      const finalDefensePower = this._getTotalFirepower(defenderBattlegroup.jointDefenseFirepower);
+      
+      // 计算火力值下降百分比
+      const attackPowerLossPercent = initialAttackPower > 0 ? 
+        ((initialAttackPower - finalAttackPower) / initialAttackPower) : 0;
+      const defensePowerLossPercent = initialDefensePower > 0 ? 
+        ((initialDefensePower - finalDefensePower) / initialDefensePower) : 0;
+      
+      // 根据火力值下降百分比判断胜负
+      const battleOutcome = this._determineBattleOutcome(
+        attackPowerLossPercent,
+        defensePowerLossPercent
+      );
+
+      // 消耗战斗机会
+      attackerBattlegroup.consumeCombatChances('attacker');
+      defenderBattlegroup.consumeCombatChances('defender');
+      
+      // 创建战斗报告数据
+      return {
+        success: true,
+        battleId: battleId,
+        attackingCommand: {
+          forceId: attackerCommandForceId,
+          name: attackerCommand.forceName,
+          faction: attackerCommand.faction
+        },
+        defendingCommand: {
+          forceId: defenderCommandForceId,
+          name: defenderCommand.forceName,
+          faction: defenderCommand.faction
+        },
+        attackerForceIds: [attackerCommandForceId, ...validAttackerSupportIds],
+        defenderForceIds: [defenderCommandForceId, ...validDefenderSupportIds],
+        // 火力值损失
+        powerComparison: {
+          initial: {
+            attacker: initialAttackPower,
+            defender: initialDefensePower
+          },
+          final: {
+            attacker: finalAttackPower,
+            defender: finalDefensePower
+          },
+          lossPercent: {
+            attacker: attackPowerLossPercent,
+            defender: defensePowerLossPercent
+          }
+        },
+        // 战斗结果
+        outcome: battleOutcome,
+        // 部队的损失信息
+        forceLosses: [...actualResults.attacker.forceLosses, ...actualResults.defender.forceLosses],
+        // 添加维度损失统计数据
+        dimensionalResults: {
+          attacker: {
+            dimensionTotalLosses: actualResults.attacker.dimensionTotalLosses, // 各维度的损失兵力值
+            totalLoss: actualResults.attacker.totalLoss // 损失的总兵力
+          },
+          defender: {
+            dimensionTotalLosses: actualResults.defender.dimensionTotalLosses,
+            totalLoss: actualResults.defender.totalLoss
+          }
+        }
+      };
+    } catch (error) {
+      console.error('执行战斗失败', error);
+      OverviewConsole.error(`战斗执行失败: ${error.message}`);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * 在总览面板打印战斗报告头部
+   * @param {Battlegroup} attackerBG 攻击方战斗群
+   * @param {Battlegroup} defenderBG 防守方战斗群
+   * @private
+   */
+  _printBattleReportHeader(attackerBG, defenderBG) {
+    OverviewConsole.stat('========== 战斗开始 ==========');
+    
+    // 获取参战单位信息
+    const attackerForces = attackerBG.forceIdList.map(id => this.store.getForceById(id)).filter(Boolean);
+    const defenderForces = defenderBG.forceIdList.map(id => this.store.getForceById(id)).filter(Boolean);
+    
+    // 攻击方指挥部队
+    const attackerCommand = this.store.getForceById(attackerBG.commandForceId);
+    // 防守方指挥部队
+    const defenderCommand = this.store.getForceById(defenderBG.commandForceId);
+    
+    // 输出攻击方信息
+    OverviewConsole.stat('【进攻方】');
+    if (attackerCommand.faction === 'blue') {
+      OverviewConsole.log(`指挥部队: ${attackerCommand.forceName}`, 'blue');
+    } else {
+      OverviewConsole.error(`指挥部队: ${attackerCommand.forceName}`);
+    }
+    
+    // 输出攻击方支援部队
+    const attackerSupports = attackerForces.filter(f => f.forceId !== attackerBG.commandForceId);
+    attackerSupports.forEach(force => {
+      if (force.combatChance <= 0) {
+        OverviewConsole.warning(`${force.forceName}（无法战斗）`);
+      } else if (force.faction === 'blue') {
+        OverviewConsole.log(`${force.forceName}`, 'blue');
+      } else {
+        OverviewConsole.error(`${force.forceName}`);
+      }
+    });
+    
+    // 输出防守方信息
+    OverviewConsole.stat('\n【防守方】');
+    if (defenderCommand.combatChance < 0) {
+      const fatigueLevel = -defenderCommand.combatChance;
+      OverviewConsole.warning(`指挥部队: ${defenderCommand.forceName}（疲劳等级${fatigueLevel}）`);
+    } else if (defenderCommand.faction === 'blue') {
+      OverviewConsole.log(`指挥部队: ${defenderCommand.forceName}`, 'blue');
+    } else {
+      OverviewConsole.error(`指挥部队: ${defenderCommand.forceName}`);
+    }
+    
+    // 输出防守方支援部队
+    const defenderSupports = defenderForces.filter(f => f.forceId !== defenderBG.commandForceId);
+    defenderSupports.forEach(force => {
+      if (force.combatChance < 0) {
+        const fatigueLevel = -force.combatChance;
+        OverviewConsole.warning(`${force.forceName}（疲劳等级${fatigueLevel}）`);
+      } else if (force.faction === 'blue') {
+        OverviewConsole.log(`${force.forceName}`, 'blue');
+      } else {
+        OverviewConsole.error(`${force.forceName}`);
+      }
+    });
+    
+    OverviewConsole.log('\n开始战斗...');
+  }
+
+  /**
+   * 执行战斗裁决
+   * @param {string} battleId 战斗ID
+   * @param {Battlegroup} attackerBG 攻击方战斗群
+   * @param {Battlegroup} defenderBG 防守方战斗群
+   * @returns {Object} 战斗裁决预期结果
+   * @private
+   */
+  _executeBattleAdjudication(battleId, attackerBG, defenderBG) {
+    // 获取联合火力值
+    const attackerFirepower = attackerBG.jointAttackFirepower;
+    const defenderFirepower = defenderBG.jointDefenseFirepower;
+    
+    // 初始化预期结果
+    const expectedResults = {
+      attacker: { losses: { land: 0, sea: 0, air: 0 }, totalLoss: 0 },
+      defender: { losses: { land: 0, sea: 0, air: 0 }, totalLoss: 0 }
+    };
+    
+    // 在每个维度上进行战斗裁决
+    const dimensions = ['land', 'sea', 'air'];
+    
+    for (const dimension of dimensions) {
+      // 获取该维度的火力值
+      const atkFirepower = attackerFirepower[dimension] || 0;
+      const defFirepower = defenderFirepower[dimension] || 0;
+      
+      // 计算火力比值
+      let ratio = 0;
+      if (defFirepower > 0) {
+        ratio = atkFirepower / defFirepower;
+      } else if (atkFirepower > 0) {
+        ratio = 999; // 防御方火力为0，攻击方有火力，设为极大值
+      } else {
+        // 双方火力都为0，跳过该维度
+        continue;
+      }
+      
+      // 确定战斗比率所在的区间
+      let ratioIndex = 0;
+      for (let i = 0; i < BattleConfig.powerRatioRanges.length; i++) {
+        const range = BattleConfig.powerRatioRanges[i];
+        if (ratio >= range.min && ratio < range.max) {
+          ratioIndex = i;
+          break;
+        }
+      }
+      
+      // 骰子摇号 (1-6)
+      const diceRoll = Math.floor(Math.random() * 6) + 1;
+      
+      // 从战斗裁决表中获取结果
+      const adjudicationResult = BattleConfig.battleTable[diceRoll - 1][ratioIndex];
+      
+      // 解析结果 (格式为 "A1/D2" 表示攻击方损失1级，防御方损失2级)
+      const [attackerLoss, defenderLoss] = adjudicationResult.split('/');
+      
+      // 获取对应的实际损失值
+      const attackerLossValue = BattleConfig.strengthLossMap[attackerLoss] || 0;
+      const defenderLossValue = BattleConfig.strengthLossMap[defenderLoss] || 0;
+      
+      // 记录预期损失
+      expectedResults.attacker.losses[dimension] = attackerLossValue;
+      expectedResults.defender.losses[dimension] = defenderLossValue;
+      expectedResults.attacker.totalLoss += attackerLossValue;
+      expectedResults.defender.totalLoss += defenderLossValue;
+      
+      // 输出该维度战斗结果
+      OverviewConsole.log(`\n▶ ${dimension === 'land' ? '陆上' : dimension === 'sea' ? '海上' : '空中'}战斗:`);
+      OverviewConsole.log(`  进攻火力: ${this._formatNumber(atkFirepower)} vs 防御火力: ${this._formatNumber(defFirepower)}`);
+      OverviewConsole.log(`  火力比: ${ratio.toFixed(2)} (${BattleConfig.powerRatioRanges[ratioIndex].name})`);
+      OverviewConsole.log(`  骰子: ${diceRoll}, 战损: ${adjudicationResult}`);
+      OverviewConsole.log(`  进攻方每个部队在此维度预期损失 ${attackerLossValue} 点兵力`);
+      OverviewConsole.log(`  防守方每个部队在此维度预期损失 ${defenderLossValue} 点兵力`);
+    }
+    
+    return expectedResults;
+  }
+  
+  /**
+   * 执行战斗视觉效果
+   * @param {string} battleId 战斗ID
+   * @param {Battlegroup} attackerBG 攻击方战斗群
+   * @param {Battlegroup} defenderBG 防守方战斗群
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _executeBattleEffects(battleId, attackerBG, defenderBG) {
+    // 获取参与战斗的部队
+    const attackerForces = attackerBG.forceIdList
+      .map(id => this.store.getForceById(id))
+      .filter(f => f && f.combatChance > 0); // 只有有战斗机会的部队才参与攻击
+    
+    const defenderForces = defenderBG.forceIdList
+      .map(id => this.store.getForceById(id))
+      .filter(Boolean);
+    
+    // 获取攻击方和防守方所在的六角格ID
+    const attackerHexIds = attackerForces
+      .map(force => force.hexId)
+      .filter(Boolean);
+    
+    const defenderHexIds = defenderForces
+      .map(force => force.hexId)
+      .filter(Boolean);
+    
+    // 计算战斗效果数量
+    const effectCount = BattleConfig.animation.bulletEffectCount;
+    
+    // 去重
+    const uniqueAttackerHexIds = [...new Set(attackerHexIds)];
+    const uniqueDefenderHexIds = [...new Set(defenderHexIds)];
+    
+    if (uniqueAttackerHexIds.length === 0 || uniqueDefenderHexIds.length === 0) {
+      OverviewConsole.warning('无法生成战斗效果: 找不到攻击方或防守方的六角格');
+      return;
+    }
+    
+    // 创建分布式战斗效果
+    const effects = this._createDistributedBattleEffects(
+      uniqueAttackerHexIds,
+      uniqueDefenderHexIds,
+      effectCount
+    );
+    
+    // 输出战斗效果开始信息
+    OverviewConsole.log('\n开始战斗...');
+    
+    // 渲染战斗效果并等待完成
+    try {
+      await this.effectsRenderer.createBattleEffects(battleId, effects);
+    } catch (error) {
+      console.error('渲染战斗效果失败', error);
+      OverviewConsole.error(`渲染战斗效果失败: ${error.message}`);
+    }
+    
+    // 输出战斗效果结束信息
+    OverviewConsole.log('战斗结束...');
+  }
+  
+  /**
+   * 应用战斗结果到部队
+   * @param {Battlegroup} attackerBG 攻击方战斗群
+   * @param {Battlegroup} defenderBG 防守方战斗群
+   * @param {Object} expectedResults 战斗预期结果
+   * @returns {Object} 实际应用的战斗结果
+   * @private
+   */
+  _applyBattleResults(attackerBG, defenderBG, expectedResults) {
+    // 实际战斗结果记录
+    const actualResults = {
+      attacker: { 
+        dimensionTotalLosses: { land: 0, sea: 0, air: 0 }, // 各维度的损失兵力值
+        totalLoss: 0, // 总损失兵力值
+        forceLosses: [], // 每个部队的损失详情 {部队id, 部队名称, 原始兵力, 损失兵力, 损失百分比, 剩余兵力, 维度}
+      },
+      defender: { 
+        dimensionTotalLosses: { land: 0, sea: 0, air: 0 }, 
+        totalLoss: 0,
+        forceLosses: [],
+      }
+    };
+    
+    // 应用攻击方和防守方损失
+    this._applyDimensionalLosses(attackerBG, expectedResults.attacker.losses, actualResults.attacker);
+    this._applyDimensionalLosses(defenderBG, expectedResults.defender.losses, actualResults.defender);
+    
+    return actualResults;
+  }
+  
+  /**
+   * 按维度应用损失到战斗群
+   * @param {Battlegroup} battlegroup 战斗群
+   * @param {Object} dimensionalLosses 各维度损失值 {land, sea, air}
+   * @param {Object} result 实际结果记录对象，将被修改
+   * @private
+   */
+  _applyDimensionalLosses(battlegroup, dimensionalLosses, result) {
+    const store = this.store;
+    const dimensions = ['land', 'sea', 'air'];
+    
+    // 获取战斗群中的所有部队
+    const forces = battlegroup.forceIdList
+      .map(id => store.getForceById(id))
+      .filter(Boolean);
+    
+    if (forces.length === 0) return;
+    
+    // 按军种对部队进行分类
+    const serviceMap = {
+      land: forces.filter(force => force.service === 'land'),
+      sea: forces.filter(force => force.service === 'sea'),
+      air: forces.filter(force => force.service === 'air')
+    };
+    
+    // 记录每个部队的损失情况
+    result.forceLosses = [];
+    
+    // 处理每个维度的损失
+    for (const dimension of dimensions) {
+      const lossValue = dimensionalLosses[dimension];
+      
+      // 如果该维度没有损失或没有对应军种的部队，跳过
+      if (lossValue <= 0 || serviceMap[dimension].length === 0) continue;
+      
+      // 该维度的部队
+      const dimensionForces = serviceMap[dimension];
+      
+      // 实际应用的总损失
+      let actualDimensionTotalLoss = 0;
+      
+      // 应用损失
+      dimensionForces.forEach(force => {
+        // 记录原始兵力
+        const originalStrength = force.troopStrength;
+        // 应用损失
+        const actualLoss = originalStrength - force.consumeTroopStrength(lossValue);
+        
+        // 累计该维度的实际损失
+        actualDimensionTotalLoss += actualLoss;
+        
+        // 记录部队的损失情况
+        const forceLoss = {
+          forceId: force.forceId,
+          name: force.forceName,
+          originalStrength: originalStrength,
+          strengthLoss: actualLoss,
+          strengthLossPercent: originalStrength > 0 ? actualLoss / originalStrength : 0,
+          remainingStrength: force.troopStrength,
+          dimension: dimension
+        };
+        
+        // 添加到损失记录
+        result.forceLosses.push(forceLoss);
+      });
+      
+      // 记录该维度的实际损失
+      result.dimensionTotalLosses[dimension] = actualDimensionTotalLoss;
+      result.totalLoss += actualDimensionTotalLoss;
+    }
+  }
+
+  /**
+   * 根据双方火力值下降百分比确定战斗结果
+   * @param {number} attackerLossPercent 攻击方火力值下降百分比
+   * @param {number} defenderLossPercent 防守方火力值下降百分比
+   * @returns {Object} 战斗结果
+   * @private
+   */
+  _determineBattleOutcome(attackerLossPercent, defenderLossPercent) {
+    let result = '';
+    let victorSide = '';
+    let attackerState = '';
+    let defenderState = '';
+    
+    // 判断各自的状态
+    if (attackerLossPercent >= 1.0) {
+      attackerState = '全军覆没';
+    } else if (attackerLossPercent >= 0.75) {
+      attackerState = '溃败';
+    } else if (attackerLossPercent >= 0.5) {
+      attackerState = '元气大伤';
+    } else if (attackerLossPercent >= 0.25) {
+      attackerState = '损失严重';
+    } else {
+      attackerState = '轻微损失';
+    }
+    
+    if (defenderLossPercent >= 1.0) {
+      defenderState = '全军覆没';
+    } else if (defenderLossPercent >= 0.75) {
+      defenderState = '溃败';
+    } else if (defenderLossPercent >= 0.5) {
+      defenderState = '元气大伤';
+    } else if (defenderLossPercent >= 0.25) {
+      defenderState = '损失严重';
+    } else {
+      defenderState = '轻微损失';
+    }
+    
+    // 判断胜负
+    if (attackerLossPercent > defenderLossPercent * 2) {
+      result = '防守方大获全胜！';
+      victorSide = 'defender';
+    } else if (attackerLossPercent > defenderLossPercent * 1.2) {
+      result = '防守方小胜。';
+      victorSide = 'defender';
+    } else if (defenderLossPercent > attackerLossPercent * 2) {
+      result = '进攻方大获全胜！';
+      victorSide = 'attacker';
+    } else if (defenderLossPercent > attackerLossPercent * 1.2) {
+      result = '进攻方小胜。';
+      victorSide = 'attacker';
+    } else {
+      result = '战斗势均力敌。';
+      victorSide = 'draw';
+    }
+    
+    return {
+      result,
+      victorSide,
+      attackerState,
+      defenderState
+    };
+  }
+
+  /**
+   * 在总览面板打印战斗报告总结
+   * @param {Object} battleResult 战斗结果数据
+   */
+  printBattleReportSummary(battleResult) {
+    if (!battleResult) return;
+    
+    // 获取参战部队
+    const attackerForces = battleResult.attackerForceIds
+      .map(id => this.store.getForceById(id))
+      .filter(Boolean);
+    const defenderForces = battleResult.defenderForceIds
+      .map(id => this.store.getForceById(id))
+      .filter(Boolean);
+    
+    // 获取指挥部队
+    const attackingCommand = this.store.getForceById(battleResult.attackingCommand.forceId);
+    const defendingCommand = this.store.getForceById(battleResult.defendingCommand.forceId);
+    
+    // 创建部队兵力变化的映射表
+    const forceLossMap = new Map();
+    // 从battleResult.forceLosses中获取每个部队的损失信息
+    if (battleResult.forceLosses && Array.isArray(battleResult.forceLosses)) {
+      battleResult.forceLosses.forEach(loss => {
+        if (loss && loss.forceId) {
+          forceLossMap.set(loss.forceId, loss);
+        }
+      });
+    }
+
+    OverviewConsole.stat('========== 战斗结果报告 ==========');
+    
+    // =================== 按阵营显示各部队及其兵力值变化 ===================
+    // ------------- 显示进攻方信息 -------------
+    OverviewConsole.stat('\n---- 进攻方部队当前状态 ----'); 
+    OverviewConsole.log('【指挥部队】');
+    // 显示指挥部队状态
+    this._displayForceInfo(attackingCommand, forceLossMap);
+    
+    // 获取攻击方支援部队
+    const attackerSupportForces = attackerForces.filter(f => f.forceId !== attackingCommand.forceId);
+    OverviewConsole.log('【支援部队】');
+    // 输出攻击方支援部队信息
+    attackerSupportForces.forEach(force => {
+      this._displayForceInfo(force, forceLossMap);
+    });
+    
+    // ------------- 显示防守方信息 -------------
+    OverviewConsole.stat('\n---- 防守方部队当前状态 ----');
+    OverviewConsole.log('【指挥部队】');
+    
+    // 显示防守方指挥部队状态
+    this._displayForceInfo(defendingCommand, forceLossMap, true);
+    
+    // 获取防守方支援部队
+    const defenderSupportForces = defenderForces.filter(f => f.forceId !== defendingCommand.forceId);
+    OverviewConsole.log('【支援部队】');
+    // 输出防守方支援部队信息
+    defenderSupportForces.forEach(force => {
+      this._displayForceInfo(force, forceLossMap, true);
+    });
+
+    // =================== 输出各维度兵力损失 ===================
+    const dimResAttacker = battleResult.dimensionalResults.attacker;
+    const dimResDefender = battleResult.dimensionalResults.defender;
+    OverviewConsole.stat(`\n---- 各维度兵力损失 ----`);
+    OverviewConsole.log(`陆地：进攻方损失${dimResAttacker.dimensionTotalLosses.land}兵力，防守方损失${dimResDefender.dimensionTotalLosses.land}兵力`);
+    OverviewConsole.log(`海上：进攻方损失${dimResAttacker.dimensionTotalLosses.sea}兵力，防守方损失${dimResDefender.dimensionTotalLosses.sea}兵力`);
+    OverviewConsole.log(`空中：进攻方损失${dimResAttacker.dimensionTotalLosses.air}兵力，防守方损失${dimResDefender.dimensionTotalLosses.air}兵力`);
+    OverviewConsole.log(`合计：进攻方损失${dimResAttacker.totalLoss}兵力，防守方损失${dimResDefender.totalLoss}兵力`);
+
+    // =================== 输出联合火力值损失 ===================
+    const powerComparison = battleResult.powerComparison;
+    OverviewConsole.stat(`\n---- 火力值损失 ----`);
+    OverviewConsole.log(`进攻方: ${this._formatNumber(powerComparison.initial.attacker)} ==> ${this._formatNumber(powerComparison.final.attacker)}(-${Math.round(powerComparison.lossPercent.attacker * 100)}%)`);
+    OverviewConsole.log(`防守方: ${this._formatNumber(powerComparison.initial.defender)} ==> ${this._formatNumber(powerComparison.final.defender)}(-${Math.round(powerComparison.lossPercent.defender * 100)}%)`);
+    
+    // =================== 输出战斗结果 ===================
+    const outcome = battleResult.outcome;
+    OverviewConsole.stat(`\n---- 战斗结果 ----`);
+    OverviewConsole.log(`\n【双方状态】进攻方: ${outcome.attackerState}, 防守方: ${outcome.defenderState}`);
+    OverviewConsole.log(`\n【胜负结果】${outcome.result}`);
+    
+    OverviewConsole.stat('========== 战斗结束 ==========');
+  }
+  
+  /**
+   * 获取火力值总和
+   * @param {Object} firepower 火力值对象 {land, sea, air}
+   * @returns {number} 火力值总和
+   * @private
+   */
+  _getTotalFirepower(firepower) {
+    return firepower.land + firepower.sea + firepower.air;
+  }
+
+  /**
    * 创建战斗效果的均匀分布
    * @param {Array<string>} attackerHexIds 攻击方六角格ID列表
    * @param {Array<string>} defenderHexIds 防守方六角格ID列表
    * @param {number} effectCount 要生成的效果数量
    * @returns {Array} 战斗效果数组，每个元素包含起点和终点六角格ID
    */
-  createDistributedBattleEffects(attackerHexIds, defenderHexIds, effectCount = 20) {
+  _createDistributedBattleEffects(attackerHexIds, defenderHexIds, effectCount = 20) {
     // 这里仅提供一个框架方法，具体实现可以根据需求调整
     const battleEffects = [];
     
@@ -250,6 +861,79 @@ export class BattleController {
     }
     
     return battleEffects;
+  }
+
+  /**
+     * 显示部队信息
+     * @param {Object} force 部队对象
+     * @param {Map} forceLossMap 部队损失信息映射
+     * @param {boolean} isCommander 是否是指挥部队
+     * @param {boolean} isDefender 是否是防守方
+     * @returns {Object} 部队信息
+     */
+  _displayForceInfo(force, forceLossMap, isDefender = false) {
+    const strength = force.troopStrength;
+    const forceLoss = forceLossMap.get(force.forceId);
+    
+    // 从forceLoss中获取原始兵力，如果没有损失记录则使用当前兵力
+    const originalStrength = forceLoss ? forceLoss.originalStrength : strength;
+    const strengthLoss = forceLoss ? forceLoss.strengthLoss : 0;
+    let strengthDisplay = '';
+    
+    // 如果有损失，显示变化；否则只显示当前值
+    if (strengthLoss > 0) {
+      strengthDisplay = `兵力值：${originalStrength}=>${strength}（-${strengthLoss}）`;
+    } else {
+      strengthDisplay = `兵力值：${strength}`;
+    }
+    
+    // 添加疲劳等级信息（仅适用于防守方）
+    let fatigueInfo = '';
+    if (isDefender && force.combatChance < 0) {
+      const fatigueLevel = -force.combatChance;
+      fatigueInfo = `，疲劳等级${fatigueLevel}`;
+    }
+    
+    // 构建完整的显示文本
+    const displayText = `${force.forceName}（${strengthDisplay}${fatigueInfo}）`;
+    
+    // 根据兵力值选择显示颜色
+    if (strength === 0) {
+      OverviewConsole.error(displayText);
+    } else if (strength <= 30) {
+      OverviewConsole.warning(displayText);
+    } else {
+      OverviewConsole.success(displayText);
+    }
+    
+    return {
+      force,
+      originalStrength,
+      strengthLoss,
+      currentStrength: strength
+    };
+  }
+  
+  /**
+   * 格式化数字
+   * @param {number} num 要格式化的数字
+   * @returns {string} 格式化后的字符串
+   * @private
+   */
+  _formatNumber(num) {
+    if (!num || isNaN(num)) return '0';
+    
+    // 转为数字确保格式化正确
+    num = Number(num);
+    
+    if (num >= 1000000000) {
+      return (num / 1000000000).toFixed(3) + 'b';
+    } else if (num >= 1000000) {
+      return (num / 1000000).toFixed(3) + 'm';
+    } else {
+      // 百万以下数字精确显示
+      return String(Math.round(num));
+    }
   }
   
   /**

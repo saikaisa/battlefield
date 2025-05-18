@@ -60,8 +60,8 @@ export const LocationConfig = {
   }
 };
 
-/** 战场相关配置 */ 
-export const BattleConfig = {
+/** 战场区域相关配置 */ 
+export const BattlefieldConfig = {
   locationName: LocationConfig.greatRiftValley.name,
   center: {
     lon: LocationConfig.greatRiftValley.lon,
@@ -75,10 +75,10 @@ export const HexConfig = {
   radius: 500, // 六角格半径（单位：米，从中心到顶点的距离）
   // 战场边界
   bounds: {
-    minLon: BattleConfig.center.lon - BattleConfig.center.offset,
-    maxLon: BattleConfig.center.lon + BattleConfig.center.offset,
-    minLat: BattleConfig.center.lat - BattleConfig.center.offset,
-    maxLat: BattleConfig.center.lat + BattleConfig.center.offset,
+    minLon: BattlefieldConfig.center.lon - BattlefieldConfig.center.offset,
+    maxLon: BattlefieldConfig.center.lon + BattlefieldConfig.center.offset,
+    minLat: BattlefieldConfig.center.lat - BattlefieldConfig.center.offset,
+    maxLat: BattlefieldConfig.center.lat + BattlefieldConfig.center.offset,
   },
   // 高度采样权重
   heightSamplingWeights: {
@@ -141,12 +141,8 @@ export const MilitaryConfig = {
     maxActionPoints: 100, // 最大行动力
     combatChance: {
       max: 1,
-      min: -2,
-      gain: 2  // 每回合增加的战斗机会
-    },
-    fatigueFactor: {
-      levelOne: 0.9,
-      levelTwo: 0.8,
+      min: -4,
+      gain: 1  // 每回合增加的战斗机会
     },
   },
 
@@ -340,5 +336,60 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       }
     }
+  }
+};
+
+/** 战斗相关配置 */
+export const BattleConfig = {
+  /** 战力比 (进攻/防御) 区间 */
+  powerRatioRanges: [
+    { name: '防守方碾压', min: 0,     max: 0.01 },      // A FP≈0
+    { name: '1:5',       min: 0.01,  max: 0.20 },
+    { name: '1:4',       min: 0.20,  max: 0.30 },
+    { name: '1:3',       min: 0.30,  max: 0.40 },
+    { name: '1:2.5',     min: 0.40,  max: 0.50 },
+    { name: '1:2',       min: 0.50,  max: 0.67 },
+    { name: '2:3',       min: 0.67,  max: 0.90 },
+    { name: '1:1',       min: 0.90,  max: 1.10 },
+    { name: '3:2',       min: 1.10,  max: 1.50 },
+    { name: '2:1',       min: 1.50,  max: 2.00 },
+    { name: '5:2',       min: 2.00,  max: 2.50 },
+    { name: '3:1',       min: 2.50,  max: 3.50 },
+    { name: '7:2',       min: 3.50,  max: 4.50 },
+    { name: '4:1',       min: 4.50,  max: 6.00 },
+    { name: '5:1',       min: 6.00,  max: 8.00 },
+    { name: '8:1',       min: 8.00,  max: 10.00 },
+    { name: '进攻方碾压', min: 10.00, max: Infinity }   // D FP≈0
+  ],
+
+  /** 裁决表 —— 行=骰点(1~6)，列=倍率档 */
+  battleTable: [
+  /*      防守碾压    1:5    1:4     1:3    1:2.5     1:2     2:3     1:1     3:2     2:1     5:2     3:1     7:2     4:1      5:1      8:1    进攻碾压 */
+  /*骰1*/['A10/D0','A9/D0','A9/D0','A8/D1','A8/D1','A7/D2','A6/D3','A5/D4','A4/D6','A3/D7','A2/D8','A1/D9','A1/D9','A0/D10','A0/D10','A0/D10','A0/D10'],
+  /*骰2*/['A10/D0','A9/D0','A8/D0','A8/D1','A7/D2','A6/D3','A5/D3','A4/D5','A3/D6','A2/D7','A2/D7','A1/D8','A0/D8','A0/D9' ,'A0/D9' ,'A0/D10','A0/D10'],
+  /*骰3*/['A10/D0','A9/D0','A8/D1','A7/D2','A7/D2','A6/D2','A5/D3','A4/D4','A3/D5','A2/D6','A1/D7','A1/D7','A0/D8','A0/D8' ,'A0/D9' ,'A0/D9' ,'A0/D10'],
+  /*骰4*/['A10/D0','A8/D1','A7/D2','A7/D2','A6/D2','A5/D2','A4/D3','A3/D3','A2/D4','A1/D5','A1/D6','A0/D6','A0/D7','A0/D8' ,'A0/D8' ,'A0/D9' ,'A0/D10'],
+  /*骰5*/['A10/D0','A8/D1','A7/D2','A6/D2','A5/D2','A4/D2','A3/D2','A2/D3','A2/D3','A1/D4','A0/D5','A0/D5','A0/D6','A0/D6' ,'A0/D7' ,'A0/D8' ,'A0/D10' ],
+  /*骰6*/['A10/D0','A7/D2','A6/D2','A5/D2','A5/D2','A4/D2','A3/D2','A2/D2','A1/D3','A0/D4','A0/D4','A0/D4','A0/D5','A0/D5' ,'A0/D6' ,'A0/D6' ,'A0/D10' ]
+  ],
+
+  /** 损失等级对应兵力扣减（最大兵力固定为 100） */
+  strengthLossMap: {
+    A0: 0, A1: 10, A2: 20, A3: 30, A4: 40, A5: 50, A6: 60, A7: 70, A8: 80, A9: 90, A10: 100,
+    D0: 0, D1: 10, D2: 20, D3: 30, D4: 40, D5: 50, D6: 60, D7: 70, D8: 80, D9: 90, D10: 100
+  },
+  
+  // 战斗动画配置
+  animation: {
+    bulletEffectCount: 20,     // 默认生成的射击特效数量
+    bulletSpeed: 500,          // 子弹飞行速度(米/秒)
+    missileSpeed: 300,         // 导弹飞行速度(米/秒)
+    effectDelay: {             // 特效延迟范围(毫秒)
+      min: 100,
+      max: 2000
+    },
+    explosionDuration: 1000,   // 爆炸效果持续时间(毫秒)
+    battleMinDuration: 3000,   // 战斗最短持续时间(毫秒)
+    battleMaxDuration: 8000    // 战斗最长持续时间(毫秒)
   }
 };

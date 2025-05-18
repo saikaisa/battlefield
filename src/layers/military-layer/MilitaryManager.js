@@ -9,6 +9,8 @@ import { MilitaryInstanceRenderer } from './components/MilitaryInstanceRenderer'
 import { HexForceMapper } from '@/layers/interaction-layer/utils/HexForceMapper';
 // import { showWarning, showError, showSuccess } from '@/layers/interaction-layer/utils/MessageBox';
 import { MilitaryInstanceGenerator } from "./components/MilitaryInstanceGenerator";
+import { BattleController } from './components/BattleController';
+import { BattleEffectsRenderer } from './components/BattleEffectsRenderer';
 
 /**
  * 军事单位管理器
@@ -49,6 +51,8 @@ export class MilitaryManager {
     this.loader = null;
     this.generator = null;
     this.renderer = null;
+    this.battleController = null;
+    this.battleEffectsRenderer = null;
     
     this._stopForceWatch = null;
     this._stopHexWatch = null;
@@ -76,6 +80,12 @@ export class MilitaryManager {
     // 初始化军事单位实例渲染器
     this.renderer = MilitaryInstanceRenderer.getInstance(this.viewer);
     this.renderer.regenerateAllForceInstances();
+
+    // 初始化战斗特效渲染器
+    this.battleEffectsRenderer = BattleEffectsRenderer.getInstance(this.viewer);
+    
+    // 初始化战斗控制器
+    this.battleController = BattleController.getInstance(this.viewer);
 
     // 设置初始可见性
     this.renderer.updateHexObjectVisibility();
@@ -292,6 +302,8 @@ export class MilitaryManager {
     this.loader?.dispose();
     this.generator?.dispose();
     this.renderer?.dispose();
+    this.battleController?.dispose();
+    this.battleEffectsRenderer?.dispose();
     
     // 清理单例
     MilitaryManager.#instance = null;
