@@ -1,12 +1,11 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 
 # 编码规则
 
-目前需要完成的是 military-layer 模块。
 
 ## 项目结构与约定
 

@@ -3,9 +3,10 @@
 import * as Cesium from "cesium";
 import { openGameStore } from '@/store';
 import { Battlegroup } from '@/models/MilitaryUnit';
-import { BattleConfig } from '@/config/GameConfig';
+import { BattleConfig, MilitaryConfig } from '@/config/GameConfig';
 import { BattleEffectsRenderer } from './BattleEffectsRenderer';
 import { OverviewConsole } from '@/layers/interaction-layer/utils/OverviewConsole';
+import { MilitaryInstanceGenerator } from './MilitaryInstanceGenerator';
 
 /**
  * 军事战斗控制器
@@ -260,19 +261,19 @@ export class BattleController {
       const expectedResults = this._executeBattleAdjudication(battleId, attackerBattlegroup, defenderBattlegroup);
       
       // 生成战斗效果
-      // 设置战斗效果计时器
-      const battleEffectsTimer = setTimeout(() => {
-        console.log('战斗效果执行中...');
-      }, 10000);
+      // // 设置战斗效果计时器
+      // const battleEffectsTimer = setTimeout(() => {
+      //   console.log('战斗效果执行中...');
+      // }, 10000);
       
-      // 等待战斗效果执行完成
-      await new Promise(resolve => {
-        setTimeout(() => {
-          clearTimeout(battleEffectsTimer);
-          resolve();
-        }, 20000);
-      });
-      // await this._executeBattleEffects(battleId, attackerBattlegroup, defenderBattlegroup);
+      // // 等待战斗效果执行完成
+      // await new Promise(resolve => {
+      //   setTimeout(() => {
+      //     clearTimeout(battleEffectsTimer);
+      //     resolve();
+      //   }, 20000);
+      // });
+      await this._executeBattleEffects(battleId, attackerBattlegroup, defenderBattlegroup);
       
       // 应用战斗结果 - 获取实际结果
       const actualResults = this._applyBattleResults(attackerBattlegroup, defenderBattlegroup, expectedResults);
@@ -510,49 +511,54 @@ export class BattleController {
    * @private
    */
   async _executeBattleEffects(battleId, attackerBG, defenderBG) {
-    // 获取参与战斗的部队
+    // 获取部队实例映射表
+    const forceInstanceMap = MilitaryInstanceGenerator.getforceInstanceMap();
+    
+    // 获取参与战斗的攻击方部队（只有有战斗机会的部队才参与攻击）
     const attackerForces = attackerBG.forceIdList
       .map(id => this.store.getForceById(id))
-      .filter(f => f && f.combatChance > 0); // 只有有战斗机会的部队才参与攻击
+      .filter(f => f && f.combatChance > 0);
     
+    // 获取参与战斗的防守方部队
     const defenderForces = defenderBG.forceIdList
       .map(id => this.store.getForceById(id))
       .filter(Boolean);
     
-    // 获取攻击方和防守方所在的六角格ID
-    const attackerHexIds = attackerForces
-      .map(force => force.hexId)
+    // 收集攻击方部队实例
+    const attackerForceInstances = attackerForces
+      .map(force => forceInstanceMap.get(force.forceId))
       .filter(Boolean);
     
-    const defenderHexIds = defenderForces
-      .map(force => force.hexId)
+    // 收集防守方部队实例
+    const defenderForceInstances = defenderForces
+      .map(force => forceInstanceMap.get(force.forceId))
       .filter(Boolean);
     
-    // 计算战斗效果数量
-    const effectCount = BattleConfig.animation.bulletEffectCount;
-    
-    // 去重
-    const uniqueAttackerHexIds = [...new Set(attackerHexIds)];
-    const uniqueDefenderHexIds = [...new Set(defenderHexIds)];
-    
-    if (uniqueAttackerHexIds.length === 0 || uniqueDefenderHexIds.length === 0) {
-      OverviewConsole.warning('无法生成战斗效果: 找不到攻击方或防守方的六角格');
+    // 如果双方没有有效的部队实例，则无法创建战斗效果
+    if (attackerForceInstances.length === 0 || defenderForceInstances.length === 0) {
+      OverviewConsole.warning('无法生成战斗效果: 找不到有效的攻击方或防守方部队实例');
       return;
     }
     
-    // 创建分布式战斗效果
-    const effects = this._createDistributedBattleEffects(
-      uniqueAttackerHexIds,
-      uniqueDefenderHexIds,
-      effectCount
-    );
+    // 获取攻击方和防守方所在的六角格ID，用于备选
+    const attackerHexIds = [...new Set(attackerForces.map(force => force.hexId).filter(Boolean))];
+    const defenderHexIds = [...new Set(defenderForces.map(force => force.hexId).filter(Boolean))];
     
     // 输出战斗效果开始信息
     OverviewConsole.log('\n开始战斗...');
     
+    // 创建战斗效果配置
+    const battleEffectsConfig = this._createBattleEffectsConfig(
+      battleId,
+      attackerForceInstances,
+      defenderForceInstances,
+      attackerHexIds,
+      defenderHexIds
+    );
+    
     // 渲染战斗效果并等待完成
     try {
-      await this.effectsRenderer.createBattleEffects(battleId, effects);
+      await this.effectsRenderer.createBattleEffects(battleId, battleEffectsConfig);
     } catch (error) {
       console.error('渲染战斗效果失败', error);
       OverviewConsole.error(`渲染战斗效果失败: ${error.message}`);
@@ -878,7 +884,7 @@ export class BattleController {
    * @returns {Array} 战斗效果数组，每个元素包含起点和终点六角格ID
    */
   _createDistributedBattleEffects(attackerHexIds, defenderHexIds, effectCount = 20) {
-    // 这里仅提供一个框架方法，具体实现可以根据需求调整
+    // 战斗效果配置数组
     const battleEffects = [];
     
     // 简单实现：均匀分配攻击效果
@@ -893,17 +899,42 @@ export class BattleController {
     // 为每个攻击方六角格分配目标
     for (let i = 0; i < totalAttackers; i++) {
       const attackerHexId = attackerHexIds[i];
+      const attackerHex = this.store.getHexCellById(attackerHexId);
       
-      for (let j = 0; j < effectsPerAttacker; j++) {
-        // 目标六角格循环选择，确保每个防守方六角格都有机会被攻击
-        const defenderHexId = defenderHexIds[j % totalDefenders];
+      // 只处理有效的攻击方六角格
+      if (attackerHex) {
+        // 获取攻击方六角格中心位置
+        const attackerCenter = attackerHex.getCenter();
         
-        battleEffects.push({
-          from: attackerHexId,
-          to: defenderHexId,
-          delay: Math.random() * 1000, // 随机延迟，使效果看起来更自然
-          type: Math.random() > 0.3 ? 'bullet' : 'missile' // 随机效果类型
-        });
+        for (let j = 0; j < effectsPerAttacker; j++) {
+          // 目标六角格循环选择，确保每个防守方六角格都有机会被攻击
+          const defenderHexId = defenderHexIds[j % totalDefenders];
+          const defenderHex = this.store.getHexCellById(defenderHexId);
+          
+          // 只处理有效的防守方六角格
+          if (defenderHex) {
+            // 获取防守方六角格中心位置
+            const defenderCenter = defenderHex.getCenter();
+            
+            // 随机选择子弹类型
+            const bulletType = Math.random() > 0.7 ? 
+              (Math.random() > 0.5 ? 'missile' : 'shell') : 'plainBullet';
+            
+            battleEffects.push({
+              from: {
+                position: { ...attackerCenter, height: attackerCenter.height + 20 },
+                hexId: attackerHexId
+              },
+              to: {
+                position: { ...defenderCenter, height: defenderCenter.height + 10 },
+                hexId: defenderHexId
+              },
+              type: bulletType,
+              delay: Math.random() * 1000, // 随机延迟，使效果看起来更自然
+              speed: this._getBulletSpeed(bulletType)
+            });
+          }
+        }
       }
     }
     
@@ -913,12 +944,36 @@ export class BattleController {
       const attackerIndex = Math.floor(Math.random() * totalAttackers);
       const defenderIndex = Math.floor(Math.random() * totalDefenders);
       
-      battleEffects.push({
-        from: attackerHexIds[attackerIndex],
-        to: defenderHexIds[defenderIndex],
-        delay: Math.random() * 1000,
-        type: Math.random() > 0.5 ? 'bullet' : 'missile'
-      });
+      const attackerHexId = attackerHexIds[attackerIndex];
+      const defenderHexId = defenderHexIds[defenderIndex];
+      
+      const attackerHex = this.store.getHexCellById(attackerHexId);
+      const defenderHex = this.store.getHexCellById(defenderHexId);
+      
+      // 只处理两个六角格都有效的情况
+      if (attackerHex && defenderHex) {
+        // 获取六角格中心位置
+        const attackerCenter = attackerHex.getCenter();
+        const defenderCenter = defenderHex.getCenter();
+        
+        // 随机选择子弹类型
+        const bulletType = Math.random() > 0.7 ? 
+          (Math.random() > 0.5 ? 'missile' : 'shell') : 'plainBullet';
+        
+        battleEffects.push({
+          from: {
+            position: { ...attackerCenter, height: attackerCenter.height + 20 },
+            hexId: attackerHexId
+          },
+          to: {
+            position: { ...defenderCenter, height: defenderCenter.height + 10 },
+            hexId: defenderHexId
+          },
+          type: bulletType,
+          delay: Math.random() * 1000,
+          speed: this._getBulletSpeed(bulletType)
+        });
+      }
     }
     
     return battleEffects;
@@ -999,5 +1054,361 @@ export class BattleController {
    */
   destroy() {
     BattleController.#instance = null;
+  }
+
+  /**
+   * 创建战斗效果配置
+   * @param {string} battleId 战斗ID
+   * @param {Array<Object>} attackerForceInstances 攻击方部队实例数组
+   * @param {Array<Object>} defenderForceInstances 防守方部队实例数组
+   * @param {Array<string>} fallbackAttackerHexIds 攻击方备选六角格ID数组
+   * @param {Array<string>} fallbackDefenderHexIds 防守方备选六角格ID数组
+   * @returns {Array<Object>} 战斗效果配置数组
+   * @private
+   */
+  _createBattleEffectsConfig(battleId, attackerForceInstances, defenderForceInstances, fallbackAttackerHexIds, fallbackDefenderHexIds) {
+    // 战斗效果配置数组
+    const battleEffectsConfig = [];
+    
+    // 从BattleConfig中获取子弹和爆炸效果配置
+    const bulletEffectCount = BattleConfig.animation.bulletEffectCount || 20;
+    const minBulletsPerAttacker = BattleConfig.animation.minBulletsPerAttacker || 2;
+    const baseMinBulletsMultiplier = 2; // 基础倍率倍数
+    
+    // 防守方部队分配表，用于均匀分配攻击目标
+    const defenderTargets = [];
+    defenderForceInstances.forEach(defenderForce => {
+      if (defenderForce.pose && defenderForce.pose.position) {
+        defenderTargets.push({
+          forceInstance: defenderForce,
+          position: defenderForce.pose.position,
+          hexId: defenderForce.force.hexId,
+          bulletCount: 0 // 记录已分配到该目标的子弹数量
+        });
+      }
+    });
+    
+    // 如果没有有效的防守方目标，则使用备选六角格
+    if (defenderTargets.length === 0 && fallbackDefenderHexIds.length > 0) {
+      fallbackDefenderHexIds.forEach(hexId => {
+        const hexCell = this.store.getHexCellById(hexId);
+        if (hexCell) {
+          const center = hexCell.getCenter();
+          defenderTargets.push({
+            forceInstance: null,
+            position: center,
+            hexId: hexId,
+            bulletCount: 0
+          });
+        }
+      });
+    }
+    
+    // 如果仍然没有目标，则无法创建战斗效果
+    if (defenderTargets.length === 0) {
+      OverviewConsole.warning('无法生成战斗效果: 找不到有效的防守方目标');
+      return battleEffectsConfig;
+    }
+    
+    // 计算所有部队的总战斗力，用于动态调整子弹数量
+    let totalAttackerUnits = 0;
+    attackerForceInstances.forEach(attackerForce => {
+      if (attackerForce.unitInstanceMap) {
+        totalAttackerUnits += attackerForce.unitInstanceMap.size;
+      }
+    });
+    
+    // 为每个攻击方部队实例创建战斗效果
+    attackerForceInstances.forEach(attackerForce => {
+      // 只处理有效位置的部队
+      if (attackerForce.pose && attackerForce.pose.position) {
+        // 计算该部队应该发射的子弹比例
+        const unitCount = attackerForce.unitInstanceMap ? attackerForce.unitInstanceMap.size : 0;
+        const forceRatio = totalAttackerUnits > 0 ? unitCount / totalAttackerUnits : 0;
+        
+        // 获取攻击方部队的兵种实例
+        const attackerUnitInstances = Array.from(attackerForce.unitInstanceMap.values())
+          .filter(unitInstance => unitInstance.activeModel && unitInstance.renderingKey);
+        
+        // 只处理有效的兵种实例
+        if (attackerUnitInstances.length > 0) {
+          // 为每个兵种实例创建战斗效果
+          attackerUnitInstances.forEach(unitInstance => {
+            // 获取兵种对应的模型配置
+            const modelConfig = MilitaryConfig.models[unitInstance.renderingKey] || {};
+            
+            // 获取子弹类型
+            const bulletType = modelConfig.bullet || 'none';
+            
+            // 只为能发射子弹的模型创建效果
+            if (bulletType !== 'none') {
+              // 根据子弹类型确定发射次数和间隔
+              let fireCount, fireInterval;
+              switch (bulletType) {
+                case 'plainBullet':
+                  fireCount = Math.floor(Math.random() * 3) + 3; // 3-5次
+                  fireInterval = 300 + Math.random() * 200; // 300-500毫秒
+                  break;
+                case 'shell':
+                  fireCount = Math.floor(Math.random() * 2) + 1; // 1-2次
+                  fireInterval = 800 + Math.random() * 400; // 800-1200毫秒
+                  break;
+                case 'missile':
+                  fireCount = 1; // 通常只发射一次
+                  fireInterval = 0; // 不需要间隔
+                  break;
+                default:
+                  fireCount = 1;
+                  fireInterval = 500;
+              }
+              
+              // 根据部队比例动态调整子弹数量，但保证最小发射数
+              // 总子弹数 * 部队比例 * 基础倍率，确保小部队也有足够的发射量
+              const dynamicMinBullets = Math.max(
+                minBulletsPerAttacker,
+                Math.ceil(bulletEffectCount * forceRatio * baseMinBulletsMultiplier)
+              );
+              fireCount = Math.max(fireCount, dynamicMinBullets);
+              
+              // 获取兵种实例的位置
+              const sourcePosition = this._getUnitModelPosition(unitInstance, attackerForce);
+              
+              // 调整部队朝向，面向被攻击方
+              this._adjustForceOrientation(attackerForce, defenderTargets[0]);
+              
+              // 创建该兵种实例的所有子弹效果
+              for (let i = 0; i < fireCount; i++) {
+                // 选择目标 - 按照当前被分配子弹最少的目标优先
+                defenderTargets.sort((a, b) => a.bulletCount - b.bulletCount);
+                const target = defenderTargets[0];
+                target.bulletCount++; // 增加目标的子弹计数
+                
+                // 随机化子弹落点，增加真实感
+                const randomizedTargetPosition = this._randomizeTargetPosition(
+                  target.forceInstance ? 
+                    this._getForcePosition(target.forceInstance) : 
+                    this._getHexPosition(target.hexId)
+                );
+                
+                // 计算延迟时间 - 使子弹发射时间分散
+                const delay = i * fireInterval + Math.random() * 300;
+                
+                // 创建子弹效果配置
+                battleEffectsConfig.push({
+                  battleId: battleId,
+                  type: bulletType,
+                  from: {
+                    unitInstance: unitInstance,
+                    forceInstance: attackerForce,
+                    position: sourcePosition,
+                    hexId: attackerForce.force.hexId
+                  },
+                  to: {
+                    forceInstance: target.forceInstance,
+                    position: randomizedTargetPosition,
+                    hexId: target.hexId
+                  },
+                  delay: delay,
+                  speed: this._getBulletSpeed(bulletType)
+                });
+              }
+            }
+          });
+        }
+      }
+    });
+    
+    // 如果没有生成任何战斗效果，则使用备选方案
+    if (battleEffectsConfig.length === 0) {
+      console.warn('未能生成基于部队实例的战斗效果，使用备选方案');
+      // 创建简单的六角格之间的战斗效果
+      const fallbackEffects = this._createDistributedBattleEffects(
+        fallbackAttackerHexIds,
+        fallbackDefenderHexIds,
+        bulletEffectCount
+      );
+      
+      // 添加战斗ID
+      fallbackEffects.forEach(effect => {
+        effect.battleId = battleId;
+      });
+      
+      return fallbackEffects;
+    }
+    
+    return battleEffectsConfig;
+  }
+  
+  /**
+   * 调整部队朝向，使其面向目标
+   * @param {Object} forceInstance 部队实例
+   * @param {Object} target 目标对象
+   * @private
+   */
+  _adjustForceOrientation(forceInstance, target) {
+    if (!forceInstance || !forceInstance.pose || !target) return;
+    
+    try {
+      // 获取源位置和目标位置
+      const sourcePos = forceInstance.pose.position;
+      let targetPos;
+      
+      if (target.forceInstance && target.forceInstance.pose && target.forceInstance.pose.position) {
+        targetPos = target.forceInstance.pose.position;
+      } else if (target.position) {
+        targetPos = target.position;
+      } else {
+        return; // 无法获取目标位置
+      }
+      
+      // 计算朝向角度
+      const dLon = (targetPos.longitude - sourcePos.longitude) * Math.PI / 180;
+      const dLat = (targetPos.latitude - sourcePos.latitude) * Math.PI / 180;
+      const bearing = Math.atan2(dLon, dLat);
+      
+      // 更新部队朝向
+      forceInstance.pose.heading = bearing;
+      
+      // 如果部队有实体模型，同步更新模型朝向
+      if (forceInstance.entity && forceInstance.entity.orientation) {
+        const hpr = new Cesium.HeadingPitchRoll(bearing, 0, 0);
+        forceInstance.entity.orientation = Cesium.Transforms.headingPitchRollQuaternion(
+          Cesium.Cartesian3.fromDegrees(sourcePos.longitude, sourcePos.latitude, sourcePos.height),
+          hpr
+        );
+      }
+    } catch (e) {
+      console.warn('调整部队朝向失败', e);
+    }
+  }
+  
+  /**
+   * 随机化目标位置，增加真实感
+   * @param {Object} position 原始位置对象 {longitude, latitude, height}
+   * @returns {Object} 随机化后的位置对象
+   * @private
+   */
+  _randomizeTargetPosition(position) {
+    if (!position) return position;
+    
+    // 定义随机范围（米）
+    const randomRange = 30; // 30米范围内随机
+    
+    // 经纬度的随机偏移量（近似，1度约111km）
+    const metersPerDegree = 111000;
+    const lonOffset = (Math.random() * 2 - 1) * randomRange / (metersPerDegree * Math.cos(position.latitude * Math.PI / 180));
+    const latOffset = (Math.random() * 2 - 1) * randomRange / metersPerDegree;
+    
+    // 高度的随机偏移量
+    const heightOffset = (Math.random() * 2 - 1) * 5; // ±5米
+    
+    return {
+      longitude: position.longitude + lonOffset,
+      latitude: position.latitude + latOffset,
+      height: (position.height || 0) + heightOffset
+    };
+  }
+
+  /**
+   * 获取兵种实例的模型位置
+   * @param {Object} unitInstance 兵种实例
+   * @param {Object} forceInstance 部队实例
+   * @returns {Object} 位置对象 {longitude, latitude, height}
+   * @private
+   */
+  _getUnitModelPosition(unitInstance, forceInstance) {
+    // 如果有活跃模型，尝试从模型矩阵中获取位置
+    if (unitInstance.activeModel) {
+      try {
+        const modelMatrix = unitInstance.activeModel.modelMatrix;
+        const modelPos = new Cesium.Cartesian3();
+        Cesium.Matrix4.getTranslation(modelMatrix, modelPos);
+        
+        // 将Cartesian3转换为经纬度
+        const cartographic = Cesium.Cartographic.fromCartesian(modelPos);
+        return {
+          longitude: Cesium.Math.toDegrees(cartographic.longitude),
+          latitude: Cesium.Math.toDegrees(cartographic.latitude),
+          height: cartographic.height
+        };
+      } catch (e) {
+        console.warn('从模型中获取位置失败，使用部队位置替代', e);
+      }
+    }
+    
+    // 如果无法从模型中获取位置，则使用部队位置加上兵种偏移
+    if (forceInstance.pose && forceInstance.pose.position) {
+      const forcePos = forceInstance.pose.position;
+      const offset = unitInstance.localOffset || { x: 0, y: 0 };
+      
+      // 根据部队朝向计算偏移后的位置
+      const heading = forceInstance.pose.heading || 0;
+      const offsetDistance = Math.sqrt(offset.x * offset.x + offset.y * offset.y);
+      const offsetAngle = Math.atan2(offset.y, offset.x) + heading;
+      
+      // 计算经纬度偏移
+      // 简化计算，1度≈111km，转换为偏移量
+      const metersPerDegree = 111000;
+      const lonOffset = (offsetDistance * Math.cos(offsetAngle)) / (metersPerDegree * Math.cos(forcePos.latitude * Math.PI / 180));
+      const latOffset = (offsetDistance * Math.sin(offsetAngle)) / metersPerDegree;
+      
+      return {
+        longitude: forcePos.longitude + lonOffset,
+        latitude: forcePos.latitude + latOffset,
+        height: forcePos.height + 2 // 稍微抬高，避免与地面重合
+      };
+    }
+    
+    // 均无法获取，返回默认位置
+    return { longitude: 0, latitude: 0, height: 0 };
+  }
+
+  /**
+   * 获取部队实例的位置
+   * @param {Object} forceInstance 部队实例
+   * @returns {Object} 位置对象 {longitude, latitude, height}
+   * @private
+   */
+  _getForcePosition(forceInstance) {
+    if (forceInstance && forceInstance.pose && forceInstance.pose.position) {
+      return { ...forceInstance.pose.position };
+    } else if (forceInstance && forceInstance.force && forceInstance.force.hexId) {
+      return this._getHexPosition(forceInstance.force.hexId);
+    }
+    return { longitude: 0, latitude: 0, height: 0 };
+  }
+
+  /**
+   * 获取六角格的中心位置
+   * @param {string} hexId 六角格ID
+   * @returns {Object} 位置对象 {longitude, latitude, height}
+   * @private
+   */
+  _getHexPosition(hexId) {
+    const hexCell = this.store.getHexCellById(hexId);
+    if (hexCell) {
+      const center = hexCell.getCenter();
+      return { ...center };
+    }
+    return { longitude: 0, latitude: 0, height: 0 };
+  }
+
+  /**
+   * 获取子弹速度
+   * @param {string} bulletType 子弹类型
+   * @returns {number} 子弹速度(米/秒)
+   * @private
+   */
+  _getBulletSpeed(bulletType) {
+    switch (bulletType) {
+      case 'plainBullet':
+        return BattleConfig.animation.bulletSpeed || 500;
+      case 'shell':
+        return BattleConfig.animation.shellSpeed || 300;
+      case 'missile':
+        return BattleConfig.animation.missileSpeed || 200;
+      default:
+        return BattleConfig.animation.bulletSpeed || 500;
+    }
   }
 }

@@ -183,6 +183,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
+      bullet: 'none',
       priority: 2
     },
     helicopter1: {
@@ -196,6 +197,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 100 }
       },
       animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
+      bullet: 'missile',
       priority: 2
     },
     helicopter2: {
@@ -209,6 +211,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 100 }
       },
       animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
+      bullet: 'missile',
       priority: 2
     },
     jet: {
@@ -222,6 +225,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 80 }
       },
       animationList: [],
+      bullet: 'shell',
       priority: 2
     },
     missiletank: {
@@ -235,6 +239,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
+      bullet: 'missile',
       priority: 2
     },
     sailboat: {
@@ -248,6 +253,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
+      bullet: 'shell',
       priority: 1
     },
     soldier: {
@@ -257,14 +263,15 @@ export const MilitaryConfig = {
         { level: 2, distance: 4000, path: "/assets/models/soldier_lod2.glb" }
       ],
       transform: {
-        scale: 0.5,
+        scale: 0.8,
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [ 
         { name: 'Idle', loop: Cesium.ModelAnimationLoop.REPEAT },
         { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT }
-       ],
-       priority: 1
+      ],
+      bullet: 'plainBullet',
+      priority: 1
     },
     spydrone: {
       lod: [
@@ -277,6 +284,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 100 }
       },
       animationList: [],
+      bullet: 'none',
       priority: 2
     },
     tank: {
@@ -290,6 +298,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
+      bullet: 'shell',
       priority: 2
     },
     vehicle: {
@@ -303,6 +312,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
+      bullet: 'shell',
       priority: 2
     },
     warship: {
@@ -316,6 +326,7 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
+      bullet: 'missile',
       priority: 3
     },
   },
@@ -382,12 +393,14 @@ export const BattleConfig = {
   // 战斗动画配置
   animation: {
     bulletEffectCount: 20,     // 默认生成的射击特效数量
-    bulletSpeed: 500,          // 子弹飞行速度(米/秒)
-    missileSpeed: 300,         // 导弹飞行速度(米/秒)
+    bulletSpeed: 300,          // 子弹飞行速度(米/秒)
+    shellSpeed: 500,          // 炮弹飞行速度(米/秒)
+    missileSpeed: 1000,         // 导弹飞行速度(米/秒)
     effectDelay: {             // 特效延迟范围(毫秒)
       min: 100,
       max: 2000
     },
+    minBulletsPerAttacker: 2,  // 每名进攻方最少发射的子弹数量
     explosionDuration: 1000,   // 爆炸效果持续时间(毫秒)
     battleMinDuration: 3000,   // 战斗最短持续时间(毫秒)
     battleMaxDuration: 8000    // 战斗最长持续时间(毫秒)

@@ -441,9 +441,6 @@ export class HexGridRenderer {
                 return null;
               }
             );
-            
-            console.log('[HexGridRenderer] 渲染指挥范围高亮，六角格数量:', 
-              this.immCommandRangePrimitives.length);
           }
         }
       } else {
@@ -455,7 +452,6 @@ export class HexGridRenderer {
 
     // 在攻击准备和执行模式下，使用attackState中的指挥部队渲染指挥范围
     else if (currentGameMode === GameMode.ATTACK_PREPARE || currentGameMode === GameMode.ATTACK_EXECUTE) {
-      console.log('[HexGridRenderer] 正在攻击准备/执行模式下渲染指挥范围高亮');
       
       // 清空自由模式下的指挥范围
       this.immCommandRangePrimitives.removeAll();
@@ -607,8 +603,6 @@ export class HexGridRenderer {
             attackState.phase === 'attacking')) {
         // 获取部队的指挥范围
         const commandRange = commandForce.commandRange;
-
-        console.log(`friendlyCommandRangePrimitives长度: ${this.friendlyCommandRangePrimitives.length}`);
         
         // 获取指挥范围内的所有六角格
         const hexesInRange = commandForceHex.getHexCellInRange(commandRange);
@@ -628,9 +622,7 @@ export class HexGridRenderer {
         });
         
         // 渲染友方指挥范围
-        if (friendlyRangeHexIds.size > 0) {
-          console.log('[HexGridRenderer] 渲染友方指挥范围，六角格数量:', friendlyRangeHexIds.size);
-          
+        if (friendlyRangeHexIds.size > 0) {          
           // 完全重建友方指挥范围，不使用增量更新
           this.friendlyCommandRangePrimitives.removeAll();
           
@@ -687,9 +679,7 @@ export class HexGridRenderer {
           });
           
           // 渲染敌方指挥范围
-          if (enemyRangeHexIds.size > 0) {
-            console.log('[HexGridRenderer] 渲染敌方指挥范围，六角格数量:', enemyRangeHexIds.size);
-            
+          if (enemyRangeHexIds.size > 0) {            
             // 完全重建敌方指挥范围，不使用增量更新
             this.enemyCommandRangePrimitives.removeAll();
             
@@ -743,7 +733,6 @@ export class HexGridRenderer {
   _createHexPrimitive(hexCell, styleType, heightOffset, customStyle = null, customBorderPattern = null) {
     const visual = customStyle || hexCell.getTopVisualStyle(styleType);
     if (!visual) return null;
-    console.log(`customBorderPattern: ${customBorderPattern}`);
     const primCollection = new Cesium.PrimitiveCollection();
     
     if (visual.showFill) {
@@ -797,7 +786,6 @@ export class HexGridRenderer {
       const borderColor = visual.borderColor || Cesium.Color.RED.withAlpha(0.1);
       const borderWidth = visual.borderWidth || 2.0;
       const borderPattern = customBorderPattern ?? visual.borderPattern ?? false;
-      console.log(`borderPattern: ${borderPattern}`);
       
       const borderGeometryOptions = {
         positions: positions,
