@@ -774,13 +774,14 @@ function executeAttackCommand() {
   }
 
   showSuccess('开始攻击');
-  console.log(`supportForceIds: ${attackState.supportForceIds}`);
-  console.log(`selectedHexIds: ${store.selectedHexIds}`);
+  // console.log(`supportForceIds: ${attackState.supportForceIds}`);
+  // console.log(`selectedHexIds: ${store.selectedHexIds}`);
+  // console.log(`目标六角格: ${enemyForce.hexId}`);
   
   // 执行攻击命令
   executeCommand(CommandType.ATTACK, {
     commandForceId: attackState.commandForceId,
-    targetHex: enemyForce.hexId,
+    targetHexId: enemyForce.hexId,
     supportForceIds: attackState.supportForceIds,
     enemyCommandForceId: attackState.enemyCommandForceId,
     enemySupportForceIds: attackState.enemySupportForceIds
@@ -797,14 +798,6 @@ function executeAttackCommand() {
 // 执行命令
 function executeCommand(commandType, params = {}) {
   console.log('执行命令:', commandType, params);
-  
-  // 如果没有选中部队且不是准备类命令，则不执行
-  if (!selectedForce.value && 
-      commandType !== CommandType.MOVE_PREPARE && 
-      commandType !== CommandType.ATTACK_PREPARE) {
-    console.warn('未选中部队，无法执行命令');
-    return;
-  }
   
   // 根据命令类型执行对应操作
   switch (commandType) {
@@ -859,16 +852,14 @@ function executeCommand(commandType, params = {}) {
       
     case CommandType.ATTACK: {
       // 检查参数是否完整
-      if (!params.commandForceId || !params.targetHex) {
+      if (!params.commandForceId || !params.targetHexId) {
         showWarning('攻击参数不完整');
         return;
       }
+      console.log(`执行攻击命令: ${commandType}, params: ${JSON.stringify(params)}`);
       
-      CommandService.executeCommandFromUI(commandType, { 
-        commandForceId: params.commandForceId,
-        targetHex: params.targetHex,
-        supportForceIds: params.supportForceIds || []
-      }).then(() => {
+      CommandService.executeCommandFromUI(commandType, params)
+      .then(() => {
         console.log('攻击命令已执行');
         inAttackMode.value = false; // 执行完成后重置模式
       }).catch(error => {
@@ -877,8 +868,6 @@ function executeCommand(commandType, params = {}) {
       });
       break;
     }
-      
-    // 其他命令类型...
   }
 }
 

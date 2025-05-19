@@ -133,7 +133,7 @@ export const HexVisualStyles = {
     layer: 'interaction',
     type: 'selected',
     priority: 2,
-    fillColor: Cesium.Color.BLUE.withAlpha(0.08),
+    fillColor: Cesium.Color.BLUE.withAlpha(0.06),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
     showBorder: false,
@@ -145,7 +145,7 @@ export const HexVisualStyles = {
     layer: 'interaction',
     type: 'selected',
     priority: 2,
-    fillColor: Cesium.Color.RED.withAlpha(0.08),
+    fillColor: Cesium.Color.RED.withAlpha(0.06),
     borderColor: Cesium.Color.WHITE.withAlpha(0.2),
     showFill: true,
     showBorder: false,
@@ -205,24 +205,24 @@ export const HexVisualStyles = {
     layer: 'interaction',
     type: 'support',
     priority: 4,
-    fillColor: Cesium.Color.BLUE.withAlpha(0.15),
+    fillColor: Cesium.Color.BLUE.withAlpha(0.2),
     borderColor: Cesium.Color.WHITE,
     showFill: true,
     showBorder: true,
     borderPattern: true,
-    borderWidth: 4.0
+    borderWidth: 1.0
   },
   // 支援部队：红方
   supportRed: {
     layer: 'interaction',
     type: 'support',
     priority: 4,
-    fillColor: Cesium.Color.RED.withAlpha(0.15),
+    fillColor: Cesium.Color.RED.withAlpha(0.2),
     borderColor: Cesium.Color.WHITE,
     showFill: true,
     showBorder: true,
     borderPattern: true,
-    borderWidth: 4.0
+    borderWidth: 1.0
   },
   // 提示不合法的高亮
   invalid: {

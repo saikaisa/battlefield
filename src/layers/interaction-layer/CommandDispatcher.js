@@ -376,7 +376,7 @@ export class CommandDispatcher {
       case CommandType.MOVE:
         return !!command.params.forceId && Array.isArray(command.params.path) && command.params.path.length > 1;
       case CommandType.ATTACK:
-        return !!command.params.commandForceId && Array.isArray(command.params.supportForceIds) && !!command.params.targetHex;
+        return !!command.params.commandForceId && !!command.params.targetHexId;
       case CommandType.EDIT_UNIT:
         return !!command.params.unitData;
       case CommandType.DELETE_UNIT:
@@ -462,7 +462,7 @@ export class CommandDispatcher {
       case CommandType.ATTACK:
         result = await this.processor.attack(
           params.commandForceId, 
-          params.targetHex, 
+          params.targetHexId, 
           params.supportForceIds, 
           params.enemyCommandForceId, 
           params.enemySupportForceIds

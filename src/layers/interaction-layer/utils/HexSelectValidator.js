@@ -155,8 +155,7 @@ export class HexSelectValidator {
     
     // 如果不与任何已选中六角格相邻，则拒绝选择
     if (!isNeighborOfAny) {
-      console.log('[HexSelectValidator] 不相接则不提示任何信息，相当于无反馈');
-      // 不相接则不提示任何信息，相当于无反馈
+      showWarning('路径需要连续！');
       return false;
     }
     

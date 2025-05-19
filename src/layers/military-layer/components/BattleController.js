@@ -250,7 +250,7 @@ export class BattleController {
       });
 
       // 输出战斗报告头部
-      this._printBattleReportHeader(attackerBattlegroup, defenderBattlegroup);
+      this._printBattleReportHeader(battleId, attackerBattlegroup, defenderBattlegroup);
       
       // 记录战前联合火力值
       const initialAttackPower = this._getTotalFirepower(attackerBattlegroup.jointAttackFirepower);
@@ -260,7 +260,19 @@ export class BattleController {
       const expectedResults = this._executeBattleAdjudication(battleId, attackerBattlegroup, defenderBattlegroup);
       
       // 生成战斗效果
-      await this._executeBattleEffects(battleId, attackerBattlegroup, defenderBattlegroup);
+      // 设置战斗效果计时器
+      const battleEffectsTimer = setTimeout(() => {
+        console.log('战斗效果执行中...');
+      }, 10000);
+      
+      // 等待战斗效果执行完成
+      await new Promise(resolve => {
+        setTimeout(() => {
+          clearTimeout(battleEffectsTimer);
+          resolve();
+        }, 20000);
+      });
+      // await this._executeBattleEffects(battleId, attackerBattlegroup, defenderBattlegroup);
       
       // 应用战斗结果 - 获取实际结果
       const actualResults = this._applyBattleResults(attackerBattlegroup, defenderBattlegroup, expectedResults);
@@ -344,12 +356,13 @@ export class BattleController {
 
   /**
    * 在总览面板打印战斗报告头部
+   * @param {string} battleId 战斗ID
    * @param {Battlegroup} attackerBG 攻击方战斗群
    * @param {Battlegroup} defenderBG 防守方战斗群
    * @private
    */
-  _printBattleReportHeader(attackerBG, defenderBG) {
-    OverviewConsole.stat('========== 战斗开始 ==========');
+  _printBattleReportHeader(battleId, attackerBG, defenderBG) {
+    OverviewConsole.stat(`========== 战斗开始: ${battleId} ==========`);
     
     // 获取参战单位信息
     const attackerForces = attackerBG.forceIdList.map(id => this.store.getForceById(id)).filter(Boolean);
@@ -361,50 +374,52 @@ export class BattleController {
     const defenderCommand = this.store.getForceById(defenderBG.commandForceId);
     
     // 输出攻击方信息
-    OverviewConsole.stat('【进攻方】');
-    if (attackerCommand.faction === 'blue') {
-      OverviewConsole.log(`指挥部队: ${attackerCommand.forceName}`, 'blue');
-    } else {
-      OverviewConsole.error(`指挥部队: ${attackerCommand.forceName}`);
-    }
+    OverviewConsole.stat('------ 进攻方 ------');
+    OverviewConsole.log(`一共${attackerForces.length}支部队参与战斗`);
+    OverviewConsole.stat(`\n【进攻方指挥部队】`);
+    OverviewConsole.log(`${attackerCommand.forceName}，指挥能力：${attackerCommand.combatChance}`);
     
     // 输出攻击方支援部队
+    OverviewConsole.stat('【进攻方支援部队】');
     const attackerSupports = attackerForces.filter(f => f.forceId !== attackerBG.commandForceId);
-    attackerSupports.forEach(force => {
-      if (force.combatChance <= 0) {
-        OverviewConsole.warning(`${force.forceName}（无法战斗）`);
-      } else if (force.faction === 'blue') {
-        OverviewConsole.log(`${force.forceName}`, 'blue');
-      } else {
-        OverviewConsole.error(`${force.forceName}`);
-      }
-    });
+    if (attackerSupports.length > 0) {
+      attackerSupports.forEach(force => {
+        if (force.combatChance <= 0) {
+          OverviewConsole.warning(`${force.forceName}（无法战斗）`);
+        } else {
+          OverviewConsole.log(`${force.forceName}`);
+        }
+      });
+    } else {
+      OverviewConsole.log('无支援部队');
+    }
     
     // 输出防守方信息
-    OverviewConsole.stat('\n【防守方】');
+    OverviewConsole.stat('\n------ 防守方 ------');
+    OverviewConsole.error(`一共${defenderForces.length}支部队参与战斗`);
+    OverviewConsole.stat(`\n【防守方指挥部队】`);
     if (defenderCommand.combatChance < 0) {
       const fatigueLevel = -defenderCommand.combatChance;
-      OverviewConsole.warning(`指挥部队: ${defenderCommand.forceName}（疲劳等级${fatigueLevel}）`);
-    } else if (defenderCommand.faction === 'blue') {
-      OverviewConsole.log(`指挥部队: ${defenderCommand.forceName}`, 'blue');
+      OverviewConsole.warning(`${defenderCommand.forceName}（疲劳等级${fatigueLevel}）`);
     } else {
-      OverviewConsole.error(`指挥部队: ${defenderCommand.forceName}`);
+      OverviewConsole.error(`${defenderCommand.forceName}`);
     }
     
     // 输出防守方支援部队
+    OverviewConsole.stat('【防守方支援部队】');
     const defenderSupports = defenderForces.filter(f => f.forceId !== defenderBG.commandForceId);
-    defenderSupports.forEach(force => {
-      if (force.combatChance < 0) {
-        const fatigueLevel = -force.combatChance;
-        OverviewConsole.warning(`${force.forceName}（疲劳等级${fatigueLevel}）`);
-      } else if (force.faction === 'blue') {
-        OverviewConsole.log(`${force.forceName}`, 'blue');
-      } else {
-        OverviewConsole.error(`${force.forceName}`);
-      }
-    });
-    
-    OverviewConsole.log('\n开始战斗...');
+    if (defenderSupports.length > 0) {
+      defenderSupports.forEach(force => {
+        if (force.combatChance < 0) {
+          const fatigueLevel = -force.combatChance;
+          OverviewConsole.warning(`${force.forceName}（疲劳等级${fatigueLevel}）`);
+        } else {
+          OverviewConsole.error(`${force.forceName}`);
+        }
+      });
+    } else {
+      OverviewConsole.error('无支援部队');
+    }
   }
 
   /**
@@ -479,8 +494,8 @@ export class BattleController {
       OverviewConsole.log(`  进攻火力: ${this._formatNumber(atkFirepower)} vs 防御火力: ${this._formatNumber(defFirepower)}`);
       OverviewConsole.log(`  火力比: ${ratio.toFixed(2)} (${BattleConfig.powerRatioRanges[ratioIndex].name})`);
       OverviewConsole.log(`  骰子: ${diceRoll}, 战损: ${adjudicationResult}`);
-      OverviewConsole.log(`  进攻方每个部队在此维度预期损失 ${attackerLossValue} 点兵力`);
-      OverviewConsole.log(`  防守方每个部队在此维度预期损失 ${defenderLossValue} 点兵力`);
+      OverviewConsole.log(`  进攻方在此维度的每支部队预期损失 ${attackerLossValue} 点兵力`);
+      OverviewConsole.log(`  防守方在此维度的每支部队预期损失 ${defenderLossValue} 点兵力`);
     }
     
     return expectedResults;
@@ -688,7 +703,22 @@ export class BattleController {
     }
     
     // 判断胜负
-    if (attackerLossPercent > defenderLossPercent * 2) {
+    // 如果双方损失都很小,判定为试探性接触
+    if (attackerLossPercent < 0.1 && defenderLossPercent < 0.1) {
+      result = '双方试探性接触。';
+      victorSide = 'draw';
+    }
+    // 如果一方损失很小而另一方损失较大,判定为单方面突袭
+    else if (attackerLossPercent < 0.2 && defenderLossPercent > 0.4) {
+      result = '进攻方成功突袭！';
+      victorSide = 'attacker';
+    }
+    else if (defenderLossPercent < 0.2 && attackerLossPercent > 0.4) {
+      result = '防守方成功反击！';
+      victorSide = 'defender';
+    }
+    // 双方都有较大损失时,根据损失比例判定胜负
+    else if (attackerLossPercent > defenderLossPercent * 2) {
       result = '防守方大获全胜！';
       victorSide = 'defender';
     } else if (attackerLossPercent > defenderLossPercent * 1.2) {
@@ -744,6 +774,7 @@ export class BattleController {
     }
 
     OverviewConsole.stat('========== 战斗结果报告 ==========');
+    OverviewConsole.stat(`【战斗编号 ${battleResult.battleId}】`);
     
     // =================== 按阵营显示各部队及其兵力值变化 ===================
     // ------------- 显示进攻方信息 -------------
@@ -787,14 +818,44 @@ export class BattleController {
     // =================== 输出联合火力值损失 ===================
     const powerComparison = battleResult.powerComparison;
     OverviewConsole.stat(`\n---- 火力值损失 ----`);
-    OverviewConsole.log(`进攻方: ${this._formatNumber(powerComparison.initial.attacker)} ==> ${this._formatNumber(powerComparison.final.attacker)}(-${Math.round(powerComparison.lossPercent.attacker * 100)}%)`);
-    OverviewConsole.log(`防守方: ${this._formatNumber(powerComparison.initial.defender)} ==> ${this._formatNumber(powerComparison.final.defender)}(-${Math.round(powerComparison.lossPercent.defender * 100)}%)`);
+    
+    // 根据损失比例选择不同的输出样式
+    const attackerLossPercent = powerComparison.lossPercent.attacker * 100;
+    const defenderLossPercent = powerComparison.lossPercent.defender * 100;
+    
+    // 进攻方损失显示
+    if (attackerLossPercent > 50) {
+      OverviewConsole.error(`进攻方: ${this._formatNumber(powerComparison.initial.attacker)} ==> ${this._formatNumber(powerComparison.final.attacker)}(-${attackerLossPercent.toFixed(2)}%)`);
+    } else if (attackerLossPercent > 20) {
+      OverviewConsole.warning(`进攻方: ${this._formatNumber(powerComparison.initial.attacker)} ==> ${this._formatNumber(powerComparison.final.attacker)}(-${attackerLossPercent.toFixed(2)}%)`);
+    } else {
+      OverviewConsole.log(`进攻方: ${this._formatNumber(powerComparison.initial.attacker)} ==> ${this._formatNumber(powerComparison.final.attacker)}(-${attackerLossPercent.toFixed(2)}%)`);
+    }
+    
+    // 防守方损失显示
+    if (defenderLossPercent > 50) {
+      OverviewConsole.error(`防守方: ${this._formatNumber(powerComparison.initial.defender)} ==> ${this._formatNumber(powerComparison.final.defender)}(-${defenderLossPercent.toFixed(2)}%)`);
+    } else if (defenderLossPercent > 20) {
+      OverviewConsole.warning(`防守方: ${this._formatNumber(powerComparison.initial.defender)} ==> ${this._formatNumber(powerComparison.final.defender)}(-${defenderLossPercent.toFixed(2)}%)`);
+    } else {
+      OverviewConsole.log(`防守方: ${this._formatNumber(powerComparison.initial.defender)} ==> ${this._formatNumber(powerComparison.final.defender)}(-${defenderLossPercent.toFixed(2)}%)`);
+    }
     
     // =================== 输出战斗结果 ===================
     const outcome = battleResult.outcome;
     OverviewConsole.stat(`\n---- 战斗结果 ----`);
-    OverviewConsole.log(`\n【双方状态】进攻方: ${outcome.attackerState}, 防守方: ${outcome.defenderState}`);
-    OverviewConsole.log(`\n【胜负结果】${outcome.result}`);
+
+    // 根据胜负方显示不同样式
+    if (outcome.victorSide === 'attacker') {
+      OverviewConsole.success(`【双方状态】进攻方: ${outcome.attackerState}, 防守方: ${outcome.defenderState}`);
+      OverviewConsole.success(`【胜负结果】${outcome.result}`);
+    } else if (outcome.victorSide === 'defender') {
+      OverviewConsole.error(`【双方状态】进攻方: ${outcome.attackerState}, 防守方: ${outcome.defenderState}`);
+      OverviewConsole.error(`【胜负结果】${outcome.result}`);
+    } else {
+      OverviewConsole.log(`【双方状态】进攻方: ${outcome.attackerState}, 防守方: ${outcome.defenderState}`);
+      OverviewConsole.log(`【胜负结果】${outcome.result}`);
+    }
     
     OverviewConsole.stat('========== 战斗结束 ==========');
   }
@@ -867,7 +928,6 @@ export class BattleController {
      * 显示部队信息
      * @param {Object} force 部队对象
      * @param {Map} forceLossMap 部队损失信息映射
-     * @param {boolean} isCommander 是否是指挥部队
      * @param {boolean} isDefender 是否是防守方
      * @returns {Object} 部队信息
      */
@@ -875,14 +935,13 @@ export class BattleController {
     const strength = force.troopStrength;
     const forceLoss = forceLossMap.get(force.forceId);
     
-    // 从forceLoss中获取原始兵力，如果没有损失记录则使用当前兵力
-    const originalStrength = forceLoss ? forceLoss.originalStrength : strength;
+    // 从forceLoss中获取兵力损失
     const strengthLoss = forceLoss ? forceLoss.strengthLoss : 0;
     let strengthDisplay = '';
     
     // 如果有损失，显示变化；否则只显示当前值
     if (strengthLoss > 0) {
-      strengthDisplay = `兵力值：${originalStrength}=>${strength}（-${strengthLoss}）`;
+      strengthDisplay = `兵力值：${strength}（-${strengthLoss}）`;
     } else {
       strengthDisplay = `兵力值：${strength}`;
     }
@@ -895,7 +954,7 @@ export class BattleController {
     }
     
     // 构建完整的显示文本
-    const displayText = `${force.forceName}（${strengthDisplay}${fatigueInfo}）`;
+    const displayText = `${force.forceName} | ${strengthDisplay}${fatigueInfo}`;
     
     // 根据兵力值选择显示颜色
     if (strength === 0) {
@@ -908,7 +967,6 @@ export class BattleController {
     
     return {
       force,
-      originalStrength,
       strengthLoss,
       currentStrength: strength
     };

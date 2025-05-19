@@ -355,12 +355,12 @@ export const openGameStore = defineStore("gameStore", () => {
 
   // -------------------- 攻击状态操作 --------------------
   /** 初始化攻击状态 */
-  function initAttackState(commandForceId) {
-    attackState.phase = 'selectTarget';
+  function initAttackState(commandForceId, phase = 'selectTarget', supportForceIds = [], enemyCommandForceId = null, enemySupportForceIds = []) {
+    attackState.phase = phase;
     attackState.commandForceId = commandForceId;
-    attackState.supportForceIds = [];
-    attackState.enemyCommandForceId = null;
-    attackState.enemySupportForceIds = [];
+    attackState.supportForceIds = supportForceIds;
+    attackState.enemyCommandForceId = enemyCommandForceId;
+    attackState.enemySupportForceIds = enemySupportForceIds;
   }
 
   /** 清除攻击状态 */

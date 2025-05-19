@@ -552,7 +552,7 @@ function getCommandSummary(command) {
     case CommandType.MOVE:
       return `移动部队 ${command.params.forceId} 到路径终点`;
     case CommandType.ATTACK:
-      return `部队 ${command.params.commandForceId} 攻击目标 ${command.params.targetHex}`;
+      return `部队 ${command.params.commandForceId} 攻击目标 ${command.params.targetHexId}`;
     case CommandType.CREATE_FORCE:
       return `在 ${command.params.hexId} 创建 ${command.params.faction} 阵营部队`;
     case CommandType.MERGE_FORCES:

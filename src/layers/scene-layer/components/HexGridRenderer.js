@@ -85,6 +85,7 @@ export class HexGridRenderer {
       { deep: true }
     );
 
+    // 监听游戏模式的变化，更新高亮样式
     watch(
       () => this.store.gameMode,
       () => {
@@ -96,6 +97,7 @@ export class HexGridRenderer {
         } else {
           this.store.setHighlightStyle(HexVisualStyles.selected);
         }
+        this.renderMarkGrid(false);
         this.renderInteractGrid(false);
       },
       { deep: true }
@@ -162,18 +164,24 @@ export class HexGridRenderer {
 
   /**
    * 渲染六角格标记图层 (阵营标记等)
-   * 只在layerIndex=1时渲染
+   * 只在layerIndex=1且非攻击模式时渲染
    */
   renderMarkGrid(indexChange = false) {
+    const isAttackMode = this.store.gameMode === GameMode.ATTACK_EXECUTE;
+
     if (this.markGridPrimitives) {
       // 如果是通过切换图层调用的该方法，则只进行显隐控制
       if (indexChange) {
-        this.markGridPrimitives.show = (this.layerIndex.value === 1);
+        this.markGridPrimitives.show = (this.layerIndex.value === 1 && !isAttackMode);
         return;
       }
       
       this.viewer.scene.primitives.remove(this.markGridPrimitives);
       this.markGridPrimitives = null;
+    }
+
+    if (isAttackMode) {
+      return;
     }
 
     this.markGridPrimitives = new Cesium.PrimitiveCollection();
@@ -214,7 +222,7 @@ export class HexGridRenderer {
       const hexCell = this.store.getHexCellById(hexId);
       if (!hexCell) continue;
       
-      // 获取样式的哈希值（简化版，可以根据需要扩展）
+      // 获取样式的哈希值
       const styleHash = this._getStyleHash(hexId);
       const mapKey = `${hexId}|${styleHash}`;
       
@@ -445,9 +453,9 @@ export class HexGridRenderer {
       }
     }
 
-    // 在攻击准备模式下，使用attackState中的指挥部队渲染指挥范围
-    else if (currentGameMode === GameMode.ATTACK_PREPARE) {
-      console.log('[HexGridRenderer] 正在攻击准备模式下渲染指挥范围高亮');
+    // 在攻击准备和执行模式下，使用attackState中的指挥部队渲染指挥范围
+    else if (currentGameMode === GameMode.ATTACK_PREPARE || currentGameMode === GameMode.ATTACK_EXECUTE) {
+      console.log('[HexGridRenderer] 正在攻击准备/执行模式下渲染指挥范围高亮');
       
       // 清空自由模式下的指挥范围
       this.immCommandRangePrimitives.removeAll();
@@ -497,7 +505,8 @@ export class HexGridRenderer {
                 hexCell,
                 'interaction',
                 2.5, // 最高层
-                style
+                style,
+                attackState.phase === 'attacking' ? false : null // 攻击阶段不使用虚线边框而是实线
               );
             }
             return null;
@@ -509,7 +518,7 @@ export class HexGridRenderer {
       }
       
       // 处理敌方指挥部队高亮
-      if (enemyCommandForceHex && attackState.phase === 'selectTarget' || attackState.phase === 'selectSupport') {
+      if (enemyCommandForceHex && attackState.phase) {
         // 使用增量更新敌方指挥部队高亮
         this._updateHexPrimitives(
           this.enemyCommanderPrimitives,
@@ -524,7 +533,8 @@ export class HexGridRenderer {
                 hexCell,
                 'interaction',
                 2.3, // 稍低于友方指挥部队
-                style
+                style,
+                attackState.phase === 'attacking' ? false : null
               );
             }
             return null;
@@ -551,7 +561,8 @@ export class HexGridRenderer {
                 hexCell,
                 'interaction',
                 2.0,
-                style
+                style,
+                attackState.phase === 'attacking' ? false : null
               );
             }
             return null;
@@ -578,7 +589,8 @@ export class HexGridRenderer {
                 hexCell,
                 'interaction',
                 1.8,
-                style
+                style,
+                attackState.phase === 'attacking' ? false : null
               );
             }
             return null;
@@ -589,8 +601,10 @@ export class HexGridRenderer {
         this.enemySupportPrimitiveMap.clear();
       }
       
-      // 刚进入selectTarget阶段时，画出指挥部队的指挥范围，在模式退出/切换前保持不变
-      if (attackState.commandForceId && this.friendlyCommandRangePrimitives.length === 0) {
+      // 刚进入selectTarget阶段或攻击执行模式时，画出指挥部队的指挥范围
+      if (attackState.commandForceId && 
+           (this.friendlyCommandRangePrimitives.length === 0 || 
+            attackState.phase === 'attacking')) {
         // 获取部队的指挥范围
         const commandRange = commandForce.commandRange;
 
@@ -628,7 +642,8 @@ export class HexGridRenderer {
                 hexCell,
                 'interaction', 
                 1.5,
-                friendlyRangeStyle || HexVisualStyles.selectedBlue
+                friendlyRangeStyle || HexVisualStyles.selectedBlue,
+                attackState.phase === 'attacking' ? false : null
               );
               
               if (primitive) {
@@ -643,9 +658,9 @@ export class HexGridRenderer {
       }
       
       // 在selectTarget阶段，实时更新敌方指挥范围；在selectSupport阶段，保持不变
-      if (!attackState.enemyCommandForceId || (attackState.phase !== 'selectTarget' && attackState.phase !== 'selectSupport')) {
+      if (!attackState.enemyCommandForceId || !attackState.phase) {
         this.enemyCommandRangePrimitives.removeAll();
-      } else if (attackState.phase === 'selectTarget') {
+      } else if (attackState.phase === 'selectTarget' || attackState.phase === 'attacking') {
         const enemyRangeHexIds = new Set();
         
         // 只有当选中不同敌方部队或首次渲染时才重新计算
@@ -686,7 +701,8 @@ export class HexGridRenderer {
                   hexCell,
                   'interaction', 
                   1.3,
-                  enemyRangeStyle || HexVisualStyles.selectedRed
+                  enemyRangeStyle || HexVisualStyles.selectedRed,
+                  attackState.phase === 'attacking' ? false : null
                 );
                 
                 if (primitive) {
@@ -721,12 +737,13 @@ export class HexGridRenderer {
    * @param {string} styleType 样式类型
    * @param {number} heightOffset 高度偏移
    * @param {Object} [customStyle] 自定义样式，不提供则使用hexCell中的样式
+   * @param {boolean} [customBorderPattern] 是否使用虚线边框，若不传入则使用样式自带定义
    * @returns {Cesium.Primitive} 创建的primitive
    */
-  _createHexPrimitive(hexCell, styleType, heightOffset, customStyle = null) {
+  _createHexPrimitive(hexCell, styleType, heightOffset, customStyle = null, customBorderPattern = null) {
     const visual = customStyle || hexCell.getTopVisualStyle(styleType);
     if (!visual) return null;
-    
+    console.log(`customBorderPattern: ${customBorderPattern}`);
     const primCollection = new Cesium.PrimitiveCollection();
     
     if (visual.showFill) {
@@ -779,7 +796,8 @@ export class HexGridRenderer {
       // 边框属性
       const borderColor = visual.borderColor || Cesium.Color.RED.withAlpha(0.1);
       const borderWidth = visual.borderWidth || 2.0;
-      const borderPattern = visual.borderPattern || false;
+      const borderPattern = customBorderPattern ?? visual.borderPattern ?? false;
+      console.log(`borderPattern: ${borderPattern}`);
       
       const borderGeometryOptions = {
         positions: positions,

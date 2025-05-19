@@ -640,35 +640,38 @@ export class CommandProcessor {
    * - 目标模式：攻击执行模式
    * - Fallback模式：自由模式(JSON指令)或攻击准备模式(UI)
    * @param {string} commandForceId 指挥部队ID
-   * @param {string} targetHex 目标六角格ID
+   * @param {string} targetHexId 目标六角格ID
    * @param {Array<string>} [supportForceIds] 支援部队ID数组 (如果为null则由commandForceId计算)
    * @param {string} [enemyCommandForceId] 敌方指挥部队ID (如果为null则由targetHex计算)
    * @param {Array<string>} [enemySupportForceIds] 敌方支援部队ID数组 (如果为null则由targetHex计算)
    * @returns {Object} 命令执行结果
    */
-  async attack(commandForceId, targetHex, supportForceIds = [], enemyCommandForceId = null, enemySupportForceIds = []) {
+  async attack(commandForceId, targetHexId, supportForceIds = [], enemyCommandForceId = null, enemySupportForceIds = []) {
     // 仅能在自由模式或攻击准备模式下执行攻击
     const lastMode = gameModeService.getCurrentMode();
     if (lastMode === GameMode.ATTACK_PREPARE) {
       gameModeService.clearLockedSelection()
         .clearConsole()
-        .setMode(GameMode.ATTACK_PREPARE);
+        .setMode(GameMode.ATTACK_EXECUTE);
     } else if (lastMode === GameMode.FREE) {
       gameModeService.clearLockedSelection()
         .saveSelectedHexIds()
         .saveConsoleContent()
         .clearConsole()
-        .setMode(GameMode.ATTACK_PREPARE);
+        .setMode(GameMode.ATTACK_EXECUTE);
     } else {
       throw new CommandError("仅能在自由模式或攻击准备模式下执行攻击", "attack");
     }
 
     try {
-
       // 参数验证和处理
       const commandForce = this.store.getForceById(commandForceId);
       if (!commandForce) {
         throw new CommandError("找不到指挥部队", "validation");
+      }
+      const targetHex = this.store.getHexCellById(targetHexId);
+      if (!targetHex) {
+        throw new CommandError("找不到目标六角格", "validation");
       }
 
       // 指挥部队必须要有战斗机会
@@ -729,6 +732,9 @@ export class CommandProcessor {
         }
       }
 
+      // 初始化攻击状态供六角格渲染使用
+      this.store.initAttackState(commandForceId, 'attacking', supportForceIds, enemyCommandForceId, enemySupportForceIds);
+
       // 执行战斗
       const battleResult = await this.battleController.executeBattle(
         commandForceId,
@@ -750,6 +756,17 @@ export class CommandProcessor {
       // 在总览控制台显示战斗报告
       this.battleController.printBattleReportSummary(battleResult);
 
+      // 移除战场中所有兵力值为0的部队
+      const allForces = this.store.getForces();
+      allForces.forEach(force => {
+        if (force.troopStrength <= 0) {
+          this.store.removeForceById(force.forceId);
+        }
+      });
+
+      // 清除攻击状态
+      this.store.clearAttackState();
+
       return {
         status: CommandStatus.FINISHED,
         message: "攻击完成",
@@ -761,6 +778,8 @@ export class CommandProcessor {
         .clearLockedSelection()
         .restoreSelectedHexIds()
         .restoreConsoleContent();
+      // 清除攻击状态
+      this.store.clearAttackState();
       throw new CommandError(`攻击失败: ${error.message}`, "attack");
     }
   }
@@ -1230,25 +1249,5 @@ export class CommandProcessor {
    */
   destroy() {
     CommandProcessor.#instance = null;
-  }
-
-  /**
-   * 格式化数字，使用k表示千级，m表示百万级，b表示十亿级等
-   * @private
-   */
-  _formatNumber(num) {
-    if (!num || isNaN(num)) return '0';
-    
-    // 转为数字确保格式化正确
-    num = Number(num);
-    
-    if (num >= 1000000000) {
-      return (num / 1000000000).toFixed(3) + 'b';
-    } else if (num >= 1000000) {
-      return (num / 1000000).toFixed(3) + 'm';
-    } else {
-      // 百万以下数字精确显示
-      return String(Math.round(num));
-    }
   }
 }

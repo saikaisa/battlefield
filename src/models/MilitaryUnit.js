@@ -177,8 +177,9 @@ export class Force {
 
   // 士气值
   get morale() {
-    const base = 100 - 0.5 * (100 - this.troopStrength);
-    return Math.min(100, Math.max(MilitaryConfig.limit.minMorale, base * this.commandCapability));
+    // 将troopStrength损失量(0-100)映射到minMorale和100之间
+    const base = MilitaryConfig.limit.minMorale + ((100 - MilitaryConfig.limit.minMorale) * (this.troopStrength / 100));
+    return Math.round(Math.min(100, Math.max(MilitaryConfig.limit.minMorale, base * this.commandCapability)));
   }
 
   // 进攻火力值
@@ -198,16 +199,16 @@ export class Force {
   }
 
   // 可视范围
-  get visibilityRadius() { return this._maxUnitAttr('visibilityRadius'); }
+  get visibilityRadius() { return Math.ceil(this._maxUnitAttr('visibilityRadius')); }
 
   // 兵力值恢复速率，战斗机会达到最低时，疲劳系数为0，即恢复速率为0
   get recoveryRate() { return Math.round(this._weightedAvgUnitAttr('recoveryRate') * this.fatigueFactor); }
 
   // 指挥能力
-  get commandCapability() { return this._maxUnitAttr('commandCapability'); }
+  get commandCapability() { return Number(this._maxUnitAttr('commandCapability').toFixed(2)); }
 
   // 指挥范围
-  get commandRange() { return this._maxUnitAttr('commandRange'); }
+  get commandRange() { return Math.ceil(this._maxUnitAttr('commandRange')); }
 
   /* ======================== 动态属性操作方法 =========================== */
   /**

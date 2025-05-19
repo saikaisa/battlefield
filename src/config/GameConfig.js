@@ -137,7 +137,7 @@ export const MilitaryConfig = {
   // 限制参数（作为前端参考或限制条件）
   limit: {
     maxTroopStrength: 100, // 最大兵力值
-    minMorale: 50, // 最低士气值
+    minMorale: 5, // 最低士气值
     maxActionPoints: 100, // 最大行动力
     combatChance: {
       max: 1,
