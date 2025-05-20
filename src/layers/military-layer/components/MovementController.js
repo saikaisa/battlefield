@@ -166,6 +166,7 @@ export class MovementController {
           forcePose: { position: forcePos, heading: forceHeading },
           localOffset: unitInstance.localOffset,
           hexId: hexId,
+          service: forceInstance.force.service,
           unitInstanceId: unitInstanceId
         });
       });

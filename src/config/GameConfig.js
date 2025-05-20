@@ -34,6 +34,8 @@ export const CesiumConfig = {
 
 /** 一些地点的经纬度坐标 */
 export const LocationConfig = {
+  // 当前战场
+  current: 'mountEverest',
   // 珠穆朗玛峰
   mountEverest: {
     name: '珠穆朗玛峰',
@@ -62,10 +64,10 @@ export const LocationConfig = {
 
 /** 战场区域相关配置 */ 
 export const BattlefieldConfig = {
-  locationName: LocationConfig.greatRiftValley.name,
+  locationName: LocationConfig[LocationConfig.current].name,
   center: {
-    lon: LocationConfig.greatRiftValley.lon,
-    lat: LocationConfig.greatRiftValley.lat,
+    lon: LocationConfig[LocationConfig.current].lon,
+    lat: LocationConfig[LocationConfig.current].lat,
     offset: 0.1
   },
 };
@@ -109,22 +111,17 @@ export const HexRendererConfig = {
   },
   // 山顶/山脊额外偏移
   mountainPeakExtraOffset: 0.0,
-  // 优化配置
-  optimization: {
-    // 地形采样精度，值越大性能越好但质量越低
-    terrainSamplingError: 4.0
-  }
 };
 
 /** 相机视角相关配置 */ 
 export const CameraConfig = {
   defaultPosition: computeDefaultCameraView(),
-  defaultRange: 12000,
+  defaultRange: 8000,
   defaultHeading: Cesium.Math.toRadians(45),
   defaultPitch: Cesium.Math.toRadians(-45),
-  closeUpRange: 3000,
-  minZoomDistance: 0,
-  maxZoomDistance: 15000,
+  closeUpRange: 5000,
+  minZoomDistance: 1000,
+  maxZoomDistance: 20000,
   enableTilt: false,
   enableRotate: true,
   enableZoom: true,
@@ -149,7 +146,7 @@ export const MilitaryConfig = {
   // 移动配置
   movementConfig: {
     defaultTurnDuration: 200, // 默认转向时间(毫秒)
-    baseSpeed: HexConfig.radius, // 基础移动速度（米/秒）
+    baseSpeed: HexConfig.radius * 0.8, // 基础移动速度（米/秒）
     baseTurnRate: 20,  // 基础转向速率(弧度/秒)，角度越小越快
     minTurnDuration: 0, // 最小转向时间(毫秒)
     maxTurnDuration: 500, // 最大转向时间(毫秒)
@@ -160,6 +157,7 @@ export const MilitaryConfig = {
     // 部队布局（随机散列）
     forceLayout: {
       disperseRadius: 0.4,    // 部队分散半径 = 六角格半径 * 此系数
+      airHeightOffset: 400,  // 空军的高度偏移
     },
     // 部队内兵种布局（环形排列）
     unitLayout: {
@@ -175,8 +173,8 @@ export const MilitaryConfig = {
     ambulance: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/ambulance_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/ambulance_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/ambulance_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/ambulance_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/ambulance_lod2.glb" }
       ],
       transform: {
         scale: 1.5,
@@ -184,55 +182,59 @@ export const MilitaryConfig = {
       },
       animationList: [],
       bullet: 'none',
+      service: 'land',
       priority: 2
     },
     helicopter1: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/helicopter1_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/helicopter1_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/helicopter1_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/helicopter1_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/helicopter1_lod2.glb" }
       ],
       transform: {
         scale: 1.5,
-        offset: { x: 0, y: 0, z: 100 }
+        offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
       bullet: 'missile',
+      service: 'air',
       priority: 2
     },
     helicopter2: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/helicopter2_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/helicopter2_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/helicopter2_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/helicopter2_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/helicopter2_lod2.glb" }
       ],  
       transform: {
         scale: 1.5,
-        offset: { x: 0, y: 0, z: 100 }
+        offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
       bullet: 'missile',
+      service: 'air',
       priority: 2
     },
     jet: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/jet_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/jet_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/jet_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/jet_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/jet_lod2.glb" }
       ],
       transform: {
         scale: 1.0,
-        offset: { x: 0, y: 0, z: 80 }
+        offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
       bullet: 'shell',
+      service: 'air',
       priority: 2
     },
     missiletank: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/missiletank_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/missiletank_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/missiletank_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/missiletank_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/missiletank_lod2.glb" }
       ],
       transform: {
         scale: 1.0,
@@ -240,13 +242,14 @@ export const MilitaryConfig = {
       },
       animationList: [],
       bullet: 'missile',
+      service: 'land',
       priority: 2
     },
     sailboat: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/sailboat_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/sailboat_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/sailboat_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/sailboat_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/sailboat_lod2.glb" }
       ],
       transform: {
         scale: 1.0,
@@ -254,13 +257,14 @@ export const MilitaryConfig = {
       },
       animationList: [],
       bullet: 'shell',
+      service: 'sea',
       priority: 1
     },
     soldier: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/soldier_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/soldier_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/soldier_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/soldier_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/soldier_lod2.glb" }
       ],
       transform: {
         scale: 0.8,
@@ -271,27 +275,29 @@ export const MilitaryConfig = {
         { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT }
       ],
       bullet: 'plainBullet',
+      service: 'land',
       priority: 1
     },
     spydrone: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/spydrone_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/spydrone_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/spydrone_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/spydrone_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/spydrone_lod2.glb" }
       ],
       transform: {
         scale: 1.5,
-        offset: { x: 0, y: 0, z: 100 }
+        offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [],
       bullet: 'none',
+      service: 'air',
       priority: 2
     },
     tank: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/tank_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/tank_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/tank_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/tank_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/tank_lod2.glb" }
       ],
       transform: {
         scale: 1.2,
@@ -299,13 +305,14 @@ export const MilitaryConfig = {
       },
       animationList: [],
       bullet: 'shell',
+      service: 'land',
       priority: 2
     },
     vehicle: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/vehicle_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/vehicle_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/vehicle_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/vehicle_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/vehicle_lod2.glb" }
       ],
       transform: {
         scale: 1.0,
@@ -313,13 +320,14 @@ export const MilitaryConfig = {
       },
       animationList: [],
       bullet: 'shell',
+      service: 'land',
       priority: 2
     },
     warship: {
       lod: [
         { level: 0, distance: 0, path: "/assets/models/warship_lod0.glb" },
-        { level: 1, distance: 2000, path: "/assets/models/warship_lod1.glb" },
-        { level: 2, distance: 4000, path: "/assets/models/warship_lod2.glb" }
+        { level: 1, distance: 4000, path: "/assets/models/warship_lod1.glb" },
+        { level: 2, distance: 8000, path: "/assets/models/warship_lod2.glb" }
       ],
       transform: {
         scale: 1.5,
@@ -327,24 +335,55 @@ export const MilitaryConfig = {
       },
       animationList: [],
       bullet: 'missile',
+      service: 'sea',
       priority: 3
     },
   },
-  // 子弹模型资源路径与LOD配置
+  // 子弹模型资源路径
   bullets: {
     // 子弹模型
+    plainBullet: {
+      path: "/assets/models/shell.glb",
+      speed: 1000,
+      fireCount: 10,
+      fireInterval: 1000,
+      scale: 1.0,
+      particle: {
+        explosionType: "bulletImpact",
+        explosionSize: 1.0,
+        explosionDuration: 1000,
+        particleCount: 50,
+        particleImage: "/assets/maps/plainBullet_explosion.png",
+        particleScale: 0.5
+      }
+    },
     missile: {
       path: "/assets/models/missile.glb",
-      transform: {
-        scale: 1.0,
-        offset: { x: 0, y: 0, z: 0 }
+      speed: 500,
+      fireCount: 2,
+      fireInterval: 5000,
+      scale: 2.0,
+      particle: {
+        explosionType: "missileExplosion",
+        explosionSize: 10,
+        explosionDuration: 2000,
+        particleCount: 200,
+        particleImage: "/assets/maps/missile_explosion.png",
+        particleScale: 0.4
       }
     },
     shell: {
       path: "/assets/models/shell.glb",
-      transform: {
-        scale: 1.0,
-        offset: { x: 0, y: 0, z: 0 }
+      speed: 500,
+      fireCount: 5,
+      fireInterval: 2000,
+      scale: 2.0,
+      particle: {
+        explosionType: "shellExplosion",
+        explosionSize: 1.0,
+        explosionDuration: 1500,
+        particleImage: "/assets/maps/shell_explosion.png",
+        particleScale: 0.8
       }
     }
   }
@@ -389,20 +428,4 @@ export const BattleConfig = {
     A0: 0, A1: 10, A2: 20, A3: 30, A4: 40, A5: 50, A6: 60, A7: 70, A8: 80, A9: 90, A10: 100,
     D0: 0, D1: 10, D2: 20, D3: 30, D4: 40, D5: 50, D6: 60, D7: 70, D8: 80, D9: 90, D10: 100
   },
-  
-  // 战斗动画配置
-  animation: {
-    bulletEffectCount: 20,     // 默认生成的射击特效数量
-    bulletSpeed: 300,          // 子弹飞行速度(米/秒)
-    shellSpeed: 500,          // 炮弹飞行速度(米/秒)
-    missileSpeed: 1000,         // 导弹飞行速度(米/秒)
-    effectDelay: {             // 特效延迟范围(毫秒)
-      min: 100,
-      max: 2000
-    },
-    minBulletsPerAttacker: 2,  // 每名进攻方最少发射的子弹数量
-    explosionDuration: 1000,   // 爆炸效果持续时间(毫秒)
-    battleMinDuration: 3000,   // 战斗最短持续时间(毫秒)
-    battleMaxDuration: 8000    // 战斗最长持续时间(毫秒)
-  }
 };

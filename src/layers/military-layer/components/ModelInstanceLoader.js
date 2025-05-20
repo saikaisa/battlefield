@@ -71,7 +71,11 @@ export class ModelInstanceLoader {
           modelMatrix: Cesium.Matrix4.IDENTITY.clone(),
           scale: scale,
           allowPicking: false, 
-          shadows: Cesium.ShadowMode.ENABLED
+          shadows: Cesium.ShadowMode.ENABLED,
+          imageBasedLightingFactor: new Cesium.Cartesian2(1.0, 1.0),
+          color: Cesium.Color.WHITE.withAlpha(1.0),
+          lightColor: new Cesium.Color(1.0, 1.0, 1.0, 1.0),
+          luminanceAtZenith: 1,
         });
         
         // 添加到LOD数组

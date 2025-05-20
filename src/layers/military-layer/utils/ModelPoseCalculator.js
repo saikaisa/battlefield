@@ -98,7 +98,7 @@ export class ModelPoseCalculator {
         position: {
           longitude: offsetPos.longitude,
           latitude: offsetPos.latitude,
-          height: surfaceHeight !== null ? surfaceHeight : center.height
+          height: surfaceHeight + (force?.service === 'air' ? MilitaryConfig.layoutConfig.forceLayout.airHeightOffset : 0)
         },
       });
     }
@@ -113,6 +113,7 @@ export class ModelPoseCalculator {
    * @param {Object} [params.forcePose] 部队位置和朝向 {position: {longitude, latitude, height}, heading}
    * @param {Object} [params.localOffset] 兵种实例相对于部队位置的偏移 {x, y}
    * @param {string} [params.hexId] 六角格ID
+   * @param {string} [params.service] 部队军种
    * @returns {Object|Array<Object>} 经纬度坐标 {longitude, latitude, height} 或其数组
    */
   computeUnitPosition(params) {
@@ -156,10 +157,11 @@ export class ModelPoseCalculator {
         position: {
           longitude: unitPos.longitude,
           latitude: unitPos.latitude,
-          // 如果获取失败则使用部队高度 + 默认偏移
+          // 如果获取失败则使用部队高度 + 默认偏移，空军需要额外的高度偏移
           height: (surfaceHeight !== null ? 
             surfaceHeight : 
-            forcePos.height) + MilitaryConfig.layoutConfig.unitLayout.heightOffset
+            forcePos.height) + MilitaryConfig.layoutConfig.unitLayout.heightOffset + 
+            (param.service === 'air' ? MilitaryConfig.layoutConfig.forceLayout.airHeightOffset : 0)
         }
       });
     }

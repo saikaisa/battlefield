@@ -471,7 +471,7 @@ export class CommandProcessor {
       // 播放移动动画
       if (forceInstance && forceInstance.unitInstanceMap) {
         forceInstance.unitInstanceMap.forEach(unitInstance => {
-          this.militaryRenderer.addMoveAnimation(unitInstance);
+          this.militaryRenderer.addAnimation(unitInstance);
         });
       }
 
@@ -489,7 +489,7 @@ export class CommandProcessor {
             // 移除移动动画
             if (forceInstance && forceInstance.unitInstanceMap) {
               forceInstance.unitInstanceMap.forEach(unitInstance => {
-                this.militaryRenderer.removeMoveAnimation(unitInstance);
+                this.militaryRenderer.removeAnimation(unitInstance);
               });
             }
 
@@ -585,17 +585,6 @@ export class CommandProcessor {
       
       if (!commandHex) {
         throw new CommandError("无法获取指挥部队所在的六角格", "validation");
-      }
-      
-      // 检查指挥范围内是否有敌方控制的六角格
-      const hexesInRange = commandHex.getHexCellInRange(commandRange);
-      const hasEnemyHex = hexesInRange.some(hex => 
-        hex && hex.battlefieldState.controlFaction !== 'neutral' && 
-        hex.battlefieldState.controlFaction !== commandForce.faction
-      );
-      
-      if (!hasEnemyHex) {
-        throw new CommandError("该部队指挥范围内没有敌方控制的六角格，无法发起攻击", "validation");
       }
       
       // 保存当前选中状态并设置模式
@@ -766,6 +755,8 @@ export class CommandProcessor {
 
       // 清除攻击状态
       this.store.clearAttackState();
+
+      showSuccess('战斗结束！');
 
       return {
         status: CommandStatus.FINISHED,

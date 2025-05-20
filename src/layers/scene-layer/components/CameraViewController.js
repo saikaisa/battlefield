@@ -267,8 +267,8 @@ export class CameraViewController {
       Cesium.Cartographic.toCartesian(Cesium.Cartographic.fromDegrees(bounds.maxLon, bounds.maxLat))
     );
     
-    // 设置适当的高度，确保可以看到整个区域，增加20%边距
-    const range = diagonalDistance * 1.2;
+    // 设置适当的高度，确保可以看到整个区域
+    const range = diagonalDistance * 1.6;
     
     // 创建俯瞰视角
     const panoramaView = new CameraView();

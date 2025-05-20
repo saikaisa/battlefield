@@ -161,7 +161,7 @@ export async function createBasicUnits() {
     const helicopter = {
       unitId: null,
       unitName: '武装直升机',
-      service: ['land'],
+      service: ['air'],
       category: '直升机',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
@@ -245,7 +245,7 @@ export async function createBasicUnits() {
     const jet = {
       unitId: null,
       unitName: '战斗机',
-      service: ['land'],
+      service: ['air'],
       category: '战机',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
@@ -273,7 +273,7 @@ export async function createBasicUnits() {
     const spyDrone = {
       unitId: null,
       unitName: '侦察无人机',
-      service: ['land'],
+      service: ['air'],
       category: '无人机',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
@@ -461,7 +461,7 @@ export async function createAdvancedUnits() {
     const attackHelicopter = {
       unitId: null,
       unitName: '武装攻击直升机',
-      service: ['land'],
+      service: ['air'],
       category: '攻击机',
       factionAvailability: ['red', 'blue'],
       attackPowerComposition: {
@@ -623,26 +623,26 @@ export async function createRedForces(centerHex) {
       return createdForceIds;
     }
     
-    // 创建包含多种兵种的红方部队
-    const redMultiUnitForceData = {
-      forceName: '红方联合特遣队',
-      faction: 'red',
-      service: 'land',
-      hexId: centerHex.hexId,
-      composition: [
-        { unitId: unitIds.infantryId, unitCount: 100 },
-        { unitId: unitIds.tankId, unitCount: 60 },
-        { unitId: unitIds.artilleryId, unitCount: 40 },
-        { unitId: unitIds.specialForcesId, unitCount: 20 },
-        { unitId: unitIds.motorcycleTroopId, unitCount: 50 },
-        { unitId: unitIds.helicopterId, unitCount: 15 },
-        { unitId: unitIds.rocketArtilleryId, unitCount: 30 },
-        { unitId: unitIds.spyDroneId, unitCount: 25 }
-      ].filter(item => item.unitId), // 过滤掉不存在的兵种
-      troopStrength: 100,
-      combatChance: 1,
-      actionPoints: 100
-    };
+    // // 创建包含多种兵种的红方部队
+    // const redMultiUnitForceData = {
+    //   forceName: '红方联合特遣队',
+    //   faction: 'red',
+    //   service: 'land',
+    //   hexId: centerHex.hexId,
+    //   composition: [
+    //     { unitId: unitIds.infantryId, unitCount: 100 },
+    //     { unitId: unitIds.tankId, unitCount: 60 },
+    //     { unitId: unitIds.artilleryId, unitCount: 40 },
+    //     { unitId: unitIds.specialForcesId, unitCount: 20 },
+    //     { unitId: unitIds.motorcycleTroopId, unitCount: 50 },
+    //     { unitId: unitIds.helicopterId, unitCount: 15 },
+    //     { unitId: unitIds.rocketArtilleryId, unitCount: 30 },
+    //     { unitId: unitIds.spyDroneId, unitCount: 25 }
+    //   ].filter(item => item.unitId), // 过滤掉不存在的兵种
+    //   troopStrength: 100,
+    //   combatChance: 1,
+    //   actionPoints: 100
+    // };
     
     // 创建其他红方部队
     const redForces = [
@@ -675,7 +675,7 @@ export async function createRedForces(centerHex) {
       {
         forceName: '红方空军第一航空队',
         faction: 'red',
-        service: 'land',
+        service: 'air',
         hexId: centerHex.hexId,
         composition: [
           { unitId: unitIds.helicopterId, unitCount: 20 },
@@ -688,20 +688,20 @@ export async function createRedForces(centerHex) {
       }
     ];
     
-    // 首先创建包含多种兵种的部队
-    console.log('[Test] 开始创建红方联合特遣队...');
-    const multiUnitResult = await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
-      forceData: redMultiUnitForceData,
-      formationId: 'FM_red_default'
-    });
+    // // 首先创建包含多种兵种的部队
+    // console.log('[Test] 开始创建红方联合特遣队...');
+    // const multiUnitResult = await commandDispatcher.executeCommandFromUI(CommandType.CREATE_FORCE, { 
+    //   forceData: redMultiUnitForceData,
+    //   formationId: 'FM_red_default'
+    // });
     
-    if (multiUnitResult.success && multiUnitResult.result?.data) {
-      const forceId = multiUnitResult.result.data.forceId;
-      createdForceIds.push(forceId);
-      console.log(`[Test] 创建红方联合特遣队成功, ID: ${forceId}`);
-    } else {
-      console.error('[Test] 创建红方联合特遣队失败:', multiUnitResult.error || '未知错误');
-    }
+    // if (multiUnitResult.success && multiUnitResult.result?.data) {
+    //   const forceId = multiUnitResult.result.data.forceId;
+    //   createdForceIds.push(forceId);
+    //   console.log(`[Test] 创建红方联合特遣队成功, ID: ${forceId}`);
+    // } else {
+    //   console.error('[Test] 创建红方联合特遣队失败:', multiUnitResult.error || '未知错误');
+    // }
     
     // 然后创建其他红方部队
     for (let i = 0; i < redForces.length; i++) {
@@ -788,7 +788,7 @@ export async function createBlueForces(neighborHexes) {
         forceData = {
           forceName: `蓝方空军第${i+1}航空队`,
           faction: 'blue',
-          service: 'land',
+          service: 'air',
           hexId: neighborHex.hexId,
           composition: [
             { unitId: unitIds.helicopterId, unitCount: 15 + (i * 2) },

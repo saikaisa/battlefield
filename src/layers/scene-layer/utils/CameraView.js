@@ -3,6 +3,20 @@ import * as Cesium from 'cesium';
 import { CameraConfig } from "@/config/GameConfig.js";
 
 export class CameraView {
+  // 初始化时对默认位置进行高度采样
+  static defaultPosition = null;
+
+  static async initialize(viewer) {
+    const position = CameraConfig.defaultPosition;
+    const terrainProvider = viewer.scene.terrainProvider;
+    try {
+      const positions = await Cesium.sampleTerrainMostDetailed(terrainProvider, [position]);
+      CameraView.defaultPosition = positions[0];
+    } catch {
+      CameraView.defaultPosition = position;
+    }
+  }
+
   /**
    * 构造函数
    * @param {Cesium.Cartographic} position - 聚焦中心位置
@@ -11,7 +25,7 @@ export class CameraView {
    * @param {number} pitch - 相机垂直倾斜角度
    */
   constructor() {
-    this.position = CameraConfig.defaultPosition;
+    this.position = CameraView.defaultPosition || CameraConfig.defaultPosition;
     this.range = CameraConfig.defaultRange;
     this.heading = CameraConfig.defaultHeading;
     this.pitch = CameraConfig.defaultPitch;
@@ -84,21 +98,6 @@ export class CameraView {
     const cam = new CameraView();
     cam.position = position;
     cam.range = CameraConfig.closeUpRange;
-    cam.heading = viewer.camera.heading;
-    cam.pitch = CameraConfig.defaultPitch;
-    return cam;
-  }
-
-  /**
-   * 视角拉远，用于总览
-   * @param {Cesium.Viewer} viewer - Cesium 实例
-   * @param {Cesium.Cartographic} position - 聚焦中心位置
-   * @returns {CameraView|null}
-   */
-  static panoramicView(viewer, position) {
-    const cam = new CameraView();
-    cam.position = position;
-    cam.range = CameraConfig.maxZoomDistance;
     cam.heading = viewer.camera.heading;
     cam.pitch = CameraConfig.defaultPitch;
     return cam;

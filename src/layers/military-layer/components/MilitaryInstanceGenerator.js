@@ -347,6 +347,28 @@ export class MilitaryInstanceGenerator {
           if (excess > 0) break;
         }
       }
+    } else if (totalPlannedRenderCount < maxTotalUnits && totalRenderingUnits > maxTotalUnits) {
+      // 如果计划渲染总数少于最大限制，但是总数大于最大限制，则将多余的数量均匀分配给每个渲染组
+      let remainingSlots = maxTotalUnits - totalPlannedRenderCount;
+      
+      // 按照优先级降序排序，优先级高的先增加
+      const sortedGroups = Array.from(renderingGroups.entries())
+        .map(([key, renderCount]) => {
+          // 从配置中获取优先级
+          const priority = MilitaryConfig.models[key]?.priority || 0;
+          return { key, renderCount, priority };
+        })
+        .sort((a, b) => b.priority - a.priority);
+      
+      // 从优先级高的组开始，每组加一个，循环加直到满为止
+      let index = 0;
+      
+      while (remainingSlots > 0 && sortedGroups.length > 0) {
+        const currentGroup = sortedGroups[index % sortedGroups.length];
+        renderingGroups.set(currentGroup.key, renderingGroups.get(currentGroup.key) + 1);
+        remainingSlots--;
+        index++;
+      }
     }
 
     return renderingGroups;

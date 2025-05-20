@@ -10,6 +10,7 @@ import { ModelPoseCalculator } from "../utils/ModelPoseCalculator";
 import { HexVisualStyles } from "@/config/HexVisualStyles";
 import { MilitaryConfig } from "@/config/GameConfig";
 import { HexRenderer } from "@/layers/scene-layer/components/HexGridRenderer";
+import { GameMode } from "@/config/GameModeConfig";
 
 /**
  * 军事单位实例渲染器
@@ -156,7 +157,7 @@ export class MilitaryInstanceRenderer {
           // 移动中的部队：计算新位置并更新
           this.movementController.updateMovingForces(forceId);
         } 
-        else if (shouldUpdateLOD) {
+        else if (shouldUpdateLOD && this.store.gameMode !== GameMode.ATTACK_EXECUTE) {
           // 静止部队：更新LOD
           this._updateModelLOD(forceInstance);
         }
@@ -303,7 +304,8 @@ export class MilitaryInstanceRenderer {
           const unitPos = this.poseCalculator.computeUnitPosition({
             forcePose: forceInstance.pose,
             localOffset: unitInstance.localOffset,
-            hexId: force.hexId
+            hexId: force.hexId,
+            service: forceInstance.force.service
           });
 
           // 然后计算兵种对应的每个模型加上偏移后在地球上的位置
@@ -342,19 +344,22 @@ export class MilitaryInstanceRenderer {
   }
 
   /**
-   * 为模型添加移动动画
+   * 为模型添加动画
    * @param {Object} unitInstance 兵种实例
+   * @param {string} [state] 动画状态：idle, move, attack
    * @returns {Promise} 添加动画完成的Promise
    */
-  async addMoveAnimation(unitInstance) {
+  async addAnimation(unitInstance, state = 'move') {
+    console.log(`为模型添加动画: ${unitInstance.renderingKey}, 状态: ${state}`);
     // 如果无效参数，立即返回已解决的Promise
     if (!unitInstance || !unitInstance.activeModel) {
+      console.warn(`无效的兵种实例: ${unitInstance.renderingKey}`);
       return Promise.resolve();
     }
     
     try {
       // 首先移除当前动画（如果存在）
-      this.removeMoveAnimation(unitInstance);
+      this.removeAnimation(unitInstance);
       
       // 检查模型是否支持动画
       const modelConfig = MilitaryConfig.models[unitInstance.renderingKey];
@@ -365,13 +370,14 @@ export class MilitaryInstanceRenderer {
       
       // 加载模型动画配置
       let animConfig;
-      
-      // 加载移动动画
-      if (unitInstance.renderingKey === 'soldier') {
-        animConfig = MilitaryConfig.models[unitInstance.renderingKey].animationList[1];
-      } 
-      else if (unitInstance.renderingKey === 'helicopter1' || unitInstance.renderingKey === 'helicopter2') {
-        animConfig = MilitaryConfig.models[unitInstance.renderingKey].animationList[0];
+      if (modelConfig && modelConfig.animationList) {
+        if (state === 'move') {
+          animConfig = modelConfig.animationList.find(anim => anim.name === 'Move');
+        } else if (state === 'idle' || state === 'attack') {
+          if (unitInstance.renderingKey === 'helicopter1' || unitInstance.renderingKey === 'helicopter2') {
+            animConfig = modelConfig.animationList.find(anim => anim.name === 'Move');
+          }
+        }
       }
       
       // 如果找到了动画配置，添加动画
@@ -380,7 +386,9 @@ export class MilitaryInstanceRenderer {
           name: animConfig.name,
           loop: animConfig.loop
         });
-        console.log(`成功添加移动动画到模型: ${unitInstance.renderingKey}`);
+        // console.log(`成功添加动画到模型: ${unitInstance.renderingKey}`);
+      } else {
+        console.warn(`找不到动画配置: ${unitInstance.renderingKey}`);
       }
       
       return Promise.resolve();
@@ -391,10 +399,10 @@ export class MilitaryInstanceRenderer {
   }
 
   /** 
-   * 移除移动动画
+   * 移除动画
    * @param {Object} unitInstance 兵种实例
    */
-  removeMoveAnimation(unitInstance) {
+  removeAnimation(unitInstance) {
     if (unitInstance.activeAnimation) {
       unitInstance.activeModel.activeAnimations.remove(unitInstance.activeAnimation);
       unitInstance.activeAnimation = null;
@@ -485,7 +493,7 @@ export class MilitaryInstanceRenderer {
             }
 
             // 移除动画
-            this.removeMoveAnimation(unitInstance);
+            this.removeAnimation(unitInstance);
           }
         } catch (error) {
           console.error(`[MilitaryInstanceRenderer] 更新LOD处理失败: ${unitInstanceId}`, error);

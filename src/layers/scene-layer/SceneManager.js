@@ -2,7 +2,7 @@
 import * as Cesium from "cesium";
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 
-import { CesiumConfig } from "@/config/GameConfig";
+import { CameraConfig, CesiumConfig } from "@/config/GameConfig";
 import { openGameStore } from '@/store';
 import { CameraViewController } from '@/layers/scene-layer/components/CameraViewController';
 import { HexGridGenerator } from '@/layers/scene-layer/components/HexGridGenerator';
@@ -10,7 +10,8 @@ import { HexGridRenderer } from '@/layers/scene-layer/components/HexGridRenderer
 import { HexHeightCache } from '@/layers/scene-layer/components/HexHeightCache';
 import { SceneInteractor } from '@/layers/interaction-layer/SceneInteractor';
 // import { FogOfWarManager } from "./components/FogOfWarManager";
-
+import { HexConfig } from "@/config/GameConfig";
+import { CameraView } from '@/layers/scene-layer/utils/CameraView';
 /**
  * 场景管理器（单例模式）
  * 
@@ -85,7 +86,16 @@ export class SceneManager {
         Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
       );
 
+      // 启用Inspector调试
       this.viewer.extend(Cesium.viewerCesiumInspectorMixin);
+
+      // ---------------- 环境配置开始 ----------------
+      this.configureEnvironment({
+        limitLoadRange: true,
+        limitLoadRangeOffset: 0.01,
+        precision: 4,
+      });
+      // ---------------- 环境配置结束 ----------------
 
       // ---------------- 底图加载开始 ----------------
       await this.loadAssets(
@@ -115,6 +125,7 @@ export class SceneManager {
       // ---------------- 屏幕交互器加载结束 ----------------
       
       // ---------------- 相机系统加载开始 ----------------
+      await CameraView.initialize(this.viewer);
       this.cameraViewController = CameraViewController.getInstance(this.viewer);
       this.cameraViewController.initialize();
       // ---------------- 相机系统加载结束 ----------------
@@ -178,5 +189,59 @@ export class SceneManager {
     } catch (error) {
       console.error("加载底图数据失败：", error);
     }
+  }
+
+  /**
+   * 环境配置
+   * @param {Object} options - 配置选项
+   * @param {boolean} options.limitLoadRange - 是否限制地形加载范围
+   * @param {number} options.limitLoadRangeOffset - 地形加载范围偏移量
+   * @param {number} options.precision - 影像显示精度
+   */
+  configureEnvironment(options) {
+    // 设置地形加载限制范围
+    if (options.limitLoadRange) {
+      this.viewer.scene.globe.cartographicLimitRectangle = Cesium.Rectangle.fromDegrees(
+        HexConfig.bounds.minLon - options.limitLoadRangeOffset, 
+        HexConfig.bounds.minLat - options.limitLoadRangeOffset, 
+        HexConfig.bounds.maxLon + options.limitLoadRangeOffset, 
+        HexConfig.bounds.maxLat + options.limitLoadRangeOffset
+      );
+    }
+
+    // 设置影像显示精度
+    this.viewer.scene.globe.maximumScreenSpaceError = options.precision;
+
+    // 设置阴影
+    const shadowMap = this.viewer.scene.shadowMap;
+    this.viewer.shadows = true;
+    shadowMap.enabled = true;
+    shadowMap.darkness = 0.5;
+    shadowMap.maximumDistance = CameraConfig.maxZoomDistance;
+    shadowMap.normalOffset = true;
+    shadowMap.softShadows = true;
+
+    // 设置光照
+    this.viewer.scene.globe.lightingFadeInDistance = 20000;
+    this.viewer.scene.globe.lightingFadeOutDistance = 20000;
+    const centerLon = (HexConfig.bounds.minLon + HexConfig.bounds.maxLon) / 2;
+    const centerLat = (HexConfig.bounds.minLat + HexConfig.bounds.maxLat) / 2;
+    const centerCartesian = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0);
+    const direction = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.negate(centerCartesian, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+    const offsetAngle = Cesium.Math.toRadians(30); // 30度偏移
+    const rotationMatrix = Cesium.Matrix3.fromRotationZ(offsetAngle);
+    const rotatedDirection = Cesium.Matrix3.multiplyByVector(
+      rotationMatrix,
+      direction,
+      new Cesium.Cartesian3()
+    );
+    this.viewer.scene.light = new Cesium.DirectionalLight({
+      direction: rotatedDirection,
+      color: Cesium.Color.WHITE,
+      intensity: 2.0
+    });
   }
 }

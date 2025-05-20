@@ -4,6 +4,11 @@ import { openGameStore } from '@/store';
 import { MilitaryConfig, BattleConfig } from '@/config/GameConfig';
 import { ModelInstanceLoader } from "./ModelInstanceLoader";
 import { ModelPoseCalculator } from "../utils/ModelPoseCalculator";
+import { MilitaryInstanceGenerator } from "./MilitaryInstanceGenerator";
+import { GeoMathUtils } from "@/layers/scene-layer/utils/GeoMathUtils";
+import { MilitaryInstanceRenderer } from "./MilitaryInstanceRenderer";
+import { showSuccess } from "@/layers/interaction-layer/utils/MessageBox";
+import { OverviewConsole } from "@/layers/interaction-layer/utils/OverviewConsole";
 
 /**
  * 战斗特效渲染器
@@ -37,21 +42,25 @@ export class BattleEffectsRenderer {
     this.viewer = viewer;
     this.store = openGameStore();
     
-    // 初始化模型加载器
-    this.modelLoader = ModelInstanceLoader.getInstance(viewer);
-    // 初始化姿态计算器
+    // 获取姿态计算器
     this.poseCalculator = ModelPoseCalculator.getInstance(viewer);
+    // 获取部队实例映射表
+    this.forceInstanceMap = MilitaryInstanceGenerator.getforceInstanceMap(viewer);
+    // 获取部队实例渲染器
+    this.renderer = MilitaryInstanceRenderer.getInstance(viewer);
     
-    // 活跃中的战斗特效 {id: {type, entity, startTime, endTime, completed}}
-    this.activeEffects = new Map();
-    // 特效ID计数器
-    this.effectCounter = 0;
+    // 活跃中的子弹实体 {id: {type, entity, startTime, endTime, completed}}
+    this.activeBullets = new Map();
     // 爆炸效果集合
     this.explosions = new Map();
+    // 特效ID计数器
+    this.effectCounter = 0;
     // 特效更新句柄
     this._updateHandle = null;
-    // 战斗特效完成回调
-    this._battleCompleteCallbacks = new Map();
+    // 战斗数据实例
+    this.battleInstances = [];
+    // 战斗时的临时朝向 {battleId: {forceId: tempHeading}}
+    this.battleHeadings = new Map();
   }
 
   /**
@@ -64,31 +73,26 @@ export class BattleEffectsRenderer {
       // 当前时间
       const now = Date.now();
       
-      // 检查所有活跃特效是否完成
-      this.activeEffects.forEach((effect, id) => {
-        if (effect.completed) return;
+      // 检查所有活跃子弹是否完成
+      this.activeBullets.forEach((bullet, id) => {
+        if (bullet.completed) return;
         
-        if (now >= effect.endTime) {
-          // 特效结束
-          effect.completed = true;
+        if (now >= bullet.endTime) {
+          // 子弹效果结束
+          bullet.completed = true;
           
-          // 如果是子弹/导弹/炮弹，创建目标位置的爆炸效果
-          if (effect.type === 'bullet' || effect.type === 'plainBullet') {
-            this._createExplosion(effect.targetPosition, 'bullet', effect.battleId);
-          } else if (effect.type === 'missile') {
-            this._createExplosion(effect.targetPosition, 'missile', effect.battleId);
-          } else if (effect.type === 'shell') {
-            this._createExplosion(effect.targetPosition, 'shell', effect.battleId);
+          // 创建目标位置的爆炸效果
+          if (bullet.targetPosition && bullet.battleId && bullet.bulletType) {
+            this._createExplosion(bullet.targetPosition, bullet.battleId, bullet.bulletType);
           }
           
-          // 移除特效实体
-          if (effect.entity && !effect.entity._isDestroyed && this.viewer.entities.contains(effect.entity)) {
-            this.viewer.entities.remove(effect.entity);
-          }
-          
-          // 检查特定战斗ID的所有特效是否都已完成
-          if (effect.battleId) {
-            this._checkBattleComplete(effect.battleId);
+          // 移除子弹实体
+          if (bullet.entity) {
+            try {
+              this.viewer.entities.remove(bullet.entity);
+            } catch (error) {
+              console.warn(`在更新循环中移除子弹实体时出错: ${error.message}`);
+            }
           }
         }
       });
@@ -102,17 +106,18 @@ export class BattleEffectsRenderer {
           explosion.completed = true;
           
           // 移除爆炸效果实体
-          if (explosion.entity && !explosion.entity._isDestroyed && this.viewer.entities.contains(explosion.entity)) {
-            this.viewer.entities.remove(explosion.entity);
-          }
-          
-          // 检查特定战斗ID的所有特效是否都已完成
-          if (explosion.battleId) {
-            this._checkBattleComplete(explosion.battleId);
+          if (explosion.entity) {
+            try {
+              this.viewer.entities.remove(explosion.entity);
+            } catch (error) {
+              console.warn(`在更新循环中移除爆炸实体时出错: ${error.message}`);
+            }
           }
         }
       });
     });
+    
+    console.log('已启动特效更新循环');
   }
   
   /**
@@ -129,197 +134,1163 @@ export class BattleEffectsRenderer {
    * 清理所有战斗特效
    */
   clearAllEffects() {
-    // 清除所有活跃特效
-    this.activeEffects.forEach(effect => {
-      if (effect.entity && !effect.entity._isDestroyed && this.viewer.entities.contains(effect.entity)) {
-        this.viewer.entities.remove(effect.entity);
+    // 清除所有活跃子弹
+    this.activeBullets.forEach(bullet => {
+      if (bullet.entity) {
+        try {
+          this.viewer.entities.remove(bullet.entity);
+        } catch (error) {
+          console.warn(`移除子弹实体时出错: ${error.message}`);
+        }
       }
     });
-    this.activeEffects.clear();
+    this.activeBullets.clear();
     
     // 清除所有爆炸效果
     this.explosions.forEach(explosion => {
-      if (explosion.entity && !explosion.entity._isDestroyed && this.viewer.entities.contains(explosion.entity)) {
-        this.viewer.entities.remove(explosion.entity);
+      if (explosion.entity) {
+        try {
+          this.viewer.entities.remove(explosion.entity);
+        } catch (error) {
+          console.warn(`移除爆炸实体时出错: ${error.message}`);
+        }
       }
     });
     this.explosions.clear();
+
+    // 清除战斗实例数据
+    this.battleInstances = [];
+    
+    console.log('已清理所有战斗特效');
   }
 
   /**
-   * 创建战斗视觉特效
-   * @param {string} battleId 战斗ID，用于分组特效
-   * @param {Array<Object>} effectsConfig 特效配置数组，包含详细的战斗效果配置
-   * @returns {Promise<void>} 当所有特效完成时解析的Promise
+   * 创建战斗特效配置
+   * @param {string} battleId 战斗ID
+   * @param {Array} attackerForces 攻击方部队ID数组
+   * @param {Array} defenderForces 防守方部队ID数组
+   * @returns {Array} 战斗特效配置数组
    */
-  async createBattleEffects(battleId, effectsConfig) {
-    if (!battleId || !effectsConfig || effectsConfig.length === 0) {
-      return Promise.resolve();
+  _createBattleEffectsConfig(battleId, attackerForces, defenderForces) {
+    // 战斗实例列表，包含所有符合要求的战斗单位和其目标
+    const battleInstances = [];
+    
+    // 1. 获取所有参战部队并分配子弹类型
+    // 收集攻击方部队实例（只包含有战斗机会的部队）
+    const attackerBattleForces = attackerForces
+      .map(forceId => {
+        const force = this.store.getForceById(forceId);
+        const forceInstance = this.forceInstanceMap.get(forceId);
+        return { force, forceInstance };
+      })
+      .filter(item => item.force && item.force.combatChance > 0 && item.forceInstance);
+    // 收集防守方部队实例
+    const defenderBattleForces = defenderForces
+      .map(forceId => {
+        const force = this.store.getForceById(forceId);
+        const forceInstance = this.forceInstanceMap.get(forceId);
+        return { force, forceInstance };
+      })
+      .filter(item => item.force && item.forceInstance);
+    // 处理攻击方部队
+    const attackerOriginForces = this._processBattleForces(attackerBattleForces, 'attacker');
+    // 处理防守方部队
+    const defenderOriginForces = this._processBattleForces(defenderBattleForces, 'defender');
+    
+    // 2. 每个进攻部队分配目标防守部队，并为每个防守部队分配目标进攻部队
+    // 为攻击方分配防守目标
+    this._assignTargetsForForces(attackerOriginForces, defenderOriginForces, battleInstances);
+    // 为防守方分配攻击目标
+    this._assignTargetsForForces(defenderOriginForces, attackerOriginForces, battleInstances);
+    
+    // 3. 计算子弹轨迹、出现点、落点和飞行时间
+    this._calculateBulletTrajectories(battleInstances);
+    
+    // 4. 计算粒子效果参数
+    this._calculateParticleEffects(battleInstances);
+    
+    // 为每个战斗实例添加战斗ID
+    battleInstances.forEach(instance => {
+      instance.battleId = battleId;
+    });
+    
+    // 保存战斗数据
+    this.battleInstances = battleInstances;
+
+    // 在控制台输出战斗实例详细信息
+    // console.log('\n▶ 战斗实例详细信息:');
+    // battleInstances.forEach((instance, index) => {
+    //   console.log(`\n  战斗实例 #${index + 1}:`);
+    //   console.log(`  ├─ 战斗ID: ${instance.battleId}`);
+      
+    //   // 输出原始部队信息
+    //   console.log('  ├─ 原始部队:');
+    //   console.log(`  │  ├─ 战斗类型: ${instance.originForce.battleType}`);
+    //   console.log(`  │  ├─ 部队ID: ${instance.originForce.forceInstance.force.forceId}`);
+    //   console.log(`  │  └─ 部队名称: ${instance.originForce.forceInstance.force.forceName}`);
+      
+    //   // 输出目标部队信息
+    //   console.log('  ├─ 目标部队:');
+    //   console.log(`  │  ├─ 部队ID: ${instance.targetForce.forceInstance.force.forceId}`);
+    //   console.log(`  │  └─ 部队名称: ${instance.targetForce.forceInstance.force.forceName}`);
+      
+    //   // 输出子弹效果信息
+    //   console.log('  └─ 子弹效果:');
+    //   instance.originForce.bulletEffectMap.forEach((effect, unitId) => {
+    //     console.log(`\n     ├─ 单位ID: ${unitId}`);
+    //     console.log(`     ├─ 子弹类型: ${effect.bulletType}`);
+    //     console.log(`     ├─ 发射次数: ${effect.fireCount}`);
+    //     console.log(`     ├─ 发射延迟: ${effect.delay}ms`);
+    //     console.log(`     ├─ 起始点: ${effect.startPosition ? `(${effect.startPosition.longitude.toFixed(2)}, ${effect.startPosition.latitude.toFixed(2)}, ${effect.startPosition.height.toFixed(2)})` : '未设置'}`);
+    //     console.log(`     ├─ 落点: ${effect.endPosition ? `(${effect.endPosition.longitude.toFixed(2)}, ${effect.endPosition.latitude.toFixed(2)}, ${effect.endPosition.height.toFixed(2)})` : '未设置'}`);
+    //     console.log(`     ├─ 飞行方向（角度）: ${effect.heading ? effect.heading.toFixed(2) : '未设置'}`);
+    //     console.log(`     └─ 飞行时间: ${effect.flightDuration}ms`);
+    //   });
+    // });
+    
+    return battleInstances;
+  }
+
+  /**
+   * 处理战斗部队，为每个兵种分配子弹类型
+   * @param {Array} battleForces 战斗部队数组，每项包含{force, forceInstance}
+   * @param {string} battleType 战斗类型，'attacker'或'defender'
+   * @returns {Array} 处理后的部队数组，每项包含{battleType, forceInstance, bulletEffectMap}
+   */
+  _processBattleForces(battleForces, battleType) {
+    const processedForces = [];
+    
+    battleForces.forEach(({ force, forceInstance }) => {
+      // 为每个部队创建子弹效果映射
+      const bulletEffectMap = new Map();
+      let hasBulletEffect = false;
+      
+      // 遍历部队中的每个兵种实例
+      forceInstance.unitInstanceMap.forEach((unitInstance, unitInstanceId) => {
+        // 获取兵种的渲染键
+        const renderingKey = unitInstance.renderingKey;
+        
+        // 从配置中获取子弹类型
+        const modelConfig = MilitaryConfig.models[renderingKey];
+        if (!modelConfig || !modelConfig.bullet || modelConfig.bullet === 'none') {
+          return; // 跳过没有子弹配置或子弹为none的兵种
+        }
+        
+        // 获取子弹配置
+        const bulletType = modelConfig.bullet;
+        const bulletConfig = MilitaryConfig.bullets[bulletType];
+        if (!bulletConfig) {
+          return; // 跳过配置缺失的子弹类型
+        }
+        
+        // 创建子弹效果
+        const bulletEffect = {
+          unitInstanceId,
+          bulletType,
+          path: bulletConfig.path,
+          speed: bulletConfig.speed,
+          fireCount: bulletConfig.fireCount,
+          delay: bulletConfig.fireInterval + Math.random() * 500 // 添加随机延迟
+        };
+        
+        // 将子弹效果添加到映射中
+        bulletEffectMap.set(unitInstanceId, bulletEffect);
+        hasBulletEffect = true;
+      });
+      
+      // 只添加有子弹效果的部队
+      if (hasBulletEffect) {
+        processedForces.push({
+          battleType,
+          forceInstance,
+          bulletEffectMap
+        });
+      }
+    });
+    
+    return processedForces;
+  }
+
+  /**
+   * 为部队分配攻击目标
+   * @param {Array} originForces 原始部队数组
+   * @param {Array} targetCandidates 目标候选部队数组
+   * @param {Array} battleInstances 战斗实例数组，将被修改
+   */
+  _assignTargetsForForces(originForces, targetCandidates, battleInstances) {
+    if (originForces.length === 0 || targetCandidates.length === 0) {
+      return;
+    }
+    
+    // 为每个原始部队分配一个目标
+    originForces.forEach((originForce, index) => {
+      // 如果目标候选数小于原始部队数，则循环分配
+      const targetIndex = index % targetCandidates.length;
+      const targetForce = targetCandidates[targetIndex];
+      
+      // 创建战斗实例
+      battleInstances.push({
+        originForce,
+        targetForce: {
+          forceInstance: targetForce.forceInstance
+        }
+      });
+    });
+  }
+
+  /**
+   * 计算子弹轨迹、出现点、落点和飞行时间
+   * @param {Array} battleInstances 战斗实例数组，将被修改
+   */
+  _calculateBulletTrajectories(battleInstances) {
+    if (!battleInstances || battleInstances.length === 0) {
+      return;
+    }
+    
+    // 遍历每个战斗实例
+    for (const battleInstance of battleInstances) {
+      const originForce = battleInstance.originForce;
+      const targetForce = battleInstance.targetForce;
+      
+      // 验证基本数据有效性
+      if (!originForce || !targetForce || !originForce.forceInstance || !targetForce.forceInstance) {
+        console.warn('战斗实例中的部队数据无效，跳过计算子弹轨迹');
+        continue;
+      }
+      
+      // 获取目标部队位置
+      const targetPose = targetForce.forceInstance.pose;
+      if (!targetPose || !targetPose.position) {
+        console.warn('目标部队位置无效，跳过计算子弹轨迹');
+        continue;
+      }
+      
+      // 确保目标位置的经纬度有效
+      const targetLon = targetPose.position.longitude;
+      const targetLat = targetPose.position.latitude;
+      const targetHeight = targetPose.position.height;
+      
+      if (!isFinite(targetLon) || !isFinite(targetLat) || !isFinite(targetHeight)) {
+        console.warn(`目标部队坐标无效: (${targetLon}, ${targetLat}, ${targetHeight})`);
+        continue;
+      }
+      
+      // 获取子弹效果映射表
+      const bulletEffectMap = originForce.bulletEffectMap;
+      if (!bulletEffectMap || bulletEffectMap.size === 0) {
+        console.warn('部队没有可用的子弹效果配置');
+        continue;
+      }
+      
+      // 为每个兵种计算子弹轨迹
+      for (const [unitInstanceId, bulletEffect] of bulletEffectMap.entries()) {
+        try {
+          // 获取兵种实例
+          const unitInstance = originForce.forceInstance.unitInstanceMap.get(unitInstanceId);
+          if (!unitInstance) {
+            console.warn(`找不到兵种实例: ${unitInstanceId}`);
+            continue;
+          }
+          
+          // 计算兵种位置
+          const posWithHex = this.poseCalculator.computeUnitPosition({
+            forcePose: originForce.forceInstance.pose,
+            localOffset: unitInstance.localOffset,
+            hexId: originForce.forceInstance.force.hexId,
+            service: originForce.forceInstance.force.service
+          });
+          
+          if (!posWithHex || !posWithHex.position) {
+            console.warn(`计算的兵种位置无效: ${unitInstanceId}`);
+            continue;
+          }
+          
+          const unitPos = posWithHex.position;
+          if (!unitPos || !isFinite(unitPos.longitude) || !isFinite(unitPos.latitude) || !isFinite(unitPos.height)) {
+            console.warn(`兵种位置坐标无效: (${unitPos?.longitude}, ${unitPos?.latitude}, ${unitPos?.height})`);
+            continue;
+          }
+          
+          // 计算目标的随机落点
+          const targetRadius = MilitaryConfig.layoutConfig.unitLayout.radius || 50;
+          const randomAngle = Math.random() * Math.PI * 2;
+          const randomRadius = Math.random() * targetRadius;
+          
+          // 计算落点的经纬度偏移
+          const metersPerDegree = 111000;
+          const latOffset = (randomRadius * Math.sin(randomAngle)) / metersPerDegree;
+          const lonOffset = (randomRadius * Math.cos(randomAngle)) / (metersPerDegree * Math.cos(targetLat * Math.PI / 180));
+          
+          // 目标随机落点
+          const endPosition = {
+            longitude: targetLon + lonOffset,
+            latitude: targetLat + latOffset,
+            height: targetHeight + 10 // 略高于地面
+          };
+          
+          // 计算子弹飞行方向
+          const heading = GeoMathUtils.calculateHeading(unitPos, endPosition);
+          
+          // 计算子弹出现点（略微偏移，避免从模型内部出现）
+          const startPosition = this._calculateBulletStartPosition(unitPos, heading, 10);
+          
+          // 验证最终计算的坐标有效性
+          if (!isFinite(startPosition.longitude) || !isFinite(startPosition.latitude) || !isFinite(startPosition.height) ||
+              !isFinite(endPosition.longitude) || !isFinite(endPosition.latitude) || !isFinite(endPosition.height) ||
+              !isFinite(heading)) {
+            console.warn(`计算的子弹坐标无效: 起点(${startPosition.longitude}, ${startPosition.latitude}, ${startPosition.height}), 终点(${endPosition.longitude}, ${endPosition.latitude}, ${endPosition.height}), 朝向: ${heading}`);
+            continue;
+          }
+          
+          // 计算飞行距离和时间
+          const startCartesian = Cesium.Cartesian3.fromDegrees(
+            startPosition.longitude, 
+            startPosition.latitude, 
+            startPosition.height || 0
+          );
+          
+          const endCartesian = Cesium.Cartesian3.fromDegrees(
+            endPosition.longitude, 
+            endPosition.latitude, 
+            endPosition.height || 0
+          );
+          
+          const distance = Cesium.Cartesian3.distance(startCartesian, endCartesian);
+          const speed = bulletEffect.speed || 200; // 默认200米/秒
+          const flightDuration = distance / speed * 1000; // 转换为毫秒
+          
+          // 更新子弹效果
+          bulletEffect.startPosition = startPosition;
+          bulletEffect.endPosition = endPosition;
+          bulletEffect.heading = heading;
+          bulletEffect.flightDuration = flightDuration;
+          
+          // console.log(`计算子弹轨迹成功 - ${unitInstanceId}, 距离: ${distance.toFixed(2)}m, 飞行时间: ${flightDuration.toFixed(2)}ms`);
+        } catch (error) {
+          console.error(`计算子弹轨迹出错: ${unitInstanceId}, ${error.message}`, error);
+        }
+      }
+    }
+  }
+
+  /**
+   * 计算子弹出现点
+   * @param {Object} unitPos 兵种位置
+   * @param {number} heading 朝向角度（弧度）
+   * @param {number} offset 偏移距离（米）
+   * @returns {Object} 子弹出现点
+   */
+  _calculateBulletStartPosition(unitPos, heading, offset) {
+    if (!unitPos || !isFinite(unitPos.longitude) || !isFinite(unitPos.latitude) || !isFinite(unitPos.height) || 
+        !isFinite(heading) || !isFinite(offset)) {
+      console.warn(`计算子弹出现点的参数无效 - unitPos: ${JSON.stringify(unitPos)}, heading: ${heading}, offset: ${offset}`);
+      // 返回默认位置，避免错误
+      return {
+        longitude: 0,
+        latitude: 0,
+        height: 0
+      };
+    }
+    
+    // 计算经纬度偏移
+    const metersPerDegree = 111000; // 每度大约111公里
+    const latOffset = (offset * Math.sin(heading)) / metersPerDegree;
+    const lonOffset = (offset * Math.cos(heading)) / (metersPerDegree * Math.cos(unitPos.latitude * Math.PI / 180));
+    
+    return {
+      longitude: unitPos.longitude + lonOffset,
+      latitude: unitPos.latitude + latOffset,
+      height: unitPos.height + 10 // 略高于兵种位置
+    };
+  }
+  
+  /**
+   * 计算两点间的朝向角度
+   * @param {Object} from 起始点，包含{longitude, latitude}
+   * @param {Object} to 终点，包含{longitude, latitude}
+   * @returns {number} 朝向角度（弧度）
+   */
+  _calculateHeading(from, to) {
+    if (!from || !to || 
+        !isFinite(from.longitude) || !isFinite(from.latitude) || 
+        !isFinite(to.longitude) || !isFinite(to.latitude)) {
+      console.warn(`计算朝向的参数无效 - from: ${JSON.stringify(from)}, to: ${JSON.stringify(to)}`);
+      return 0; // 返回默认朝向
+    }
+    
+    // 将经纬度转换为弧度
+    const fromLon = from.longitude * Math.PI / 180;
+    const fromLat = from.latitude * Math.PI / 180;
+    const toLon = to.longitude * Math.PI / 180;
+    const toLat = to.latitude * Math.PI / 180;
+    
+    // 计算朝向
+    const y = Math.sin(toLon - fromLon) * Math.cos(toLat);
+    const x = Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(toLon - fromLon);
+    
+    return Math.atan2(y, x);
+  }
+
+  /**
+   * 计算粒子效果参数
+   * @param {Array} battleInstances 战斗实例数组，将被修改
+   */
+  _calculateParticleEffects(battleInstances) {
+    battleInstances.forEach(battleInstance => {
+      battleInstance.originForce.bulletEffectMap.forEach(bulletEffect => {
+        // 根据子弹类型从配置中获取粒子效果参数
+        const bulletConfig = MilitaryConfig.bullets[bulletEffect.bulletType];
+        
+        if (bulletConfig && bulletConfig.particle) {
+          const particleConfig = bulletConfig.particle;
+          
+          // 设置粒子效果参数
+          bulletEffect.explosionType = particleConfig.explosionType;
+          bulletEffect.explosionSize = particleConfig.explosionSize;
+          bulletEffect.explosionDuration = particleConfig.explosionDuration;
+          bulletEffect.particleImage = particleConfig.particleImage;
+        } else {
+          console.error(`找不到粒子效果参数: ${bulletEffect.bulletType}`);
+        }
+      });
+    });
+  }
+
+  /**
+   * 执行部队转向和战斗动画
+   * @param {string} battleId 战斗ID
+   * @param {Array} attackerForces 攻击方部队ID数组
+   * @param {Array} defenderForces 防守方部队ID数组
+   * @returns {Promise<void>} 当所有动画完成时解析的Promise
+   */
+  async createBattleEffects(battleId, attackerForces, defenderForces) {    
+    // 清理现有特效
+    this.clearAllEffects();
+    
+    // 验证参数
+    if (!battleId || !attackerForces || !defenderForces) {
+      console.warn(`缺少战斗参数，无法创建动画: battleId=${battleId}`);
+      return;
     }
     
     // 确保更新循环已启动
     this.startEffectsUpdateLoop();
     
-    // 创建Promise等待所有特效完成
-    return new Promise((resolve) => {
-      // 注册战斗完成回调
-      this._battleCompleteCallbacks.set(battleId, resolve);
-      
-      // 最小战斗持续时间
-      const minDuration = BattleConfig.animation.battleMinDuration || 5000;
-      // 记录战斗开始时间
-      const battleStartTime = Date.now();
-      
-      // 处理特效配置
-      for (const effectConfig of effectsConfig) {
-        let sourcePos, targetPos;
-        
-        // 处理源位置
-        if (effectConfig.from.position) {
-          sourcePos = this._getPositionCartesian3(effectConfig.from.position);
-        } else if (effectConfig.from.unitInstance && effectConfig.from.forceInstance) {
-          // 如果有兵种实例和部队实例，则使用兵种位置
-          const unitPos = effectConfig.from.unitInstance.getPosition();
-          sourcePos = unitPos ? 
-            Cesium.Cartesian3.fromDegrees(unitPos.longitude, unitPos.latitude, unitPos.height) :
-            this._getPositionCartesian3(effectConfig.from.forceInstance.pose.position);
-        }
-        
-        // 处理目标位置
-        if (effectConfig.to.position) {
-          targetPos = this._getPositionCartesian3(effectConfig.to.position);
-        } else if (effectConfig.to.forceInstance && effectConfig.to.forceInstance.pose) {
-          targetPos = this._getPositionCartesian3(effectConfig.to.forceInstance.pose.position);
-        }
-        
-        if (!sourcePos || !targetPos) {
-          console.warn('无法创建战斗特效：无效的源位置或目标位置', effectConfig);
-          continue;
-        }
-        
-        // 计算飞行时间
-        const distance = Cesium.Cartesian3.distance(sourcePos, targetPos);
-        const speed = effectConfig.speed || BattleConfig.animation.bulletSpeed || 500;
-        const flightDuration = (distance / speed) * 1000; // 毫秒
-        
-        // 延迟创建特效
-        setTimeout(() => {
-          // 根据类型创建不同特效
-          switch (effectConfig.type) {
-            case 'missile':
-              this._createMissileEffect(battleId, sourcePos, targetPos, flightDuration);
-              break;
-            case 'shell':
-              this._createShellEffect(battleId, sourcePos, targetPos, flightDuration);
-              break;
-            case 'plainBullet':
-              this._createBulletEffect(battleId, sourcePos, targetPos, flightDuration);
-              break;
-            default:
-              this._createBulletEffect(battleId, sourcePos, targetPos, flightDuration);
-              break;
-          }
-        }, effectConfig.delay || 0);
+    try {
+      // 1. 创建战斗配置
+      const battleInstances = this._createBattleEffectsConfig(battleId, attackerForces, defenderForces);
+      if (!battleInstances || battleInstances.length === 0) {
+        console.warn(`没有生成有效的战斗实例配置`);
+        return;
+      }
+
+      // 为每个兵种模型添加动画
+      for (const battleInstance of battleInstances) {
+        const forceInstance = battleInstance.originForce.forceInstance;
+        if (!forceInstance || !forceInstance.unitInstanceMap) continue;
+        forceInstance.unitInstanceMap.forEach(unitInstance => {
+          this.renderer.addAnimation(unitInstance, 'attack');
+        });
       }
       
-      // 确保战斗至少持续一段时间
-      setTimeout(() => {
-        const elapsedTime = Date.now() - battleStartTime;
-        if (elapsedTime < minDuration) {
-          // 如果战斗持续时间不足最小值，等待一段时间后再检查完成状态
-          setTimeout(() => {
-            this._checkBattleComplete(battleId);
-          }, minDuration - elapsedTime);
-        } else {
-          // 否则立即检查是否完成
-          this._checkBattleComplete(battleId);
+      // 2. 执行部队转向动画（等待完成）
+      console.log(`开始执行部队转向动画`);
+      await this._rotateForces(battleInstances, battleId);
+      console.log(`部队转向动画完成`);
+      
+      // 3. 执行子弹效果（不等待，异步进行）
+      console.log(`开始执行子弹效果`);
+      this._executeBulletEffects(battleInstances, battleId);
+      
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // 4. 等待所有子弹和爆炸特效完成
+      console.log(`等待所有子弹和爆炸特效完成`);
+      await this._waitForAllEffectsComplete(battleId);
+
+      showSuccess('战斗结束！正在打扫战场...');
+      OverviewConsole.success('战斗结束！正在打扫战场...');
+      
+      // 5. 执行被消灭部队的渐隐动画
+      await this._fadeOutAnimation(1500);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // 6. 执行部队回转动画（等待完成）
+      console.log(`开始执行部队回转动画`);
+      await this._rotateBackForces(battleId);
+      console.log(`部队回转动画完成`);
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // 为每个兵种模型移除动画
+      for (const battleInstance of battleInstances) {
+        const forceInstance = battleInstance.originForce.forceInstance;
+        if (!forceInstance || !forceInstance.unitInstanceMap) continue;
+        forceInstance.unitInstanceMap.forEach(unitInstance => {
+          this.renderer.removeAnimation(unitInstance);
+        });
+      }
+      
+      console.log(`战斗动画完成 - 战斗ID: ${battleId}`);
+    } catch (error) {
+      console.error(`战斗动画执行出错: ${error.message}`, error);
+    }
+  }
+
+  async _fadeOutAnimation(duration = 1000) {
+    // console.log('开始执行部队渐隐动画');
+    const allForces = this.store.getForces();
+    const fadePromises = [];
+    
+    // 遍历所有部队，找出兵力为0的部队
+    allForces.forEach(force => {
+      if (force.troopStrength <= 0) {
+        // 获取部队实例
+        const forceInstance = this.forceInstanceMap.get(force.forceId);
+        if (!forceInstance || !forceInstance.unitInstanceMap) {
+          console.warn(`找不到部队实例或其单位实例映射: ${force.forceId}`);
+          return;
         }
-      }, 100); // 短延迟确保所有特效都已创建
+        
+        // console.log(`为兵力为0的部队执行渐隐动画: ${force.forceId} - ${force.forceName}`);
+        
+        // 为该部队的每个兵种实例创建渐隐动画
+        forceInstance.unitInstanceMap.forEach((unitInstance, unitInstanceId) => {
+          if (!unitInstance.activeModel) {
+            console.warn(`兵种实例没有激活的模型: ${unitInstanceId}`);
+            return;
+          }
+          
+          // 添加到渐隐Promise数组
+          fadePromises.push(
+            this._fadeOut(unitInstance.activeModel, duration)
+              .catch(error => {
+                console.error(`兵种 ${unitInstanceId} 渐隐动画执行错误: ${error.message}`);
+              })
+          );
+        });
+      }
+    });
+    
+    // 等待所有渐隐动画完成
+    if (fadePromises.length > 0) {
+      // console.log(`共有 ${fadePromises.length} 个兵种模型需要执行渐隐动画`);
+      await Promise.all(fadePromises);
+      // console.log('所有部队渐隐动画已完成');
+    } else {
+      // console.log('没有找到需要执行渐隐动画的兵种模型');
+    }
+  }
+
+  async _fadeOut(model, duration = 1000) {
+    return new Promise(resolve => {
+      if (!model) {
+        console.warn('无法执行渐隐动画：模型不存在');
+        resolve();
+        return;
+      }
+      
+      // 如果模型已经隐藏，直接返回
+      if (!model.show) {
+        resolve();
+        return;
+      }
+      
+      let start = null;
+      // 记录初始颜色
+      let initialColor = model.color ? model.color.clone() : Cesium.Color.WHITE.clone();
+      let startAlpha = initialColor.alpha;
+    
+      function animate(timestamp) {
+        if (!start) start = timestamp;
+        const elapsed = timestamp - start;
+        let progress = Math.min(elapsed / duration, 1.0);
+        
+        // 使用指数缓动函数，创建更均匀的渐隐效果
+        // easeOutQuad函数: 在开始时变化更明显，结束时变化更平滑
+        let easedProgress = 1 - Math.pow(1 - progress, 2);
+        let newAlpha = startAlpha * (1.0 - easedProgress);
+        
+        try {
+          // 应用新的透明度
+          model.color = Cesium.Color.fromAlpha(initialColor, newAlpha);
+          
+          if (progress < 1.0) {
+            requestAnimationFrame(animate);
+          } else {
+            // 动画结束后彻底隐藏
+            model.show = false;
+            // console.log('模型渐隐动画完成');
+            resolve();
+          }
+        } catch (error) {
+          console.error('渐隐动画执行错误:', error.message);
+          resolve();
+        }
+      }
+      
+      // 开始动画
+      requestAnimationFrame(animate);
     });
   }
 
   /**
-   * 将地理位置转换为Cartesian3坐标
-   * @param {Object} position 地理位置对象 {longitude, latitude, height}
-   * @returns {Cesium.Cartesian3|null} Cartesian3坐标
-   * @private
+   * 执行模型转向动画
+   * @param {Object} unitInstance 兵种实例
+   * @param {Object} position 位置{longitude, latitude, height}
+   * @param {number} startHeading 起始朝向（弧度）
+   * @param {number} targetHeading 目标朝向（弧度）
+   * @param {number} duration 动画持续时间（毫秒）
+   * @returns {Promise<void>} 当转向完成时解析的Promise
    */
-  _getPositionCartesian3(position) {
-    if (!position || position.longitude === undefined || position.latitude === undefined) {
-      return null;
-    }
-    
-    return Cesium.Cartesian3.fromDegrees(
-      position.longitude,
-      position.latitude,
-      position.height || 0
-    );
+  _rotateModel(unitInstance, position, startHeading, targetHeading, duration = 300) {
+    return new Promise(resolve => {
+      if (!unitInstance || !unitInstance.activeModel) {
+        resolve();
+        return;
+      }
+
+      const startTime = Date.now();
+      let completed = false;
+      
+      // 创建动画更新函数
+      const updateRotation = () => {
+        if (completed) {
+          resolve();
+          return;
+        }
+        
+        const now = Date.now();
+        const elapsed = now - startTime;
+        const progress = Math.min(1.0, elapsed / duration);
+        
+        let currentHeading;
+        if (progress >= 1.0) {
+          currentHeading = targetHeading;
+          completed = true;
+        } else {
+          currentHeading = GeoMathUtils.lerpAngle(startHeading, targetHeading, progress);
+        }
+        
+        // 计算新的模型矩阵
+        const modelMatrix = this.poseCalculator.computeModelMatrix(
+          position,
+          currentHeading,
+          unitInstance.offset
+        );
+        
+        // 应用到活跃模型
+        Cesium.Matrix4.clone(modelMatrix, unitInstance.activeModel.modelMatrix);
+        
+        if (completed) {
+          resolve();
+          return;
+        }
+        
+        // 继续动画
+        requestAnimationFrame(updateRotation);
+      };
+      
+      // 启动动画
+      requestAnimationFrame(updateRotation);
+    });
   }
 
   /**
-   * 处理旧格式的特效配置（兼容性）
+   * 执行部队转向动画
+   * @param {Array} battleInstances 战斗实例数组
    * @param {string} battleId 战斗ID
-   * @param {Object} effect 旧格式的特效配置
+   * @returns {Promise<void>} 当所有转向完成时解析的Promise
    * @private
    */
-  _handleLegacyEffectConfig(battleId, effect) {
-    // 获取源六角格和目标六角格
-    const store = openGameStore();
-    const sourceHex = store.getHexCellById(effect.from);
-    const targetHex = store.getHexCellById(effect.to);
+  async _rotateForces(battleInstances, battleId) {
+    // 创建用于存储这个战斗的临时朝向数据
+    const battleHeadingsMap = new Map();
+    this.battleHeadings.set(battleId, battleHeadingsMap);
     
-    if (!sourceHex || !targetHex) {
-      console.warn('无法创建战斗特效：找不到源六角格或目标六角格', effect);
-      return;
+    const rotationPromises = [];
+    
+    // 为每个战斗实例执行转向
+    for (const battleInstance of battleInstances) {
+      const originForce = battleInstance.originForce;
+      const targetForce = battleInstance.targetForce;
+      
+      // 计算从原始部队到目标部队的朝向
+      const fromPos = originForce.forceInstance.pose.position;
+      const toPos = targetForce.forceInstance.pose.position;
+      
+      // 验证位置有效性
+      if (!fromPos || !toPos || 
+          !isFinite(fromPos.longitude) || !isFinite(fromPos.latitude) ||
+          !isFinite(toPos.longitude) || !isFinite(toPos.latitude)) {
+        console.warn('部队位置无效，无法计算朝向');
+        continue;
+      }
+      
+      // 计算目标朝向角度
+      const targetHeading = GeoMathUtils.calculateHeading(fromPos, toPos);
+      
+      // 获取部队的原始朝向和ID
+      const forceId = originForce.forceInstance.force.forceId;
+      const originalHeading = originForce.forceInstance.pose.heading || 0;
+      
+      // 保存战斗时的临时朝向，用于回转
+      battleHeadingsMap.set(forceId, targetHeading);
+      
+      // 对每个兵种执行转向动画
+      for (const [unitInstanceId, unitInstance] of originForce.forceInstance.unitInstanceMap.entries()) {
+        if (!unitInstance.activeModel) continue;
+        
+        // 计算单位当前位置
+        const unitPos = this.poseCalculator.computeUnitPosition({
+          forcePose: originForce.forceInstance.pose,
+          localOffset: unitInstance.localOffset,
+          hexId: originForce.forceInstance.force.hexId,
+          service: originForce.forceInstance.force.service
+        });
+        
+        if (!unitPos || !unitPos.position) {
+          console.warn(`计算兵种 ${unitInstanceId} 位置失败，跳过转向`);
+          continue;
+        }
+        
+        // 创建转向动画Promise
+        rotationPromises.push(
+          this._rotateModel(
+            unitInstance,
+            unitPos.position,
+            originalHeading,
+            targetHeading,
+          ).catch(error => {
+            console.error(`兵种 ${unitInstanceId} 转向动画执行错误: ${error.message}`);
+          })
+        );
+      }
     }
     
-    // 获取六角格中心位置
-    const sourceCenter = sourceHex.getCenter();
-    const targetCenter = targetHex.getCenter();
-    
-    // 创建源点和目标点
-    const sourcePosition = Cesium.Cartesian3.fromDegrees(
-      sourceCenter.longitude,
-      sourceCenter.latitude,
-      sourceCenter.height + 50 // 稍微抬高，避免穿透地面
-    );
-    
-    const targetPosition = Cesium.Cartesian3.fromDegrees(
-      targetCenter.longitude,
-      targetCenter.latitude,
-      targetCenter.height + 30 // 目标点略低于源点
-    );
-    
-    // 计算飞行时间
-    const distance = Cesium.Cartesian3.distance(sourcePosition, targetPosition);
-    const speed = effect.type === 'missile' ? 
-                BattleConfig.animation.missileSpeed : 
-                BattleConfig.animation.bulletSpeed;
-    const flightDuration = (distance / speed) * 1000; // 毫秒
-    
-    // 延迟创建特效
-    setTimeout(() => {
-      // 根据类型创建不同特效
-      if (effect.type === 'missile') {
-        this._createMissileEffect(battleId, sourcePosition, targetPosition, flightDuration);
-      } else {
-        this._createBulletEffect(battleId, sourcePosition, targetPosition, flightDuration);
+    // 等待所有转向完成
+    if (rotationPromises.length > 0) {
+      await Promise.all(rotationPromises);
+      // console.log(`战斗 ${battleId} 的所有部队转向已完成，共 ${rotationPromises.length} 个兵种`);
+    } else {
+      console.warn(`战斗 ${battleId} 没有需要转向的兵种`);
+    }
+  }
+
+  /**
+   * 执行部队回转动画（战斗结束后转回原始朝向）
+   * @param {string} battleId 战斗ID
+   * @returns {Promise<void>} 当所有回转完成时解析的Promise
+   * @private
+   */
+  async _rotateBackForces(battleId) {
+    // 检查是否存在临时朝向数据
+    if (!this.battleHeadings.has(battleId)) {
+      console.warn(`找不到战斗 ${battleId} 的临时朝向数据，跳过回转`);
+      return;
+    }
+
+    const battleHeadingsMap = this.battleHeadings.get(battleId);
+    const rotationPromises = [];
+
+    // console.log(`开始回转所有部队 - 临时朝向数据共有 ${battleHeadingsMap.size} 条记录`);
+
+    // 获取所有参与战斗的部队ID
+    const forceIds = Array.from(battleHeadingsMap.keys());
+
+    for (const forceId of forceIds) {
+      // 从forceInstanceMap获取部队实例
+      const forceInstance = this.forceInstanceMap.get(forceId);
+      if (!forceInstance) {
+        console.warn(`找不到部队实例 ${forceId}，跳过回转`);
+        continue;
       }
-    }, effect.delay || 0);
+
+      // 获取部队的当前临时朝向和原始朝向
+      const tempHeading = battleHeadingsMap.get(forceId);
+      const originalHeading = forceInstance.pose.heading || 0;
+
+      // console.log(`部队 ${forceId} 临时朝向: ${tempHeading.toFixed(2)}, 原始朝向: ${originalHeading.toFixed(2)}`);
+
+      // 对每个兵种执行回转动画
+      for (const [unitInstanceId, unitInstance] of forceInstance.unitInstanceMap.entries()) {
+        if (!unitInstance.activeModel) {
+          console.warn(`兵种 ${unitInstanceId} 没有激活的模型，跳过回转`);
+          continue;
+        }
+
+        // 计算单位当前位置
+        const unitPos = this.poseCalculator.computeUnitPosition({
+          forcePose: forceInstance.pose,
+          localOffset: unitInstance.localOffset,
+          hexId: forceInstance.force.hexId,
+          service: forceInstance.force.service
+        });
+
+        if (!unitPos || !unitPos.position) {
+          console.warn(`计算兵种 ${unitInstanceId} 位置失败，跳过回转`);
+          continue;
+        }
+
+        // 确保回转角度与临时朝向有明显差别
+        let actualTempHeading = tempHeading;
+        if (Math.abs(tempHeading - originalHeading) < 0.01) {
+          console.warn(`兵种 ${unitInstanceId} 临时朝向与原始朝向几乎相同，设置一个明显的差异`);
+          // 如果几乎没有差异，强制设置一个差异以确保动画效果
+          actualTempHeading = tempHeading + 0.1;
+        }
+        
+        // 创建回转动画Promise
+        rotationPromises.push(
+          this._rotateModel(
+            unitInstance,
+            unitPos.position,
+            actualTempHeading,
+            originalHeading,
+          ).catch(error => {
+            console.error(`兵种 ${unitInstanceId} 回转动画执行错误: ${error.message}`);
+          })
+        );
+      }
+    }
+
+    // 确保我们有回转动画要执行
+    if (rotationPromises.length === 0) {
+      console.warn(`战斗 ${battleId} 没有发现需要回转的兵种模型`);
+      // 清理这个战斗的临时朝向数据
+      this.battleHeadings.delete(battleId);
+      return;
+    }
+
+    // console.log(`战斗 ${battleId} 共有 ${rotationPromises.length} 个兵种模型需要回转`);
+
+    // 等待所有回转完成
+    await Promise.all(rotationPromises);
+    // console.log(`战斗 ${battleId} 的所有部队回转已完成`);
+
+    // 清理这个战斗的临时朝向数据
+    this.battleHeadings.delete(battleId);
+  }
+
+  /**
+   * 执行子弹效果
+   * @param {Array} battleInstances 战斗实例数组
+   * @param {string} battleId 战斗ID
+   * @private
+   */
+  _executeBulletEffects(battleInstances, battleId) {
+    // 创建发射计划，按照发射延迟排序
+    const firePlans = [];
+    
+    battleInstances.forEach(battleInstance => {
+      const originForce = battleInstance.originForce;
+      
+      originForce.bulletEffectMap.forEach(bulletEffect => {
+        // 为每次开火创建子弹效果
+        for (let i = 0; i < bulletEffect.fireCount; i++) {
+          // 计算开火延迟
+          const fireDelay = bulletEffect.delay * i;
+          
+          // 添加到发射计划
+          firePlans.push({
+            delay: fireDelay,
+            bulletEffect: bulletEffect,
+            battleId: battleId
+          });
+        }
+      });
+    });
+    
+    // 排序发射计划（按延迟时间从小到大）
+    firePlans.sort((a, b) => a.delay - b.delay);
+    
+    // 执行发射计划
+    firePlans.forEach(plan => {
+      setTimeout(() => {
+        this._fireBullet(plan.battleId, plan.bulletEffect);
+      }, plan.delay);
+    });
+    
+    console.log(`已安排 ${firePlans.length} 个子弹发射计划`);
+  }
+
+  /**
+   * 发射子弹
+   * @param {string} battleId 战斗ID
+   * @param {Object} bulletEffect 子弹效果配置
+   */
+  _fireBullet(battleId, bulletEffect) {
+    try {
+      const bulletId = `bullet_${++this.effectCounter}`;
+      const startTime = Date.now();
+      const flightDurationMs = bulletEffect.flightDuration || 2000; // 使用计算好的飞行时间，如果没有默认为2000毫秒
+      const endTime = startTime + flightDurationMs;
+      
+      // 验证坐标
+      if (!bulletEffect.startPosition || !bulletEffect.endPosition ||
+          !isFinite(bulletEffect.startPosition.longitude) || 
+          !isFinite(bulletEffect.startPosition.latitude) ||
+          !isFinite(bulletEffect.startPosition.height) ||
+          !isFinite(bulletEffect.endPosition.longitude) || 
+          !isFinite(bulletEffect.endPosition.latitude) ||
+          !isFinite(bulletEffect.endPosition.height)) {
+        console.warn(`子弹坐标无效，无法发射: ${bulletEffect.unitInstanceId}`);
+        return;
+      }
+      
+      // 从配置中获取子弹类型和路径
+      const bulletConfig = MilitaryConfig.bullets[bulletEffect.bulletType];
+      const bulletPath = bulletEffect.path || bulletConfig?.path;
+      
+      if (!bulletPath) {
+        console.warn(`子弹没有有效的贴图路径: ${bulletEffect.bulletType}`);
+        return;
+      }
+      
+      // 创建子弹实体的位置采样属性
+      const positionProperty = new Cesium.SampledPositionProperty();
+      
+      // 开始位置和结束位置
+      const startPosition = Cesium.Cartesian3.fromDegrees(
+        bulletEffect.startPosition.longitude,
+        bulletEffect.startPosition.latitude,
+        bulletEffect.startPosition.height || 0
+      );
+      
+      const endPosition = Cesium.Cartesian3.fromDegrees(
+        bulletEffect.endPosition.longitude,
+        bulletEffect.endPosition.latitude,
+        bulletEffect.endPosition.height || 0
+      );
+      
+      // 设置简单的直线轨迹，不再使用中点
+      positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(startTime)), startPosition);
+      positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(endTime)), endPosition);
+      
+      // 计算从起点到终点的方向向量
+      const direction = new Cesium.Cartesian3();
+      Cesium.Cartesian3.subtract(endPosition, startPosition, direction);
+      Cesium.Cartesian3.normalize(direction, direction);
+      
+      // 从配置中获取缩放比例
+      const scale = bulletConfig?.scale || 0.5;
+      
+      // 创建固定朝向的HeadingPitchRoll（基于从起点到终点的方向）
+      const orientation = new Cesium.VelocityOrientationProperty(positionProperty);
+      
+      // 使用model实体渲染子弹
+      const entity = this.viewer.entities.add({
+        position: positionProperty,
+        orientation: orientation,
+        model: {
+          uri: bulletPath,
+          scale: scale,
+          minimumPixelSize: 16,
+          maximumScale: 20000,
+          runAnimations: false,
+          allowPicking: false, 
+          imageBasedLightingFactor: new Cesium.Cartesian2(1.0, 1.0),
+          color: Cesium.Color.WHITE.withAlpha(1.0),
+          lightColor: new Cesium.Color(1.0, 1.0, 1.0, 1.0),
+          shadow: Cesium.ShadowMode.ENABLED,
+          nodeTransformations: {
+            // 调整初始朝向
+            root: {
+              rotation: Cesium.Quaternion.fromHeadingPitchRoll(
+                new Cesium.HeadingPitchRoll(0, Math.PI/2, 0)
+              )
+            }
+          },
+          // 确保模型头部向上
+          up: new Cesium.Cartesian3(0, 0, 1),
+          right: new Cesium.Cartesian3(0, -1, 0),
+          forward: new Cesium.Cartesian3(1, 0, 0)
+        }
+      });
+      
+      // 为导弹添加轨迹效果
+      if (bulletEffect.bulletType === 'missile') {
+        entity.path = {
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.3,
+            color: Cesium.Color.RED
+          }),
+          width: 3,
+          leadTime: 0
+        };
+      }
+      
+      // 从配置中获取粒子效果参数
+      const particleConfig = bulletConfig?.particle;
+      
+      // 记录子弹信息
+      this.activeBullets.set(bulletId, {
+        type: bulletEffect.bulletType,
+        entity: entity,
+        startTime: startTime,
+        endTime: endTime,
+        completed: false,
+        battleId: battleId,
+        targetPosition: endPosition,
+        bulletType: bulletEffect.bulletType,
+        explosionType: particleConfig.explosionType,
+        explosionSize: particleConfig.explosionSize,
+        explosionDuration: particleConfig.explosionDuration,
+        particleImage: particleConfig.particleImage,
+        particleScale: particleConfig.particleScale
+      });
+      
+      // console.log(`发射子弹成功 - ID: ${bulletId}, 类型: ${bulletEffect.bulletType}, 飞行时间: ${flightDurationMs.toFixed(2)}ms`);
+    } catch (error) {
+      console.error(`发射子弹时出错: ${error.message}`, error);
+    }
+  }
+
+  /**
+   * 创建爆炸特效
+   * @param {Cesium.Cartesian3} position 爆炸位置
+   * @param {string} battleId 战斗ID
+   * @param {string} bulletType 子弹类型
+   * @private
+   */
+  _createExplosion(position, battleId, bulletType) {
+    try {
+      if (!position || !battleId || !bulletType) {
+        console.warn('创建爆炸特效时参数无效');
+        return;
+      }
+
+      const explosionId = `explosion_${++this.effectCounter}`;
+      const startTime = Date.now();
+      
+      // 获取子弹配置
+      const bulletConfig = MilitaryConfig.bullets[bulletType];
+      const particleConfig = bulletConfig?.particle;
+      
+      // 获取子弹特效参数
+      let explosionDuration = 1000;
+      let particleImage = '/assets/maps/explosion.png';
+      let explosionSize = 10;
+      let particleScale = 0.5; // 默认粒子缩放
+      
+      // 如果有粒子配置，优先使用配置的参数
+      if (particleConfig) {
+        explosionDuration = particleConfig.explosionDuration;
+        particleImage = particleConfig.particleImage;
+        explosionSize = particleConfig.explosionSize;
+        particleScale = particleConfig.particleScale || 0.5;
+      } else {
+        // 查找对应的子弹实例，获取其配置
+        const bullet = Array.from(this.activeBullets.values()).find(b => 
+          b.battleId === battleId && b.bulletType === bulletType
+        );
+        
+        if (bullet) {
+          explosionDuration = bullet.explosionDuration || explosionDuration;
+          particleImage = bullet.particleImage || particleImage;
+          explosionSize = bullet.explosionSize || explosionSize;
+          particleScale = bullet.particleScale || particleScale;
+        }
+      }
+      
+      const endTime = startTime + explosionDuration;
+      
+      // 创建爆炸实体
+      const entity = this.viewer.entities.add({
+        position: position,
+        billboard: {
+          image: particleImage,
+          scale: particleScale, // 使用配置的缩放比例
+          scaleByDistance: new Cesium.NearFarScalar(1.0e2, particleScale * 2.0, 1.0e4, particleScale * 0.5)
+        }
+      });
+      
+      // 添加简单的爆炸动画(缩放)
+      this._animateExplosion(entity, explosionDuration, explosionSize * particleScale);
+      
+      // 记录爆炸信息
+      this.explosions.set(explosionId, {
+        entity: entity,
+        startTime: startTime,
+        endTime: endTime,
+        completed: false,
+        battleId: battleId
+      });
+      
+      // console.log(`创建爆炸特效成功 - ID: ${explosionId}, 类型: ${bulletType}, 持续时间: ${explosionDuration}ms, 缩放: ${particleScale}`);
+    } catch (error) {
+      console.error(`创建爆炸特效时出错: ${error.message}`, error);
+    }
+  }
+  
+  /**
+   * 为爆炸实体添加动画
+   * @param {Cesium.Entity} entity 爆炸实体
+   * @param {number} duration 持续时间(毫秒)
+   * @param {number} maxSize 最大尺寸
+   * @private
+   */
+  _animateExplosion(entity, duration, maxSize) {
+    const startTime = Date.now();
+    const endTime = startTime + duration;
+    
+    // 基础缩放值
+    const baseScale = 0.1; // 开始时的基础缩放比例
+    
+    // 创建爆炸动画回调
+    const explosionCallback = () => {
+      const now = Date.now();
+      if (now > endTime || !entity) {
+        return;
+      }
+      
+      // 计算动画进度(0到1)
+      const progress = (now - startTime) / duration;
+      
+      // 根据进度更新爆炸效果
+      // 先放大后缩小的效果
+      let scale;
+      if (progress < 0.3) {
+        // 放大阶段 - 从基础缩放值逐渐放大到指定最大值
+        scale = baseScale + progress * (maxSize - baseScale) / 0.3;
+      } else if (progress < 0.7) {
+        // 保持阶段 - 维持最大尺寸一段时间
+        scale = maxSize;
+      } else {
+        // 缩小阶段 - 从最大值逐渐缩小到基础缩放值
+        const fadeProgress = (progress - 0.7) / 0.3; // 0到1的缩小进度
+        scale = maxSize - fadeProgress * (maxSize - baseScale);
+      }
+      
+      // 透明度从1逐渐变为0
+      const alpha = Math.max(0, 1 - progress * 1.2); // 略微加快透明度衰减
+      
+      // 更新爆炸效果的缩放和透明度
+      if (entity.billboard) {
+        entity.billboard.scale = scale;
+        entity.billboard.color = Cesium.Color.WHITE.withAlpha(alpha);
+      }
+      
+      // 继续下一帧动画
+      requestAnimationFrame(explosionCallback);
+    };
+    
+    // 启动爆炸动画
+    requestAnimationFrame(explosionCallback);
   }
 
   /**
    * 检查特定战斗的所有特效是否已完成
    * @param {string} battleId 战斗ID
+   * @returns {boolean} 是否所有特效都已完成
    * @private
    */
   _checkBattleComplete(battleId) {
     // 检查是否所有相关特效都已完成
     let allCompleted = true;
     
-    // 检查子弹/导弹/炮弹特效
-    this.activeEffects.forEach(effect => {
-      if (effect.battleId === battleId && !effect.completed) {
+    // 检查子弹特效
+    this.activeBullets.forEach(bullet => {
+      if (bullet.battleId === battleId && !bullet.completed) {
         allCompleted = false;
       }
     });
@@ -331,544 +1302,56 @@ export class BattleEffectsRenderer {
       }
     });
     
-    // 如果所有特效都已完成，触发回调
-    if (allCompleted && this._battleCompleteCallbacks.has(battleId)) {
-      const callback = this._battleCompleteCallbacks.get(battleId);
-      this._battleCompleteCallbacks.delete(battleId);
-      callback();
-    }
-  }
-
-  /**
-   * 创建子弹特效
-   * @param {string} battleId 战斗ID
-   * @param {Cesium.Cartesian3} sourcePosition 源位置
-   * @param {Cesium.Cartesian3} targetPosition 目标位置
-   * @param {number} duration 持续时间(毫秒)
-   * @private
-   */
-  _createBulletEffect(battleId, sourcePosition, targetPosition, duration) {
-    const effectId = `bullet_${++this.effectCounter}`;
-    const startTime = Date.now();
-    const endTime = startTime + duration;
-    
-    // 创建子弹实体
-    const entity = this.viewer.entities.add({
-      position: new Cesium.SampledPositionProperty(),
-      point: {
-        pixelSize: 4,
-        color: Cesium.Color.YELLOW,
-        outlineColor: Cesium.Color.WHITE,
-        outlineWidth: 1
-      }
-    });
-    
-    // 设置子弹轨迹
-    const positionProperty = entity.position;
-    positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(startTime)), sourcePosition);
-    positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(endTime)), targetPosition);
-    
-    // 记录特效信息
-    this.activeEffects.set(effectId, {
-      type: 'bullet',
-      entity: entity,
-      startTime: startTime,
-      endTime: endTime,
-      completed: false,
-      battleId: battleId,
-      targetPosition: targetPosition
-    });
-  }
-
-  /**
-   * 创建导弹特效
-   * @param {string} battleId 战斗ID
-   * @param {Cesium.Cartesian3} sourcePosition 源位置
-   * @param {Cesium.Cartesian3} targetPosition 目标位置
-   * @param {number} duration 持续时间(毫秒)
-   * @private
-   */
-  _createMissileEffect(battleId, sourcePosition, targetPosition, duration) {
-    const effectId = `missile_${++this.effectCounter}`;
-    const startTime = Date.now();
-    const endTime = startTime + duration;
-    
-    // 计算中间点，使导弹飞行轨迹呈抛物线
-    const midPoint = new Cesium.Cartesian3();
-    Cesium.Cartesian3.lerp(sourcePosition, targetPosition, 0.5, midPoint);
-    
-    // 抬高中间点
-    const normal = Cesium.Cartesian3.normalize(midPoint, new Cesium.Cartesian3());
-    Cesium.Cartesian3.multiplyByScalar(normal, 500, normal); // 500米的高度偏移
-    Cesium.Cartesian3.add(midPoint, normal, midPoint);
-    
-    // 获取导弹模型配置
-    const missileModelConfig = MilitaryConfig.bullets && MilitaryConfig.bullets.missile;
-    let entity;
-    
-    // 如果有模型配置，使用3D模型；否则使用简单实体
-    if (missileModelConfig && missileModelConfig.path) {
-      // 创建模型实体
-      entity = this.viewer.entities.add({
-        position: new Cesium.SampledPositionProperty(),
-        orientation: new Cesium.VelocityOrientedProperty(new Cesium.SampledPositionProperty()),
-        model: {
-          uri: missileModelConfig.path,
-          scale: missileModelConfig.transform.scale || 1.0,
-          minimumPixelSize: 16,
-          maximumScale: 100
-        },
-        path: {
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.3,
-            color: Cesium.Color.RED
-          }),
-          width: 8,
-          leadTime: 0
-        }
-      });
-    } else {
-      // 创建简单实体作为备选
-      entity = this.viewer.entities.add({
-        position: new Cesium.SampledPositionProperty(),
-        path: {
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.3,
-            color: Cesium.Color.RED
-          }),
-          width: 8,
-          leadTime: 0
-        },
-        point: {
-          pixelSize: 8,
-          color: Cesium.Color.RED,
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 2
-        }
-      });
-    }
-    
-    // 设置导弹轨迹
-    const positionProperty = entity.position;
-    positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(startTime)), sourcePosition);
-    positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(startTime + duration / 2)), midPoint);
-    positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(endTime)), targetPosition);
-    
-    // 记录特效信息
-    this.activeEffects.set(effectId, {
-      type: 'missile',
-      entity: entity,
-      startTime: startTime,
-      endTime: endTime,
-      completed: false,
-      battleId: battleId,
-      targetPosition: targetPosition
-    });
-  }
-
-  /**
-   * 创建炮弹特效
-   * @param {string} battleId 战斗ID
-   * @param {Cesium.Cartesian3} sourcePosition 源位置
-   * @param {Cesium.Cartesian3} targetPosition 目标位置
-   * @param {number} duration 持续时间(毫秒)
-   * @private
-   */
-  _createShellEffect(battleId, sourcePosition, targetPosition, duration) {
-    const effectId = `shell_${++this.effectCounter}`;
-    const startTime = Date.now();
-    const endTime = startTime + duration;
-    
-    // 计算中间点，使炮弹飞行轨迹呈高抛物线
-    const midPoint = new Cesium.Cartesian3();
-    Cesium.Cartesian3.lerp(sourcePosition, targetPosition, 0.5, midPoint);
-    
-    // 抬高中间点，炮弹轨迹比导弹更高
-    const normal = Cesium.Cartesian3.normalize(midPoint, new Cesium.Cartesian3());
-    Cesium.Cartesian3.multiplyByScalar(normal, 800, normal); // 800米的高度偏移，比导弹更高
-    Cesium.Cartesian3.add(midPoint, normal, midPoint);
-    
-    // 获取炮弹模型配置
-    const shellModelConfig = MilitaryConfig.bullets && MilitaryConfig.bullets.shell;
-    let entity;
-    
-    // 如果有模型配置，使用3D模型；否则使用简单实体
-    if (shellModelConfig && shellModelConfig.path) {
-      // 创建模型实体
-      entity = this.viewer.entities.add({
-        position: new Cesium.SampledPositionProperty(),
-        orientation: new Cesium.VelocityOrientedProperty(new Cesium.SampledPositionProperty()),
-        model: {
-          uri: shellModelConfig.path,
-          scale: shellModelConfig.transform.scale || 1.0,
-          minimumPixelSize: 12,
-          maximumScale: 100
-        },
-        path: {
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.2,
-            color: Cesium.Color.ORANGERED
-          }),
-          width: 5,
-          leadTime: 0
-        }
-      });
-    } else {
-      // 创建简单实体作为备选
-      entity = this.viewer.entities.add({
-        position: new Cesium.SampledPositionProperty(),
-        path: {
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.2,
-            color: Cesium.Color.ORANGERED
-          }),
-          width: 5,
-          leadTime: 0
-        },
-        point: {
-          pixelSize: 6,
-          color: Cesium.Color.ORANGERED,
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 1
-        }
-      });
-    }
-    
-    // 设置炮弹轨迹
-    const positionProperty = entity.position;
-    positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(startTime)), sourcePosition);
-    positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(startTime + duration / 2)), midPoint);
-    positionProperty.addSample(Cesium.JulianDate.fromDate(new Date(endTime)), targetPosition);
-    
-    // 记录特效信息
-    this.activeEffects.set(effectId, {
-      type: 'shell',
-      entity: entity,
-      startTime: startTime,
-      endTime: endTime,
-      completed: false,
-      battleId: battleId,
-      targetPosition: targetPosition
-    });
-  }
-
-  /**
-   * 创建爆炸特效
-   * @param {Cesium.Cartesian3} position 爆炸位置
-   * @param {string} [type='bullet'] 爆炸类型：'bullet', 'shell', 'missile'
-   * @param {string} [battleId] 战斗ID
-   * @private
-   */
-  _createExplosion(position, type = 'bullet', battleId) {
-    const explosionId = `explosion_${++this.effectCounter}`;
-    const startTime = Date.now();
-    const duration = this._getExplosionDuration(type);
-    const endTime = startTime + duration;
-    
-    // 根据爆炸类型设置不同的特效
-    let scale, color, particleCount, particleSize, maxParticleLife;
-    switch (type) {
-      case 'missile':
-        scale = 2.0;
-        color = Cesium.Color.ORANGERED;
-        particleCount = 150;
-        particleSize = 25;
-        maxParticleLife = 2.0;
-        break;
-      case 'shell':
-        scale = 1.5;
-        color = Cesium.Color.ORANGE;
-        particleCount = 80;
-        particleSize = 20;
-        maxParticleLife = 1.5;
-        break;
-      case 'bullet':
-      case 'plainBullet':
-      default:
-        scale = 1.0;
-        color = Cesium.Color.YELLOW;
-        particleCount = 30;
-        particleSize = 15;
-        maxParticleLife = 1.0;
-        break;
-    }
-    
-    // 创建爆炸实体
-    const entity = this.viewer.entities.add({
-      position: position,
-      billboard: {
-        image: this._getExplosionImage(type),
-        scale: scale,
-        scaleByDistance: new Cesium.NearFarScalar(1.0e2, 2.0, 1.0e4, 0.5)
-      }
-    });
-    
-    // 添加爆炸动画
-    this._animateExplosion(entity, duration, {
-      type: type,
-      scale: scale,
-      color: color,
-      particleCount: particleCount
-    });
-    
-    // 记录爆炸信息
-    this.explosions.set(explosionId, {
-      entity: entity,
-      startTime: startTime,
-      endTime: endTime,
-      completed: false,
-      battleId: battleId,
-      type: type
-    });
-    
-    // 添加粒子效果，根据爆炸类型调整粒子系统
-    this._addExplosionParticles(position, {
-      type: type,
-      particleCount: particleCount,
-      particleSize: particleSize,
-      color: color,
-      duration: duration,
-      maxLife: maxParticleLife
-    });
+    return allCompleted;
   }
   
   /**
-   * 获取爆炸持续时间
-   * @param {string} type 爆炸类型
-   * @returns {number} 持续时间(毫秒)
+   * 等待特定战斗的所有特效完成
+   * @param {string} battleId 战斗ID
+   * @returns {Promise<void>} 当所有特效完成时解析的Promise
    * @private
    */
-  _getExplosionDuration(type) {
-    switch (type) {
-      case 'missile':
-        return BattleConfig.animation.missileExplosionDuration || 1500;
-      case 'shell':
-        return BattleConfig.animation.shellExplosionDuration || 1000;
-      case 'bullet':
-      default:
-        return BattleConfig.animation.explosionDuration || 500;
-    }
-  }
-  
-  /**
-   * 获取爆炸图片
-   * @param {string} type 爆炸类型
-   * @returns {string} 图片路径
-   * @private
-   */
-  _getExplosionImage(type) {
-    const baseUrl = '/assets/icons/';
-    switch (type) {
-      case 'missile':
-        return `${baseUrl}attack.png`;
-      case 'shell':
-        return `${baseUrl}march.png`;
-      case 'bullet':
-      case 'plainBullet':
-      default:
-        return `${baseUrl}confirm.png`;
-    }
-  }
-  
-  /**
-   * 添加爆炸粒子效果
-   * @param {Cesium.Cartesian3} position 爆炸位置
-   * @param {Object} options 粒子选项
-   * @private
-   */
-  _addExplosionParticles(position, options) {
-    // 如果浏览器不支持或者禁用了WebGL 2，则简化粒子效果
-    const useSimplifiedEffect = !this.viewer.scene.context.webgl2;
-    
-    if (useSimplifiedEffect) {
-      // 简化版粒子系统 - 仅使用少量粒子
-      const particleSystem = new Cesium.ParticleSystem({
-        image: '/assets/icons/add.png', // 使用现有的图标替代
-        startColor: options.color.withAlpha(0.8),
-        endColor: options.color.withAlpha(0),
-        startScale: options.type === 'missile' ? 1.5 : 1.0,
-        endScale: 0.5,
-        minimumParticleLife: 0.3,
-        maximumParticleLife: options.maxLife || 1.5,
-        minimumSpeed: 1.0,
-        maximumSpeed: 3.0,
-        imageSize: new Cesium.Cartesian2(15, 15),
-        emissionRate: Math.min(options.particleCount / 2, 30),  // 减少粒子数量
-        lifetime: options.duration / 1000,
-        emitter: new Cesium.CircleEmitter(options.type === 'missile' ? 10 : 5),
-        modelMatrix: Cesium.Matrix4.fromTranslation(position),
-        emitterModelMatrix: Cesium.Matrix4.IDENTITY
+  async _waitForAllEffectsComplete(battleId) {
+    // 检查是否有与该战斗相关的特效
+    const hasBattleEffects = () => {
+      let hasEffects = false;
+      
+      // 检查子弹特效
+      this.activeBullets.forEach(bullet => {
+        if (bullet.battleId === battleId && !bullet.completed) {
+          hasEffects = true;
+        }
       });
       
-      this.viewer.scene.primitives.add(particleSystem);
-      
-      setTimeout(() => {
-        if (!this.viewer.isDestroyed() && !particleSystem.isDestroyed()) {
-          this.viewer.scene.primitives.remove(particleSystem);
+      // 检查爆炸特效
+      this.explosions.forEach(explosion => {
+        if (explosion.battleId === battleId && !explosion.completed) {
+          hasEffects = true;
         }
-      }, options.duration + 200);
+      });
       
+      return hasEffects;
+    };
+    
+    // 如果没有特效，直接返回
+    if (!hasBattleEffects()) {
       return;
     }
     
-    // 完整版粒子效果 - 主爆炸粒子系统
-    const mainParticleSystem = new Cesium.ParticleSystem({
-      image: '/assets/icons/attack.png', // 使用现有的图标替代
-      startColor: options.color.withAlpha(0.9),
-      endColor: options.color.withAlpha(0),
-      startScale: options.type === 'missile' ? 2.0 : 1.5,
-      endScale: 0.5,
-      minimumParticleLife: 0.3,
-      maximumParticleLife: options.maxLife || 1.5,
-      minimumSpeed: 2.0,
-      maximumSpeed: 6.0,
-      imageSize: new Cesium.Cartesian2(options.particleSize || 20, options.particleSize || 20),
-      emissionRate: options.particleCount,
-      lifetime: options.duration / 2000, // 主爆炸持续时间较短
-      emitter: new Cesium.CircleEmitter(options.type === 'missile' ? 15 : 10),
-      modelMatrix: Cesium.Matrix4.fromTranslation(position),
-      emitterModelMatrix: Cesium.Matrix4.IDENTITY
+    // 等待所有特效完成
+    return new Promise(resolve => {
+      const checkInterval = 500; // 毫秒
+      const checkComplete = () => {
+        if (!hasBattleEffects()) {
+          resolve();
+        } else {
+          setTimeout(checkComplete, checkInterval);
+        }
+      };
+      
+      // 开始检查
+      setTimeout(checkComplete, checkInterval);
     });
-    
-    // 烟雾粒子系统 - 在主爆炸之后持续更长时间
-    const smokeParticleSystem = new Cesium.ParticleSystem({
-      image: '/assets/icons/dragger.png', // 使用现有的图标替代
-      startColor: Cesium.Color.DARKGRAY.withAlpha(0.7),
-      endColor: Cesium.Color.WHITE.withAlpha(0),
-      startScale: options.type === 'missile' ? 1.5 : 1.0,
-      endScale: 2.0, // 烟雾会扩散
-      minimumParticleLife: 1.0,
-      maximumParticleLife: options.maxLife * 1.5,
-      minimumSpeed: 1.0,
-      maximumSpeed: 3.0,
-      imageSize: new Cesium.Cartesian2(options.particleSize * 1.2, options.particleSize * 1.2),
-      emissionRate: options.particleCount / 2,
-      lifetime: options.duration / 1000,
-      emitter: new Cesium.CircleEmitter(options.type === 'missile' ? 20 : 15),
-      modelMatrix: Cesium.Matrix4.fromTranslation(position),
-      emitterModelMatrix: Cesium.Matrix4.IDENTITY
-    });
-    
-    // 如果是导弹爆炸，添加额外的碎片粒子
-    let debrisParticleSystem = null;
-    if (options.type === 'missile') {
-      debrisParticleSystem = new Cesium.ParticleSystem({
-        image: '/assets/icons/multiSelect.png', // 使用现有的图标替代
-        startColor: Cesium.Color.YELLOW.withAlpha(0.9),
-        endColor: Cesium.Color.ORANGERED.withAlpha(0),
-        startScale: 0.8,
-        endScale: 0.1,
-        minimumParticleLife: 0.6,
-        maximumParticleLife: 1.2,
-        minimumSpeed: 8.0,
-        maximumSpeed: 15.0,
-        imageSize: new Cesium.Cartesian2(5, 5),
-        emissionRate: 100,
-        lifetime: 0.3, // 短暂的碎片喷射
-        emitter: new Cesium.ConeEmitter(Cesium.Math.toRadians(45)),
-        modelMatrix: Cesium.Matrix4.fromTranslation(position),
-        emitterModelMatrix: Cesium.Matrix4.IDENTITY
-      });
-    }
-    
-    // 添加到场景
-    this.viewer.scene.primitives.add(mainParticleSystem);
-    this.viewer.scene.primitives.add(smokeParticleSystem);
-    if (debrisParticleSystem) {
-      this.viewer.scene.primitives.add(debrisParticleSystem);
-    }
-    
-    // 设置定时器以移除粒子系统
-    setTimeout(() => {
-      if (!this.viewer.isDestroyed() && !mainParticleSystem.isDestroyed()) {
-        this.viewer.scene.primitives.remove(mainParticleSystem);
-      }
-    }, options.duration / 2 + 200);
-    
-    setTimeout(() => {
-      if (!this.viewer.isDestroyed() && !smokeParticleSystem.isDestroyed()) {
-        this.viewer.scene.primitives.remove(smokeParticleSystem);
-      }
-    }, options.duration + 500);
-    
-    if (debrisParticleSystem) {
-      setTimeout(() => {
-        if (!this.viewer.isDestroyed() && !debrisParticleSystem.isDestroyed()) {
-          this.viewer.scene.primitives.remove(debrisParticleSystem);
-        }
-      }, 1000); // 碎片效果只持续短时间
-    }
-  }
-  
-  /**
-   * 为爆炸实体添加动画
-   * @param {Cesium.Entity} entity 爆炸实体
-   * @param {number} duration 持续时间(毫秒)
-   * @param {Object} options 动画选项
-   * @private
-   */
-  _animateExplosion(entity, duration, options) {
-    const startTime = Date.now();
-    const endTime = startTime + duration;
-    
-    // 创建爆炸动画回调
-    const explosionCallback = () => {
-      const now = Date.now();
-      // 检查实体是否已被移除或销毁
-      if (now > endTime || !entity || entity._isDestroyed || !this.viewer.entities.contains(entity)) {
-        return;
-      }
-      
-      // 计算动画进度(0到1)
-      const progress = (now - startTime) / duration;
-      
-      // 根据进度更新爆炸效果
-      // 根据爆炸类型调整动画效果
-      let scale;
-      if (options.type === 'missile') {
-        // 导弹爆炸 - 快速放大后缓慢缩小
-        if (progress < 0.2) {
-          // 放大阶段
-          scale = options.scale * (0.5 + progress * 5); // 从0.5倍快速放大到最大2.0倍
-        } else {
-          // 缩小阶段
-          scale = options.scale * (2.0 - (progress - 0.2) * 2); // 从2.0倍逐渐缩小到0
-        }
-      } else if (options.type === 'shell') {
-        // 炮弹爆炸 - 中等速度放大后缩小
-        if (progress < 0.3) {
-          // 放大阶段
-          scale = options.scale * (0.5 + progress * 3); // 从0.5倍放大到最大1.5倍
-        } else {
-          // 缩小阶段
-          scale = options.scale * (1.5 - (progress - 0.3) * 2); // 从1.5倍逐渐缩小到0
-        }
-      } else {
-        // 普通子弹爆炸 - 默认动画
-        if (progress < 0.3) {
-          // 放大阶段
-          scale = options.scale * (0.5 + progress * 2.5); // 从0.5倍逐渐放大到最大1.25倍
-        } else {
-          // 缩小阶段
-          scale = options.scale * (1.25 - (progress - 0.3) * 1.8); // 从1.25倍逐渐缩小到0
-        }
-      }
-      
-      // 透明度从1逐渐变为0
-      const alpha = Math.max(0, 1 - progress);
-      
-      // 更新爆炸效果的缩放和透明度
-      if (entity.billboard) {
-        entity.billboard.scale = scale;
-        entity.billboard.color = options.color.withAlpha(alpha);
-      }
-      
-      // 继续下一帧动画
-      requestAnimationFrame(explosionCallback);
-    };
-    
-    // 启动爆炸动画
-    requestAnimationFrame(explosionCallback);
   }
   
   /**
@@ -878,5 +1361,20 @@ export class BattleEffectsRenderer {
     this.clearAllEffects();
     this.stopEffectsUpdateLoop();
     BattleEffectsRenderer.#instance = null;
+  }
+
+  /**
+   * 渲染战斗特效（外部入口）
+   * @param {string} battleId 战斗ID
+   * @param {Array} attackerForces 攻击方部队ID数组
+   * @param {Array} defenderForces 防守方部队ID数组
+   * @returns {Promise<void>} 当所有动画完成时解析的Promise
+   */
+  async renderBattle(battleId, attackerForces, defenderForces) {
+    try {
+      return await this.createBattleEffects(battleId, attackerForces, defenderForces);
+    } catch (error) {
+      console.error(`渲染战斗特效时出错: ${error.message}`, error);
+    }
   }
 } 

@@ -6,7 +6,7 @@
 -->
 <template>
   <teleport to="body">
-    <div class="detail-info-panel" :class="{ 'disabled': isPanelDisabled }">
+    <div class="detail-info-panel" v-if="store.gameMode !== GameMode.PANORAMA" :class="{ 'disabled': isPanelDisabled }">
       <!-- 左侧：六角格详细信息 -->
       <div class="hex-info-section">
         <div class="section-header">

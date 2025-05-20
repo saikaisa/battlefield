@@ -112,9 +112,6 @@ export class HexGridRenderer {
         this.renderInteractGrid(true);
       }
     );
-
-    // 设置地形采样精度
-    this.viewer.scene.globe.maximumScreenSpaceError = HexRendererConfig.optimization.terrainSamplingError;
   }
 
   /**
@@ -770,7 +767,8 @@ export class HexGridRenderer {
         }),
         asynchronous: true,
         allowPicking: true,
-        releaseGeometryInstances: true
+        releaseGeometryInstances: true,
+        // shadows: Cesium.ShadowMode.RECEIVE_ONLY
       }));
     }
     
@@ -943,7 +941,8 @@ export class HexGridRenderer {
         }),
         asynchronous: true,
         allowPicking: true,
-        releaseGeometryInstances: true
+        releaseGeometryInstances: true,
+        shadows: Cesium.ShadowMode.RECEIVE_ONLY
       }));
     }
 
@@ -1206,7 +1205,7 @@ export class HexGridRenderer {
         closed: true
       }),
       asynchronous: true,
-      allowPicking: true
+      allowPicking: true,
     });
   }
 }
