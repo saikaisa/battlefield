@@ -268,6 +268,13 @@ onMounted(() => {
   z-index: 100;
 }
 
+/* 屏幕宽度小于 1440px时调整面板位置 */
+@media screen and (max-width: 1440px) {
+  .overview-container {
+    bottom: 47%;
+  }
+}
+
 .overview-container.disabled {
   pointer-events: none;
   filter: grayscale(50%);

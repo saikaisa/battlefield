@@ -951,6 +951,13 @@ const attackState = computed(() => store.attackState);
   }
 }
 
+/* 屏幕宽度小于 1440px时调整面板位置 */
+@media screen and (max-width: 1440px) {
+  .detail-info-panel {
+    left: 65%;
+  }
+}
+
 /* 公共样式 */
 .section-header {
   background-color: rgba(80, 60, 40, 0.5);

@@ -29,7 +29,7 @@ import FormationPanel from '@/components/hud/FormationPanel.vue';
 import CommandPanel from '@/components/hud/CommandPanel.vue';
 import MilitaryManagePanel from '@/components/hud/MilitaryManagePanel.vue';
 // eslint-disable-next-line no-unused-vars
-import { runTests, runMovementTestOnly } from '@/test/test';
+import { runTests } from '@/test/test';
 
 // viewer 引用
 const viewerRef = ref(null);
