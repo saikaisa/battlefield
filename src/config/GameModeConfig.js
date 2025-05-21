@@ -18,7 +18,8 @@ export const GamePanels = {
   FORMATION_LIST: 'formation-list', // 编队列表
   COMMAND_PANEL: 'command-panel',   // 命令面板
   DETAIL_INFO_PANEL: 'detail-info-panel', // 详细信息面板
-  OVERVIEW_PANEL: 'overview-panel'    // 总览面板
+  OVERVIEW_PANEL: 'overview-panel',
+  MILITARY_MANAGE_PANEL: 'military_manage_panel',
 };
 
 // 按钮名称

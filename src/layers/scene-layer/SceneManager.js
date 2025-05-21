@@ -87,13 +87,13 @@ export class SceneManager {
       );
 
       // 启用Inspector调试
-      this.viewer.extend(Cesium.viewerCesiumInspectorMixin);
+      // this.viewer.extend(Cesium.viewerCesiumInspectorMixin);
 
       // ---------------- 环境配置开始 ----------------
       this.configureEnvironment({
-        limitLoadRange: true,
-        limitLoadRangeOffset: 0.01,
-        precision: 4,
+        limitLoadRange: CesiumConfig.limitLoadRange,
+        limitLoadRangeOffset: CesiumConfig.limitLoadRangeOffset,
+        precision: CesiumConfig.precision,
       });
       // ---------------- 环境配置结束 ----------------
 
@@ -212,10 +212,13 @@ export class SceneManager {
     // 设置影像显示精度
     this.viewer.scene.globe.maximumScreenSpaceError = options.precision;
 
+    // 开启深度检测，位于地表以下的物体不会显示
+    this.viewer.scene.globe.depthTestAgainstTerrain = true;
+
     // 设置阴影
     const shadowMap = this.viewer.scene.shadowMap;
-    this.viewer.shadows = true;
-    shadowMap.enabled = true;
+    this.viewer.shadows = false;
+    shadowMap.enabled = false;
     shadowMap.darkness = 0.5;
     shadowMap.maximumDistance = CameraConfig.maxZoomDistance;
     shadowMap.normalOffset = true;

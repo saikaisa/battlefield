@@ -610,9 +610,9 @@ function openForceManagement() {
     return;
   }
   
-  showWarning('部队管理功能尚未实现');
-  // TODO: 实现部队管理模态框
-  // 可以使用 showModal 或其他方式显示模态框
+  // 设置军事管理面板的选项卡为"部队管理"，并显示面板
+  store.setActiveMilitaryTab('force');
+  store.showPanel(GamePanels.MILITARY_MANAGE_PANEL);
 }
 
 // 打开兵种管理模态框
@@ -621,9 +621,9 @@ function openUnitManagement() {
     return;
   }
   
-  showWarning('兵种管理功能尚未实现');
-  // TODO: 实现兵种管理模态框
-  // 可以使用 showModal 或其他方式显示模态框
+  // 设置军事管理面板的选项卡为"兵种管理"，并显示面板
+  store.setActiveMilitaryTab('unit');
+  store.showPanel(GamePanels.MILITARY_MANAGE_PANEL);
 }
 
 // 计算属性：获取攻击按钮文本

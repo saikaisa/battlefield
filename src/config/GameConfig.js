@@ -24,6 +24,9 @@ export const RuleConfig = {
 
 /** Cesium基础配置 */ 
 export const CesiumConfig = {
+  limitLoadRange: false, // 是否限制加载范围
+  limitLoadRangeOffset: 0.01, // 限制加载范围的偏移量
+  precision: 4, // 影像图层显示精度
   terrainAssetId: 1, // Cesium Ion地形数据的Asset ID
   imageryAssetId: 3, // Cesium Ion影像数据的Asset ID
   genOsmBuildings: true, // 是否加载Cesium OSM Buildings
@@ -35,7 +38,7 @@ export const CesiumConfig = {
 /** 一些地点的经纬度坐标 */
 export const LocationConfig = {
   // 当前战场
-  current: 'mountEverest',
+  current: 'kilimanjaro',
   // 珠穆朗玛峰
   mountEverest: {
     name: '珠穆朗玛峰',
@@ -163,7 +166,7 @@ export const MilitaryConfig = {
     unitLayout: {
       maxCount: 6,           // 部队内最多渲染的兵种实例数（六边形布局） 
       radius: 200,             // 环形布局半径（米）
-      heightOffset: 20,       // 模型离地高度（米）
+      heightOffset: 50,       // 模型离地高度（米）
     },
   },
 
@@ -171,6 +174,7 @@ export const MilitaryConfig = {
   models: {
     // 兵种模型
     ambulance: {
+      name: '救护车',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/ambulance_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/ambulance_lod1.glb" },
@@ -186,6 +190,7 @@ export const MilitaryConfig = {
       priority: 2
     },
     helicopter1: {
+      name: '单旋翼直升机',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/helicopter1_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/helicopter1_lod1.glb" },
@@ -196,11 +201,12 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
-      bullet: 'missile',
+      bullet: 'shell',
       service: 'air',
       priority: 2
     },
     helicopter2: {
+      name: '双旋翼直升机',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/helicopter2_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/helicopter2_lod1.glb" },
@@ -211,11 +217,12 @@ export const MilitaryConfig = {
         offset: { x: 0, y: 0, z: 0 }
       },
       animationList: [ { name: 'Move', loop: Cesium.ModelAnimationLoop.REPEAT } ],
-      bullet: 'missile',
+      bullet: 'shell',
       service: 'air',
       priority: 2
     },
     jet: {
+      name: '战斗机',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/jet_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/jet_lod1.glb" },
@@ -231,6 +238,7 @@ export const MilitaryConfig = {
       priority: 2
     },
     missiletank: {
+      name: '导弹坦克',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/missiletank_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/missiletank_lod1.glb" },
@@ -246,6 +254,7 @@ export const MilitaryConfig = {
       priority: 2
     },
     sailboat: {
+      name: '护卫舰',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/sailboat_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/sailboat_lod1.glb" },
@@ -261,6 +270,7 @@ export const MilitaryConfig = {
       priority: 1
     },
     soldier: {
+      name: '士兵',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/soldier_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/soldier_lod1.glb" },
@@ -279,6 +289,7 @@ export const MilitaryConfig = {
       priority: 1
     },
     spydrone: {
+      name: '侦察机',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/spydrone_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/spydrone_lod1.glb" },
@@ -294,6 +305,7 @@ export const MilitaryConfig = {
       priority: 2
     },
     tank: {
+      name: '坦克',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/tank_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/tank_lod1.glb" },
@@ -309,6 +321,7 @@ export const MilitaryConfig = {
       priority: 2
     },
     vehicle: {
+      name: '装甲车',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/vehicle_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/vehicle_lod1.glb" },
@@ -324,6 +337,7 @@ export const MilitaryConfig = {
       priority: 2
     },
     warship: {
+      name: '航空母舰',
       lod: [
         { level: 0, distance: 0, path: "/assets/models/warship_lod0.glb" },
         { level: 1, distance: 4000, path: "/assets/models/warship_lod1.glb" },

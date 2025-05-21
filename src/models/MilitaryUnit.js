@@ -30,7 +30,7 @@ export class Unit {
       if (data.unitName !== undefined) existing.unitName = data.unitName;
       if (data.service !== undefined) existing.service = data.service;
       if (data.category !== undefined) existing.category = data.category;
-      if (data.factionAvailability !== undefined) existing.factionAvailability = { ...data.factionAvailability };
+      if (data.factionAvailability !== undefined) existing.factionAvailability = [...data.factionAvailability];
       if (data.attackPowerComposition !== undefined) existing.attackPowerComposition = { ...data.attackPowerComposition };
       if (data.defensePowerComposition !== undefined) existing.defensePowerComposition = { ...data.defensePowerComposition };
       if (data.visibilityRadius !== undefined) existing.visibilityRadius = data.visibilityRadius;

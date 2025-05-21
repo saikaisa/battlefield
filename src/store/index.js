@@ -74,6 +74,12 @@ export const openGameStore = defineStore("gameStore", () => {
   const linkMode = ref('linked');      // 部队与六角格关联模式：'linked', 'independent'
   const cameraControlEnabled = ref(true);      // 是否允许相机控制
 
+  // 面板显示状态
+  const activePanels = ref(new Set());
+  
+  // 记录当前激活的军事管理面板选项卡
+  const activeMilitaryTab = ref('unit'); // 'unit' 或 'force'
+
   /* ========================= 方法定义 ========================= */
   // -------------------- 图层控制 --------------------
   const setLayerIndex = idx => layerIndex.value = idx;
@@ -529,6 +535,35 @@ export const openGameStore = defineStore("gameStore", () => {
   /** 获取总览控制台 */
   const getOverviewConsole = () => OverviewConsole;
 
+  // 控制面板显示
+  function showPanel(panelId) {
+    activePanels.value.add(panelId);
+  }
+
+  function hidePanel(panelId) {
+    activePanels.value.delete(panelId);
+  }
+
+  function togglePanel(panelId) {
+    if (activePanels.value.has(panelId)) {
+      activePanels.value.delete(panelId);
+    } else {
+      activePanels.value.add(panelId);
+    }
+  }
+
+  function isPanelActive(panelId) {
+    return activePanels.value.has(panelId);
+  }
+
+  function setActiveMilitaryTab(tab) {
+    activeMilitaryTab.value = tab;
+  }
+
+  function getActiveMilitaryTab() {
+    return activeMilitaryTab.value;
+  }
+
   return {
     // 状态导出
     layerIndex,
@@ -566,6 +601,16 @@ export const openGameStore = defineStore("gameStore", () => {
     selectMode,
     linkMode,
     cameraControlEnabled,
+
+    // 面板状态控制
+    activePanels,
+    showPanel,
+    hidePanel,
+    togglePanel,
+    isPanelActive,
+    activeMilitaryTab,
+    setActiveMilitaryTab,
+    getActiveMilitaryTab,
 
     // 方法导出
     setLayerIndex,

@@ -167,9 +167,14 @@ export class HexGridRenderer {
     const isAttackMode = this.store.gameMode === GameMode.ATTACK_EXECUTE;
 
     if (this.markGridPrimitives) {
+      if (this.layerIndex.value === 3) {
+        this.markGridPrimitives.show = false;
+        return;
+      }
+      
       // 如果是通过切换图层调用的该方法，则只进行显隐控制
       if (indexChange) {
-        this.markGridPrimitives.show = (this.layerIndex.value === 1 && !isAttackMode);
+        this.markGridPrimitives.show = (this.layerIndex.value !== 3 && !isAttackMode);
         return;
       }
       

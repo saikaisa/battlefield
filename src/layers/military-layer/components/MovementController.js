@@ -527,7 +527,7 @@ export class MovementController {
             start.hexId,
             position.longitude,
             position.latitude,
-          ) + MilitaryConfig.layoutConfig.unitLayout.heightOffset;
+          ) + MilitaryConfig.layoutConfig.unitLayout.heightOffset + (forceInstance.force.service === 'air' ? MilitaryConfig.layoutConfig.forceLayout.airHeightOffset : 0);
           
           // 计算矩阵
           const newMatrix = this.poseCalculator.computeModelMatrix(

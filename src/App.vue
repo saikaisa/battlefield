@@ -9,6 +9,7 @@
       <FormationPanel /> <!-- 编队列表 -->
       <CommandPanel /> <!-- 命令管理面板 -->
       <DetailInfoPanel /> <!-- 详情信息面板 -->
+      <MilitaryManagePanel /> <!-- 军事管理面板 -->
     </div>
 
     <div v-else class="loading">
@@ -26,6 +27,7 @@ import OverviewPanel from '@/components/hud/OverviewPanel.vue';
 import DetailInfoPanel from '@/components/hud/DetailInfoPanel.vue';
 import FormationPanel from '@/components/hud/FormationPanel.vue';
 import CommandPanel from '@/components/hud/CommandPanel.vue';
+import MilitaryManagePanel from '@/components/hud/MilitaryManagePanel.vue';
 // eslint-disable-next-line no-unused-vars
 import { runTests, runMovementTestOnly } from '@/test/test';
 
@@ -38,7 +40,6 @@ const gameReady = ref(false);
 let sceneManager;
 let militaryManager;
 let commandDispatcher;
-
 
 onMounted(async () => {
   // 初始化场景管理器

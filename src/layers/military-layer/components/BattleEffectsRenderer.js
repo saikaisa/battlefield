@@ -1091,7 +1091,7 @@ export class BattleEffectsRenderer {
           imageBasedLightingFactor: new Cesium.Cartesian2(1.0, 1.0),
           color: Cesium.Color.WHITE.withAlpha(1.0),
           lightColor: new Cesium.Color(1.0, 1.0, 1.0, 1.0),
-          shadow: Cesium.ShadowMode.ENABLED,
+          shadow: Cesium.ShadowMode.DISABLED,
           nodeTransformations: {
             // 调整初始朝向
             root: {
